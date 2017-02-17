@@ -6,6 +6,10 @@ import rospy
 from moveit_msgs.msg import MoveItErrorCodes
 from moveit_python import MoveGroupInterface, PlanningSceneInterface
 from geometry_msgs.msg import PoseStamped, Pose, Point, Quaternion
+from rosie_msgs.msg import RobotCommand, RobotAction
+
+def callback(data):
+    rospy.loginfo("Received a message!")
 
 # Note: fetch_moveit_config move_group.launch must be running
 if __name__ == '__main__':
@@ -14,6 +18,8 @@ if __name__ == '__main__':
 
     # Create move group interface for a fetch robot
     move_group = MoveGroupInterface("arm_with_torso", "base_link")
+
+    rospy.Subscriber("/rosie_arm_commands", RobotCommand, callback)
 
     while not rospy.is_shutdown():
         rospy.loginfo("Rosie motor node running!")
