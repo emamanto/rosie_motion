@@ -1,0 +1,14 @@
+<launch>
+<include file="$(find rosbridge_server)/launch/rosbridge_websocket.launch" >
+</include>
+
+<include file="$(find fetch_gazebo)/launch/simple_pickplace.launch" >
+</include>
+
+<include file="$(find fetch_moveit_config)/launch/move_group.launch" >
+</include>
+
+<node name="rosie_motion_server" pkg="rosie_motion" type="motion_server.py" output="screen" >
+</node>
+
+</launch>
