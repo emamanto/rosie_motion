@@ -2,7 +2,7 @@
 <include file="$(find rosbridge_server)/launch/rosbridge_websocket.launch" >
 </include>
 
-<include file="$(find fetch_gazebo)/launch/simple_pickplace.launch" >
+<include file="$(find rosie_motion)/launch/simple_pickplace.launch" >
 </include>
 
 <include file="$(find fetch_moveit_config)/launch/move_group.launch" >
