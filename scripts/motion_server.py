@@ -4,12 +4,14 @@
 import time
 import rospy
 import sys
+import math
 import numpy
 from threading import Lock
 import moveit_msgs.msg
 import moveit_commander
 import geometry_msgs.msg
 from rosie_msgs.msg import RobotCommand, RobotAction, Observations
+from quaternion import quat2rpy, rpy2quat
 
 def command_callback(data, state):
     if data.action == state.action_state:
@@ -39,8 +41,14 @@ def command_callback(data, state):
                    [0, 0, 1, 0.695],
                    [0, 0, 0, 1]]
     adjusted_target = numpy.dot(world2robot, plan_target)
-    pose_target.orientation.w = 1.0
-    pose_target.position.x = adjusted_target[0]
+    target_rpy = [0, -math.pi/4.0, 0]
+    target_quat = rpy2quat(target_rpy)
+    rospy.loginfo("Quaternion: " + str(target_quat))
+    pose_target.orientation.x = target_quat[0]
+    pose_target.orientation.y = target_quat[1]
+    pose_target.orientation.z = target_quat[2]
+    pose_target.orientation.w = target_quat[3]
+    pose_target.position.x = adjusted_target[0] - 0.2
     pose_target.position.y = adjusted_target[1]
     pose_target.position.z = adjusted_target[2] + 0.2
 
