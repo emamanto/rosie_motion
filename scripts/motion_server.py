@@ -25,18 +25,21 @@ def command_callback(data, state):
         targ = data.action.split('=')[1]
         state.to_grab = int(targ)
         handle_grasp(int(targ), state)
+    if robot_state.POINT in data.action:
+        targ = data.action.split('=')[1]
+        handle_point(int(targ), state)
     else:
         state.to_grab = -1
 
 def handle_grasp(id, state):
-    rospy.loginfo("Going to make a motion plan!")
+    rospy.loginfo("PICKING UP OBJECT WITH ID " + str(id))
     state.publish_status()
     plan_target = []
     state.obj_lock.acquire()
     try:
-        plan_target = [state.perceived_objects[state.to_grab].translation.x,
-                       state.perceived_objects[state.to_grab].translation.y,
-                       state.perceived_objects[state.to_grab].translation.z]
+        plan_target = [state.perceived_objects[id].translation.x,
+                       state.perceived_objects[id].translation.y,
+                       state.perceived_objects[id].translation.z]
     finally:
         state.obj_lock.release()
 
@@ -59,6 +62,29 @@ def handle_grasp(id, state):
     state.finished_action = robot_state.GRAB
     state.action_state = robot_state.WAIT
 
+def handle_point(id, state):
+    rospy.loginfo("POINTING TO OBJECT WITH ID " + str(id))
+    state.publish_status()
+    plan_target = []
+    state.obj_lock.acquire()
+    try:
+        plan_target = [state.perceived_objects[id].translation.x,
+                       state.perceived_objects[id].translation.y,
+                       state.perceived_objects[id].translation.z]
+    finally:
+        state.obj_lock.release()
+
+    # Move to pointing position
+    state.move_to_xyz_target(plan_target)
+
+    time.sleep(2)
+
+    state.home_arm()
+
+    rospy.loginfo("Motor node switching to wait.")
+    state.finished_action = robot_state.POINT
+    state.action_state = robot_state.WAIT
+
 def object_callback(data, state):
     state.obj_lock.acquire()
     state.perceived_objects.clear()
@@ -77,12 +103,17 @@ class robot_state:
     FAILURE = "FAILURE"
 
     def publish_status(self):
-            #rospy.loginfo("ROSIE!")
             msg = RobotAction()
             msg.utime = long(time.time()*1000)
             msg.action = self.action_state
             msg.obj_id = self.grabbed_object
             self.stats_pub.publish(msg)
+
+    def home_arm(self):
+        joints = [1.32, 0.7, 0.0, -2.0, 0.0, -0.57, 0.0]
+        self.group.set_joint_value_target(joints)
+        self.group.plan()
+        self.group.go(wait=True)
 
     def move_to_xyz_target(self, target):
         world2robot = [[1, 0, 0, 0.8],
@@ -111,7 +142,6 @@ class robot_state:
         self.action_state = robot_state.WAIT
         self.last_command_time = 0
         self.grabbed_object = 0
-        self.to_grab = 0
 
         self.obj_lock = Lock()
         self.perceived_objects = {}
