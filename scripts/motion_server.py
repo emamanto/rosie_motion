@@ -4,59 +4,60 @@
 import time
 import rospy
 import sys
+import copy
 import math
 import numpy
-from threading import Lock
+from threading import Lock, Thread
 import moveit_msgs.msg
 import moveit_commander
 import geometry_msgs.msg
 from rosie_msgs.msg import RobotCommand, RobotAction, Observations
 from quaternion import quat2rpy, rpy2quat
 
+# Callback for when we get a command message
 def command_callback(data, state):
-    if data.action == state.action_state:
+    if state.action_state in data.action or data.utime == state.last_command_time:
         return
 
     state.action_state = data.action
+    state.last_command_time = data.utime
     if robot_state.GRAB in data.action:
         targ = data.action.split('=')[1]
         state.to_grab = int(targ)
+        handle_grasp(int(targ), state)
     else:
         state.to_grab = -1
 
+def handle_grasp(id, state):
     rospy.loginfo("Going to make a motion plan!")
-    pose_target = geometry_msgs.msg.Pose()
+    state.publish_status()
     plan_target = []
     state.obj_lock.acquire()
     try:
         plan_target = [state.perceived_objects[state.to_grab].translation.x,
                        state.perceived_objects[state.to_grab].translation.y,
-                       state.perceived_objects[state.to_grab].translation.z,
-                       1]
+                       state.perceived_objects[state.to_grab].translation.z]
     finally:
         state.obj_lock.release()
 
-    world2robot = [[1, 0, 0, 0.8],
-                   [0, 1, 0, 0],
-                   [0, 0, 1, 0.695],
-                   [0, 0, 0, 1]]
-    adjusted_target = numpy.dot(world2robot, plan_target)
-    target_rpy = [0, -math.pi/4.0, 0]
-    target_quat = rpy2quat(target_rpy)
-    rospy.loginfo("Quaternion: " + str(target_quat))
-    pose_target.orientation.x = target_quat[0]
-    pose_target.orientation.y = target_quat[1]
-    pose_target.orientation.z = target_quat[2]
-    pose_target.orientation.w = target_quat[3]
-    pose_target.position.x = adjusted_target[0] - 0.2
-    pose_target.position.y = adjusted_target[1]
-    pose_target.position.z = adjusted_target[2] + 0.2
+    # Move to pre-grasp position
+    state.move_to_xyz_target(plan_target)
 
-    print(adjusted_target)
+    # Move in to grasp
+    waypoints = []
+    waypoints.append(state.group.get_current_pose().pose)
 
-    state.group.set_pose_target(pose_target)
-    state.group.plan()
-    state.group.go(wait=True)
+    grasp_pose = copy.deepcopy(waypoints[0])
+    grasp_pose.position.x += 0.1
+    grasp_pose.position.z -= 0.15
+    waypoints.append(grasp_pose)
+
+    (grasp_in, frac) = state.group.compute_cartesian_path(waypoints, 0.01, 0.0)
+    state.group.execute(grasp_in)
+
+    rospy.loginfo("Motor node switching to wait.")
+    state.finished_action = robot_state.GRAB
+    state.action_state = robot_state.WAIT
 
 def object_callback(data, state):
     state.obj_lock.acquire()
@@ -75,10 +76,42 @@ class robot_state:
     DROP = "DROP"
     FAILURE = "FAILURE"
 
+    def publish_status(self):
+            #rospy.loginfo("ROSIE!")
+            msg = RobotAction()
+            msg.utime = long(time.time()*1000)
+            msg.action = self.action_state
+            msg.obj_id = self.grabbed_object
+            self.stats_pub.publish(msg)
+
+    def move_to_xyz_target(self, target):
+        world2robot = [[1, 0, 0, 0.8],
+                       [0, 1, 0, 0],
+                       [0, 0, 1, 0.695],
+                       [0, 0, 0, 1]]
+        pt = [target[0], target[1], target[2], 1]
+        adjusted_target = numpy.dot(world2robot, pt)
+        target_rpy = [0, -math.pi/4.0, 0]
+        target_quat = rpy2quat(target_rpy)
+
+        pose_target = geometry_msgs.msg.Pose()
+        pose_target.orientation.x = target_quat[0]
+        pose_target.orientation.y = target_quat[1]
+        pose_target.orientation.z = target_quat[2]
+        pose_target.orientation.w = target_quat[3]
+        pose_target.position.x = adjusted_target[0] - 0.2
+        pose_target.position.y = adjusted_target[1]
+        pose_target.position.z = adjusted_target[2] + 0.3
+
+        self.group.set_pose_target(pose_target)
+        self.group.plan()
+        self.group.go(wait=True)
+
     def __init__(self):
         self.action_state = robot_state.WAIT
-        self.grabbed_object = -1
-        self.to_grab = -1
+        self.last_command_time = 0
+        self.grabbed_object = 0
+        self.to_grab = 0
 
         self.obj_lock = Lock()
         self.perceived_objects = {}
@@ -95,15 +128,10 @@ class robot_state:
         rospy.Subscriber("/rosie_observations", Observations, object_callback, callback_args=self)
 
         self.stats_pub = rospy.Publisher("/rosie_arm_status", RobotAction, queue_size=10)
-        self.rate = rospy.Rate(1)
+        self.rate = rospy.Rate(10)
 
         while not rospy.is_shutdown():
-            #rospy.loginfo("ROSIE!")
-            msg = RobotAction()
-            msg.utime = long(time.time()*1000)
-            msg.action = self.action_state
-            msg.obj_id = 0
-            self.stats_pub.publish(msg)
+            self.publish_status()
             self.rate.sleep()
 
 
