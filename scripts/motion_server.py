@@ -77,8 +77,10 @@ def handle_point(id, state):
     # Move to pointing position
     state.move_to_xyz_target(plan_target)
 
+    # Wait
     time.sleep(2)
 
+    # Bring arm home so that we can see again
     state.home_arm()
 
     rospy.loginfo("Motor node switching to wait.")
@@ -161,6 +163,7 @@ class robot_state:
         self.rate = rospy.Rate(10)
 
         while not rospy.is_shutdown():
+            rospy.loginfo("Rosie spinning")
             self.publish_status()
             self.rate.sleep()
 
