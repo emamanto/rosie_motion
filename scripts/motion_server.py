@@ -7,7 +7,7 @@ import sys
 import copy
 import math
 import numpy
-from threading import Lock, Thread
+from threading import Lock
 import moveit_msgs.msg
 import moveit_commander
 import geometry_msgs.msg
@@ -105,11 +105,11 @@ class robot_state:
     FAILURE = "FAILURE"
 
     def publish_status(self):
-            msg = RobotAction()
-            msg.utime = long(time.time()*1000)
-            msg.action = self.action_state
-            msg.obj_id = self.grabbed_object
-            self.stats_pub.publish(msg)
+        msg = RobotAction()
+        msg.utime = long(time.time()*1000)
+        msg.action = self.action_state
+        msg.obj_id = self.grabbed_object
+        self.stats_pub.publish(msg)
 
     def home_arm(self):
         joints = [1.32, 0.7, 0.0, -2.0, 0.0, -0.57, 0.0]
@@ -163,7 +163,6 @@ class robot_state:
         self.rate = rospy.Rate(10)
 
         while not rospy.is_shutdown():
-            rospy.loginfo("Rosie spinning")
             self.publish_status()
             self.rate.sleep()
 
