@@ -56,13 +56,14 @@ def handle_grasp(id, state):
     waypoints.append(grasp_pose)
 
     (grasp_in, frac) = state.group.compute_cartesian_path(waypoints, 0.01, 0.0)
-    goahead = raw_input("Is this plan okay? ")
-    if goahead == "y" or goahead == "yes":
-        rospy.loginfo("Motion plan approved. Execution starting.")
-        self.group.go(wait=True)
-    else:
-        rospy.loginfo("Motion execution cancelled.")
-        return
+
+    if state.check_motion:
+        goahead = raw_input("Is this plan okay? ")
+        if goahead == "y" or goahead == "yes":
+            rospy.loginfo("Motion plan approved. Execution starting.")
+        else:
+            rospy.loginfo("Motion execution cancelled.")
+            return
 
     state.group.execute(grasp_in)
 
@@ -124,12 +125,15 @@ class robot_state:
         self.group.set_joint_value_target(joints)
         self.group.plan()
 
-        goahead = raw_input("Is this plan okay? ")
-        if goahead == "y" or goahead == "yes":
-            rospy.loginfo("Motion plan approved. Execution starting.")
-            self.group.go(wait=True)
-        else:
-            rospy.loginfo("Motion execution cancelled.")
+        if self.check_motion:
+            goahead = raw_input("Is this plan okay? ")
+            if goahead == "y" or goahead == "yes":
+                rospy.loginfo("Motion plan approved. Execution starting.")
+            else:
+                rospy.loginfo("Motion execution cancelled.")
+                return
+
+        self.group.go(wait=True)
 
     def close_gripper(self):
         rospy.loginfo(self.robot.get_joint("l_gripper_finger_joint").min_bound())
@@ -157,17 +161,21 @@ class robot_state:
         self.group.set_pose_target(pose_target)
         the_plan = self.group.plan()
 
-        goahead = raw_input("Is this plan okay? ")
-        if goahead == "y" or goahead == "yes":
-            rospy.loginfo("Motion plan approved. Execution starting.")
-            self.group.go(wait=True)
-        else:
-            rospy.loginfo("Motion execution cancelled.")
+        if self.check_motion:
+            goahead = raw_input("Is this plan okay? ")
+            if goahead == "y" or goahead == "yes":
+                rospy.loginfo("Motion plan approved. Execution starting.")
+            else:
+                rospy.loginfo("Motion execution cancelled.")
+                return
 
-    def __init__(self):
+        self.group.go(wait=True)
+
+    def __init__(self, check_motion_plans):
         self.action_state = robot_state.WAIT
         self.last_command_time = 0
         self.grabbed_object = 0
+        self.check_motion = check_motion_plans
 
         self.obj_lock = Lock()
         self.perceived_objects = {}
@@ -196,7 +204,7 @@ class robot_state:
 # Note: fetch_moveit_config move_group.launch must be running
 if __name__ == '__main__':
     time.sleep(15)
-    status = robot_state()
+    status = robot_state(True)
     # This stops all arm movement goals
     # It should be called when a program is exiting so movement stops
     group.get_move_action().cancel_all_goals()
