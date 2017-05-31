@@ -56,6 +56,14 @@ def handle_grasp(id, state):
     waypoints.append(grasp_pose)
 
     (grasp_in, frac) = state.group.compute_cartesian_path(waypoints, 0.01, 0.0)
+    goahead = raw_input("Is this plan okay? ")
+    if goahead == "y" or goahead == "yes":
+        rospy.loginfo("Motion plan approved. Execution starting.")
+        self.group.go(wait=True)
+    else:
+        rospy.loginfo("Motion execution cancelled.")
+        return
+
     state.group.execute(grasp_in)
 
     rospy.loginfo("Motor node switching to wait.")
@@ -78,7 +86,7 @@ def handle_point(id, state):
     state.move_to_xyz_target(plan_target)
 
     # Wait
-    time.sleep(2)
+    rospy.sleep(2)
 
     # Bring arm home so that we can see again
     state.home_arm()
@@ -115,7 +123,17 @@ class robot_state:
         joints = [1.32, 0.7, 0.0, -2.0, 0.0, -0.57, 0.0]
         self.group.set_joint_value_target(joints)
         self.group.plan()
-        self.group.go(wait=True)
+
+        goahead = raw_input("Is this plan okay? ")
+        if goahead == "y" or goahead == "yes":
+            rospy.loginfo("Motion plan approved. Execution starting.")
+            self.group.go(wait=True)
+        else:
+            rospy.loginfo("Motion execution cancelled.")
+
+    def close_gripper(self):
+        rospy.loginfo(self.robot.get_joint("l_gripper_finger_joint").min_bound())
+        rospy.loginfo(self.robot.get_joint("r_gripper_finger_joint").min_bound())
 
     def move_to_xyz_target(self, target):
         world2robot = [[1, 0, 0, 0.8],
@@ -137,8 +155,14 @@ class robot_state:
         pose_target.position.z = adjusted_target[2] + 0.3
 
         self.group.set_pose_target(pose_target)
-        self.group.plan()
-        self.group.go(wait=True)
+        the_plan = self.group.plan()
+
+        goahead = raw_input("Is this plan okay? ")
+        if goahead == "y" or goahead == "yes":
+            rospy.loginfo("Motion plan approved. Execution starting.")
+            self.group.go(wait=True)
+        else:
+            rospy.loginfo("Motion execution cancelled.")
 
     def __init__(self):
         self.action_state = robot_state.WAIT
@@ -153,6 +177,7 @@ class robot_state:
         rospy.loginfo("Rosie motor node starting up...")
 
         self.robot = moveit_commander.RobotCommander()
+        rospy.loginfo(self.robot.get_joint_names())
         self.scene = moveit_commander.PlanningSceneInterface()
         self.group = moveit_commander.MoveGroupCommander("arm")
 
@@ -162,6 +187,7 @@ class robot_state:
         self.stats_pub = rospy.Publisher("/rosie_arm_status", RobotAction, queue_size=10)
         self.rate = rospy.Rate(10)
 
+        self.close_gripper()
         while not rospy.is_shutdown():
             self.publish_status()
             self.rate.sleep()
