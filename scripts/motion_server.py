@@ -25,11 +25,18 @@ def command_callback(data, state):
         targ = data.action.split('=')[1]
         state.to_grab = int(targ)
         handle_grasp(int(targ), state)
-    if robot_state.POINT in data.action:
+    elif robot_state.POINT in data.action:
         targ = data.action.split('=')[1]
+        state.to_grab = int(targ)
         handle_point(int(targ), state)
+    elif robot_state.HOME in data.action:
+        state.to_grab = -1
+        handle_home(state)
     else:
         state.to_grab = -1
+
+def handle_home(state):
+    state.home_arm()
 
 def handle_grasp(id, state):
     rospy.loginfo("PICKING UP OBJECT WITH ID " + str(id))
@@ -183,7 +190,6 @@ class robot_state:
         moveit_commander.roscpp_initialize(sys.argv)
 
         self.robot = moveit_commander.RobotCommander()
-        rospy.loginfo(self.robot.get_joint_names())
         self.scene = moveit_commander.PlanningSceneInterface()
         self.group = moveit_commander.MoveGroupCommander("arm")
 
