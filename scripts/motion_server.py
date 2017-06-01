@@ -181,8 +181,6 @@ class robot_state:
         self.perceived_objects = {}
 
         moveit_commander.roscpp_initialize(sys.argv)
-        rospy.init_node("rosie_motion_server")
-        rospy.loginfo("Rosie motor node starting up...")
 
         self.robot = moveit_commander.RobotCommander()
         rospy.loginfo(self.robot.get_joint_names())
@@ -203,8 +201,25 @@ class robot_state:
 
 # Note: fetch_moveit_config move_group.launch must be running
 if __name__ == '__main__':
+    rospy.init_node("rosie_motion_server")
+    rospy.loginfo("Rosie motor node starting up...")
+
+    human_motor_check = True
+
+    for arg in sys.argv:
+        if "check_motion_plans" in arg:
+            words = arg.split('=')
+            if words[1] == "true":
+                rospy.loginfo("Human checks on motion plans will be required.")
+            elif words[1] == "false":
+                rospy.loginfo("Human checks on motion plans are disabled!")
+                human_motor_check = False
+            else:
+                rospy.loginfo("Invalid check_motion_plans argument given.")
+                sys.exit(0)
+
     time.sleep(15)
-    status = robot_state(True)
+    status = robot_state(human_motor_check)
     # This stops all arm movement goals
     # It should be called when a program is exiting so movement stops
     group.get_move_action().cancel_all_goals()
