@@ -147,12 +147,7 @@ class robot_state:
         rospy.loginfo(self.robot.get_joint("r_gripper_finger_joint").min_bound())
 
     def move_to_xyz_target(self, target):
-        world2robot = [[1, 0, 0, 0.8],
-                       [0, 1, 0, 0],
-                       [0, 0, 1, 0.695],
-                       [0, 0, 0, 1]]
-        pt = [target[0], target[1], target[2], 1]
-        adjusted_target = numpy.dot(world2robot, pt)
+        adjusted_target = [target[0], target[1], target[2], 1]
         target_rpy = [0, -math.pi/4.0, 0]
         target_quat = rpy2quat(target_rpy)
 
