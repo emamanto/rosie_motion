@@ -44,9 +44,9 @@ def handle_grasp(id, state):
     plan_target = []
     state.obj_lock.acquire()
     try:
-        plan_target = [state.perceived_objects[id].translation.x,
-                       state.perceived_objects[id].translation.y,
-                       state.perceived_objects[id].translation.z]
+        plan_target = [state.perceived_objects[id].translation.x-0.15,
+                       state.perceived_objects[id].translation.y-0.03,
+                       state.perceived_objects[id].translation.z-0.15]
     finally:
         state.obj_lock.release()
 
@@ -59,10 +59,12 @@ def handle_grasp(id, state):
 
     grasp_pose = copy.deepcopy(waypoints[0])
     grasp_pose.position.x += 0.1
-    grasp_pose.position.z -= 0.15
+    grasp_pose.position.z -= 0.1
     waypoints.append(grasp_pose)
 
-    (grasp_in, frac) = state.group.compute_cartesian_path(waypoints, 0.01, 0.0)
+    (grasp_in, frac) = state.group.compute_cartesian_path(waypoints,
+                                                          0.01, 0.0,
+                                                          avoid_collisions=False)
 
     if state.check_motion:
         goahead = raw_input("Is this plan okay? ")
@@ -156,9 +158,9 @@ class robot_state:
         pose_target.orientation.y = target_quat[1]
         pose_target.orientation.z = target_quat[2]
         pose_target.orientation.w = target_quat[3]
-        pose_target.position.x = adjusted_target[0] - 0.2
+        pose_target.position.x = adjusted_target[0]
         pose_target.position.y = adjusted_target[1]
-        pose_target.position.z = adjusted_target[2] + 0.3
+        pose_target.position.z = adjusted_target[2]
 
         self.group.set_pose_target(pose_target)
         the_plan = self.group.plan()
