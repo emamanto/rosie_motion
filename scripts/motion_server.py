@@ -46,20 +46,15 @@ def handle_grasp(id, state):
     plan_target = []
     state.obj_lock.acquire()
     try:
-        plan_target = [state.perceived_objects[id].translation.x-0.2,
+        plan_target = [state.perceived_objects[id].translation.x-0.22,
                        state.perceived_objects[id].translation.y-0.02,
-                       state.perceived_objects[id].translation.z+0.25]
+                       state.perceived_objects[id].translation.z+0.22]
     finally:
         state.obj_lock.release()
 
     # Move to pre-grasp position
     state.move_to_xyz_target(plan_target)
-    goahead = raw_input("Good? ")
-    if goahead == "y" or goahead == "yes":
-        rospy.loginfo("Motion plan approved. Execution starting.")
-    else:
-        rospy.loginfo("Motion execution cancelled.")
-        return
+    rospy.sleep(2)
 
     state.open_gripper()
 
@@ -69,7 +64,7 @@ def handle_grasp(id, state):
 
     grasp_pose = copy.deepcopy(waypoints[0])
     grasp_pose.position.x += 0.08
-    grasp_pose.position.z -= 0.1
+    grasp_pose.position.z -= 0.08
     waypoints.append(grasp_pose)
 
     (grasp_in, frac) = state.group.compute_cartesian_path(waypoints,
@@ -85,6 +80,7 @@ def handle_grasp(id, state):
             return
 
     state.group.execute(grasp_in)
+    rospy.sleep(2)
 
     state.close_gripper()
 
@@ -187,7 +183,7 @@ class robot_state:
         gripper_goal.command.position = 0.0
 
         self.gripper_client.send_goal(gripper_goal)
-        self.gripper_client.wait_for_result(rospy.Duration(2.0))
+        self.gripper_client.wait_for_result(rospy.Duration(4.0))
 
     def open_gripper(self):
         gripper_goal = GripperCommandGoal()
@@ -195,7 +191,7 @@ class robot_state:
         gripper_goal.command.position = 0.1
 
         self.gripper_client.send_goal(gripper_goal)
-        self.gripper_client.wait_for_result(rospy.Duration(2.0))
+        self.gripper_client.wait_for_result(rospy.Duration(4.0))
 
     def move_to_xyz_target(self, target):
         adjusted_target = [target[0], target[1], target[2], 1]
