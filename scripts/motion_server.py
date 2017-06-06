@@ -8,10 +8,12 @@ import copy
 import math
 import numpy
 from threading import Lock
+import actionlib
 import moveit_msgs.msg
 import moveit_commander
 import geometry_msgs.msg
 from rosie_msgs.msg import RobotCommand, RobotAction, Observations
+from control_msgs.msg import GripperCommandAction, GripperCommandGoal
 from quaternion import quat2rpy, rpy2quat
 
 # Callback for when we get a command message
@@ -44,21 +46,29 @@ def handle_grasp(id, state):
     plan_target = []
     state.obj_lock.acquire()
     try:
-        plan_target = [state.perceived_objects[id].translation.x-0.15,
-                       state.perceived_objects[id].translation.y-0.03,
-                       state.perceived_objects[id].translation.z-0.15]
+        plan_target = [state.perceived_objects[id].translation.x-0.2,
+                       state.perceived_objects[id].translation.y-0.02,
+                       state.perceived_objects[id].translation.z+0.25]
     finally:
         state.obj_lock.release()
 
     # Move to pre-grasp position
     state.move_to_xyz_target(plan_target)
+    goahead = raw_input("Good? ")
+    if goahead == "y" or goahead == "yes":
+        rospy.loginfo("Motion plan approved. Execution starting.")
+    else:
+        rospy.loginfo("Motion execution cancelled.")
+        return
+
+    state.open_gripper()
 
     # Move in to grasp
     waypoints = []
     waypoints.append(state.group.get_current_pose().pose)
 
     grasp_pose = copy.deepcopy(waypoints[0])
-    grasp_pose.position.x += 0.1
+    grasp_pose.position.x += 0.08
     grasp_pose.position.z -= 0.1
     waypoints.append(grasp_pose)
 
@@ -75,6 +85,33 @@ def handle_grasp(id, state):
             return
 
     state.group.execute(grasp_in)
+
+    state.close_gripper()
+
+    # Move out from grasping
+    waypoints = []
+    waypoints.append(state.group.get_current_pose().pose)
+
+    back_pose = copy.deepcopy(waypoints[0])
+    back_pose.position.x -= 0.08
+    back_pose.position.z += 0.1
+    waypoints.append(back_pose)
+
+    (grasp_out, frac) = state.group.compute_cartesian_path(waypoints,
+                                                          0.01, 0.0,
+                                                          avoid_collisions=False)
+
+    if state.check_motion:
+        goahead = raw_input("Is this plan okay? ")
+        if goahead == "y" or goahead == "yes":
+            rospy.loginfo("Motion plan approved. Execution starting.")
+        else:
+            rospy.loginfo("Motion execution cancelled.")
+            return
+
+    state.group.execute(grasp_out)
+
+    state.home_arm()
 
     rospy.loginfo("Motor node switching to wait.")
     state.finished_action = robot_state.GRAB
@@ -145,8 +182,20 @@ class robot_state:
         self.group.go(wait=True)
 
     def close_gripper(self):
-        rospy.loginfo(self.robot.get_joint("l_gripper_finger_joint").min_bound())
-        rospy.loginfo(self.robot.get_joint("r_gripper_finger_joint").min_bound())
+        gripper_goal = GripperCommandGoal()
+        gripper_goal.command.max_effort = 10.0
+        gripper_goal.command.position = 0.0
+
+        self.gripper_client.send_goal(gripper_goal)
+        self.gripper_client.wait_for_result(rospy.Duration(2.0))
+
+    def open_gripper(self):
+        gripper_goal = GripperCommandGoal()
+        gripper_goal.command.max_effort = 10.0
+        gripper_goal.command.position = 0.1
+
+        self.gripper_client.send_goal(gripper_goal)
+        self.gripper_client.wait_for_result(rospy.Duration(2.0))
 
     def move_to_xyz_target(self, target):
         adjusted_target = [target[0], target[1], target[2], 1]
@@ -189,6 +238,10 @@ class robot_state:
         self.robot = moveit_commander.RobotCommander()
         self.scene = moveit_commander.PlanningSceneInterface()
         self.group = moveit_commander.MoveGroupCommander("arm")
+        self.group.set_max_velocity_scaling_factor(0.2)
+
+        self.gripper_client = actionlib.SimpleActionClient("gripper_controller/gripper_action", GripperCommandAction)
+        self.gripper_client.wait_for_server()
 
         rospy.Subscriber("/rosie_arm_commands", RobotCommand, command_callback, callback_args=self)
         rospy.Subscriber("/rosie_observations", Observations, object_callback, callback_args=self)
