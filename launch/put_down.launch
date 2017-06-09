@@ -1,0 +1,6 @@
+<launch>
+
+<node name="rosie_putdown" pkg="rosie_motion" type="put_down.py" output="screen" >
+</node>
+
+</launch>

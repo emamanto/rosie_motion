@@ -119,9 +119,9 @@ def handle_point(id, state):
     plan_target = []
     state.obj_lock.acquire()
     try:
-        plan_target = [state.perceived_objects[id].translation.x,
+        plan_target = [state.perceived_objects[id].translation.x-0.22,
                        state.perceived_objects[id].translation.y,
-                       state.perceived_objects[id].translation.z]
+                       state.perceived_objects[id].translation.z+0.22]
     finally:
         state.obj_lock.release()
 
@@ -129,7 +129,7 @@ def handle_point(id, state):
     state.move_to_xyz_target(plan_target)
 
     # Wait
-    rospy.sleep(2)
+    rospy.sleep(3)
 
     # Bring arm home so that we can see again
     state.home_arm()
@@ -163,6 +163,7 @@ class robot_state:
         self.stats_pub.publish(msg)
 
     def home_arm(self):
+        self.group.set_start_state_to_current_state()
         joints = [1.32, 0.7, 0.0, -2.0, 0.0, -0.57, 0.0]
         self.group.set_joint_value_target(joints)
         self.group.plan()
