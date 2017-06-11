@@ -9,12 +9,13 @@ import math
 import numpy
 from threading import Lock
 import actionlib
-import moveit_msgs.msg
+from moveit_msgs.msg import CollisionObject
 import moveit_commander
 import geometry_msgs.msg
 from rosie_msgs.msg import RobotCommand, RobotAction, Observations
 from control_msgs.msg import GripperCommandAction, GripperCommandGoal
 from quaternion import quat2rpy, rpy2quat
+from shape_msgs.msg import Plane
 
 # Callback for when we get a command message
 def command_callback(data, state):
@@ -34,6 +35,8 @@ def command_callback(data, state):
     elif robot_state.HOME in data.action:
         state.to_grab = -1
         handle_home(state)
+    elif robot_state.SCENE in data.action:
+        state.set_up_scene()
     else:
         state.to_grab = -1
 
@@ -119,9 +122,9 @@ def handle_point(id, state):
     plan_target = []
     state.obj_lock.acquire()
     try:
-        plan_target = [state.perceived_objects[id].translation.x-0.22,
-                       state.perceived_objects[id].translation.y,
-                       state.perceived_objects[id].translation.z+0.22]
+        plan_target = [state.perceived_objects[id][0].translation.x-0.22,
+                       state.perceived_objects[id][0].translation.y,
+                       state.perceived_objects[id][0].translation.z+0.22]
     finally:
         state.obj_lock.release()
 
@@ -156,6 +159,7 @@ class robot_state:
     POINT = "POINT"
     DROP = "DROP"
     FAILURE = "FAILURE"
+    SCENE = "SCENE"
 
     def publish_status(self):
         msg = RobotAction()
@@ -197,7 +201,7 @@ class robot_state:
         self.gripper_client.wait_for_result(rospy.Duration(4.0))
 
     def set_up_scene(self):
-        #self.scene.remove_world_object()
+        self.scene.remove_world_object()
         self.obj_lock.acquire()
         try:
             for onum, o in self.perceived_objects.iteritems():
@@ -223,13 +227,29 @@ class robot_state:
             planep.position.y = 0.0
             planep.position.z = (self.current_table[3] + self.current_table[0]*0.8 +
                                  self.current_table[1]*0.0) / -self.current_table[2]
+            planep.orientation.w = 1.0
             pps = geometry_msgs.msg.PoseStamped()
             pps.pose = planep
             pps.header.frame_id = self.group.get_planning_frame()
-            self.scene.add_plane("table", pps, (self.current_table[0],
-                                                self.current_table[1],
-                                                self.current_table[2]),
-                                 self.current_table[3])
+            print(pps)
+            # add_plane is broken, so I'm duplicating its functionality
+            #self.scene.add_plane("table", pps, (self.current_table[0],
+            #                                    self.current_table[1],
+            #                                    self.current_table[2]),
+            #                     self.current_table[3])
+
+            co = CollisionObject()
+            co.operation = CollisionObject.ADD
+            co.id = "table"
+            co.header.frame_id = self.group.get_planning_frame()
+            pl = Plane()
+            pl.coef = list(self.current_table[0],
+                           self.current_table[1],
+                           self.current_table[2])
+            pl.coef.append(self.current_table[3])
+            co.planes = [pl]
+            co.plane_poses = [pps]
+            self.collision_publisher.publish(co)
         finally:
             self.obj_lock.release()
 
@@ -293,6 +313,8 @@ class robot_state:
 
         self.stats_pub = rospy.Publisher("/rosie_arm_status", RobotAction, queue_size=10)
         self.rate = rospy.Rate(10)
+
+        self.collision_pub = rospy.Publisher('/collision_object', CollisionObject, queue_size=100)
 
         self.close_gripper()
         while not rospy.is_shutdown():
