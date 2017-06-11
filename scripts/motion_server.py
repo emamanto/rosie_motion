@@ -140,12 +140,14 @@ def handle_point(id, state):
 
 def object_callback(data, state):
     state.obj_lock.acquire()
-    state.perceived_objects.clear()
     try:
+        state.perceived_objects.clear()
+        state.current_table = data.table
         for o in data.observations:
-            state.perceived_objects[o.obj_id] = o.bbox_xyzrpy
+            state.perceived_objects[o.obj_id] = [o.bbox_xyzrpy, o.bbox_dim]
     finally:
         state.obj_lock.release()
+
 
 class robot_state:
     WAIT = "WAIT"
@@ -194,7 +196,49 @@ class robot_state:
         self.gripper_client.send_goal(gripper_goal)
         self.gripper_client.wait_for_result(rospy.Duration(4.0))
 
+    def set_up_scene(self):
+        #self.scene.remove_world_object()
+        self.obj_lock.acquire()
+        try:
+            for onum, o in self.perceived_objects.iteritems():
+                p = geometry_msgs.msg.Pose()
+                p.position.x = o[0].translation.x
+                p.position.y = o[0].translation.y
+                p.position.z = o[0].translation.z
+                p.orientation.x = o[0].rotation.x
+                p.orientation.y = o[0].rotation.y
+                p.orientation.z = o[0].rotation.z
+                p.orientation.w = o[0].rotation.w
+                ps = geometry_msgs.msg.PoseStamped()
+                ps.pose = p
+                ps.header.frame_id = self.group.get_planning_frame()
+
+                self.scene.add_box(str(onum), ps,
+                                   (o[1].x+0.02,
+                                    o[1].y+0.02,
+                                    o[1].z+0.02))
+
+            planep = geometry_msgs.msg.Pose()
+            planep.position.x = 0.8
+            planep.position.y = 0.0
+            planep.position.z = (self.current_table[3] + self.current_table[0]*0.8 +
+                                 self.current_table[1]*0.0) / -self.current_table[2]
+            pps = geometry_msgs.msg.PoseStamped()
+            pps.pose = planep
+            pps.header.frame_id = self.group.get_planning_frame()
+            self.scene.add_plane("table", pps, (self.current_table[0],
+                                                self.current_table[1],
+                                                self.current_table[2]),
+                                 self.current_table[3])
+        finally:
+            self.obj_lock.release()
+
+        rospy.sleep(0.1)
+
     def move_to_xyz_target(self, target):
+        while len(self.scene.get_known_object_names()) is 0:
+            self.set_up_scene()
+
         adjusted_target = [target[0], target[1], target[2], 1]
         target_rpy = [0, -math.pi/4.0, 0]
         target_quat = rpy2quat(target_rpy)
@@ -207,6 +251,9 @@ class robot_state:
         pose_target.position.x = adjusted_target[0]
         pose_target.position.y = adjusted_target[1]
         pose_target.position.z = adjusted_target[2]
+
+        print("OBJECTS: ")
+        print(self.scene.get_known_object_names())
 
         self.group.set_pose_target(pose_target)
         the_plan = self.group.plan()
@@ -229,6 +276,7 @@ class robot_state:
 
         self.obj_lock = Lock()
         self.perceived_objects = {}
+        self.current_table = []
 
         moveit_commander.roscpp_initialize(sys.argv)
 

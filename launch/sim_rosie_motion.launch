@@ -6,7 +6,6 @@
 </include>
 
 <include file="$(find fetch_moveit_config)/launch/move_group.launch" >
-<arg name="allow_active_sensing" value="true" />
 </include>
 
 <node name="rosie_motion_server" pkg="rosie_motion" type="motion_server.py" output="screen" args="check_motion_plans=false">
