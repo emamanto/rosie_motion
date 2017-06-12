@@ -322,7 +322,16 @@ class robot_state:
 
         self.robot = moveit_commander.RobotCommander()
         self.scene = moveit_commander.PlanningSceneInterface()
-        self.group = moveit_commander.MoveGroupCommander("arm")
+        success = False
+        while success == False:
+            try:
+                self.group = moveit_commander.MoveGroupCommander("arm")
+                success = True
+            except RuntimeError:
+                success = False
+                rospy.loginfo("Failed to create MoveGroupCommander; trying again")
+                rospy.sleep(5)
+
         self.group.set_max_velocity_scaling_factor(0.3)
 
         self.gripper_client = actionlib.SimpleActionClient("gripper_controller/gripper_action", GripperCommandAction)
@@ -361,7 +370,7 @@ if __name__ == '__main__':
                 rospy.loginfo("Invalid check_motion_plans argument given.")
                 sys.exit(0)
 
-    time.sleep(15)
+    time.sleep(20)
     status = robot_state(human_motor_check)
     # This stops all arm movement goals
     # It should be called when a program is exiting so movement stops
