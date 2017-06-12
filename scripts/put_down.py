@@ -7,10 +7,10 @@ from rosie_msgs.msg import RobotCommand
 from geometry_msgs.msg import Transform
 
 if __name__ == '__main__':
-    rospy.init_node("rosie_pickup")
+    rospy.init_node("rosie_putdown")
 
-    targ = input("Location? (x for random) ")
-    nums = ["0.7", "0.1", "0"]
+    targ = raw_input("Location? (x for random) ")
+    nums = ["0.2", "0.2"]
     if targ != "x":
         nums = targ.split(" ")
 

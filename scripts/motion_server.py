@@ -28,6 +28,9 @@ def command_callback(data, state):
         targ = data.action.split('=')[1]
         state.to_grab = int(targ)
         handle_grasp(int(targ), state)
+    elif robot_state.DROP in data.action:
+        state.to_grab = -1
+        handle_drop(data.dest, state)
     elif robot_state.POINT in data.action:
         targ = data.action.split('=')[1]
         state.to_grab = int(targ)
@@ -70,14 +73,13 @@ def handle_grasp(id, state):
     waypoints.append(state.group.get_current_pose().pose)
 
     grasp_pose = copy.deepcopy(waypoints[0])
-    grasp_pose.position.x += 0.08
+    grasp_pose.position.x += 0.05
     grasp_pose.position.z -= 0.08
     waypoints.append(grasp_pose)
 
     (grasp_in, frac) = state.group.compute_cartesian_path(waypoints,
                                                           0.01, 0.0,
                                                           avoid_collisions=False)
-
     if state.check_motion:
         goahead = raw_input("Is this plan okay? ")
         if goahead == "y" or goahead == "yes":
@@ -96,8 +98,8 @@ def handle_grasp(id, state):
     waypoints.append(state.group.get_current_pose().pose)
 
     back_pose = copy.deepcopy(waypoints[0])
-    back_pose.position.x -= 0.08
-    back_pose.position.z += 0.1
+    back_pose.position.x -= 0.05
+    back_pose.position.z += 0.08
     waypoints.append(back_pose)
 
     (grasp_out, frac) = state.group.compute_cartesian_path(waypoints,
@@ -118,6 +120,30 @@ def handle_grasp(id, state):
 
     rospy.loginfo("Motor node switching to wait.")
     state.finished_action = robot_state.GRAB
+    state.action_state = robot_state.WAIT
+
+def handle_drop(target, state):
+    rospy.loginfo("PUTTING DOWN OBJECT IN GRIPPER")
+    state.publish_status()
+    planez = (state.current_table[3] + state.current_table[0]*0.8 +
+              state.current_table[1]*0.0) / -state.current_table[2]
+
+    plan_target = [target.translation.x,
+                   target.translation.y,
+                   planez + 0.3]
+
+    print(plan_target)
+
+    # Move to pre-drop position
+    state.move_to_xyz_target(plan_target)
+    rospy.sleep(2)
+    state.open_gripper()
+    rospy.sleep(2)
+    state.close_gripper()
+    state.home_arm()
+
+    rospy.loginfo("Motor node switching to wait.")
+    state.finished_action = robot_state.DROP
     state.action_state = robot_state.WAIT
 
 def handle_point(id, state):
@@ -251,8 +277,7 @@ class robot_state:
         self.scene.add_box("table", pps, (1, 1, 0.02))
 
     def move_to_xyz_target(self, target):
-        while len(self.scene.get_known_object_names()) is 0:
-            self.set_up_scene()
+        self.set_up_scene()
 
         adjusted_target = [target[0], target[1], target[2], 1]
         target_rpy = [0, -math.pi/4.0, 0]
@@ -298,7 +323,7 @@ class robot_state:
         self.robot = moveit_commander.RobotCommander()
         self.scene = moveit_commander.PlanningSceneInterface()
         self.group = moveit_commander.MoveGroupCommander("arm")
-        self.group.set_max_velocity_scaling_factor(0.2)
+        self.group.set_max_velocity_scaling_factor(0.3)
 
         self.gripper_client = actionlib.SimpleActionClient("gripper_controller/gripper_action", GripperCommandAction)
         self.gripper_client.wait_for_server()
