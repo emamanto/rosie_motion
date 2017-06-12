@@ -37,6 +37,7 @@ def command_callback(data, state):
         handle_home(state)
     elif robot_state.SCENE in data.action:
         state.set_up_scene()
+        state.action_state = robot_state.WAIT
     else:
         state.to_grab = -1
 
@@ -49,9 +50,12 @@ def handle_grasp(id, state):
     plan_target = []
     state.obj_lock.acquire()
     try:
-        plan_target = [state.perceived_objects[id].translation.x-0.22,
-                       state.perceived_objects[id].translation.y-0.02,
-                       state.perceived_objects[id].translation.z+0.22]
+        plan_target = [(state.perceived_objects[id][0].translation.x +
+                        state.perceived_objects[id][1].x/2.0) - 0.2,
+                       (state.perceived_objects[id][0].translation.y -
+                        state.perceived_objects[id][1].y/2.0),
+                       (state.perceived_objects[id][0].translation.z +
+                        state.perceived_objects[id][1].z/2.0) + 0.2]
     finally:
         state.obj_lock.release()
 
@@ -201,14 +205,20 @@ class robot_state:
         self.gripper_client.wait_for_result(rospy.Duration(4.0))
 
     def set_up_scene(self):
-        self.scene.remove_world_object()
+        #self.scene.remove_world_object() <- broken
+        co = CollisionObject()
+        co.operation = CollisionObject.REMOVE
+        co.header.frame_id = self.group.get_planning_frame()
+        self.collision_pub.publish(co)
+        rospy.sleep(0.1)
+
         self.obj_lock.acquire()
         try:
             for onum, o in self.perceived_objects.iteritems():
                 p = geometry_msgs.msg.Pose()
-                p.position.x = o[0].translation.x
-                p.position.y = o[0].translation.y
-                p.position.z = o[0].translation.z
+                p.position.x = o[0].translation.x + (o[1].x/2.0)
+                p.position.y = o[0].translation.y - (o[1].y/2.0)
+                p.position.z = o[0].translation.z + (o[1].z/2.0)
                 p.orientation.x = o[0].rotation.x
                 p.orientation.y = o[0].rotation.y
                 p.orientation.z = o[0].rotation.z
@@ -221,39 +231,24 @@ class robot_state:
                                    (o[1].x+0.02,
                                     o[1].y+0.02,
                                     o[1].z+0.02))
+                rospy.sleep(0.1)
 
-            planep = geometry_msgs.msg.Pose()
-            planep.position.x = 0.8
-            planep.position.y = 0.0
-            planep.position.z = (self.current_table[3] + self.current_table[0]*0.8 +
-                                 self.current_table[1]*0.0) / -self.current_table[2]
-            planep.orientation.w = 1.0
-            pps = geometry_msgs.msg.PoseStamped()
-            pps.pose = planep
-            pps.header.frame_id = self.group.get_planning_frame()
-            print(pps)
-            # add_plane is broken, so I'm duplicating its functionality
-            #self.scene.add_plane("table", pps, (self.current_table[0],
-            #                                    self.current_table[1],
-            #                                    self.current_table[2]),
-            #                     self.current_table[3])
-
-            co = CollisionObject()
-            co.operation = CollisionObject.ADD
-            co.id = "table"
-            co.header.frame_id = self.group.get_planning_frame()
-            pl = Plane()
-            pl.coef = list(self.current_table[0],
-                           self.current_table[1],
-                           self.current_table[2])
-            pl.coef.append(self.current_table[3])
-            co.planes = [pl]
-            co.plane_poses = [pps]
-            self.collision_publisher.publish(co)
         finally:
             self.obj_lock.release()
 
-        rospy.sleep(0.1)
+        planep = geometry_msgs.msg.Pose()
+        planep.position.x = 0.8
+        planep.position.y = 0.0
+        planep.position.z = (self.current_table[3] + self.current_table[0]*0.8 +
+                             self.current_table[1]*0.0) / -self.current_table[2]
+        planep.position.z += 0.01
+
+        planep.orientation.w = 1.0
+        pps = geometry_msgs.msg.PoseStamped()
+        pps.pose = planep
+        pps.header.frame_id = self.group.get_planning_frame()
+        # add_plane is broken, I think, so I'm adding the table as a flat box
+        self.scene.add_box("table", pps, (1, 1, 0.02))
 
     def move_to_xyz_target(self, target):
         while len(self.scene.get_known_object_names()) is 0:
@@ -311,7 +306,7 @@ class robot_state:
         rospy.Subscriber("/rosie_arm_commands", RobotCommand, command_callback, callback_args=self)
         rospy.Subscriber("/rosie_observations", Observations, object_callback, callback_args=self)
 
-        self.stats_pub = rospy.Publisher("/rosie_arm_status", RobotAction, queue_size=10)
+        self.stats_pub = rospy.Publisher("/rosie_arm_status", RobotAction, queue_size=100)
         self.rate = rospy.Rate(10)
 
         self.collision_pub = rospy.Publisher('/collision_object', CollisionObject, queue_size=100)
