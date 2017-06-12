@@ -41,10 +41,16 @@
   <!--   <test_depend>gtest</test_depend> -->
   <buildtool_depend>catkin</buildtool_depend>
   <build_depend>moveit_python</build_depend>
+  <build_depend>moveit_core</build_depend>
+  <build_depend>moveit_ros_move_group</build_depend>
+  <build_depend>moveit_ros_planning_interface</build_depend>
   <build_depend>rosie_msgs</build_depend>
   <build_depend>rospy</build_depend>
   <build_depend>std_msgs</build_depend>
   <run_depend>moveit_python</run_depend>
+  <run_depend>moveit_core</run_depend>
+  <run_depend>moveit_ros_move_group</run_depend>
+  <run_depend>moveit_ros_planning_interface</run_depend>
   <run_depend>rosie_msgs</run_depend>
   <run_depend>rospy</run_depend>
   <run_depend>std_msgs</run_depend>
