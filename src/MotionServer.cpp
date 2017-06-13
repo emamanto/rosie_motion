@@ -96,9 +96,9 @@ public:
             objectPoses.insert(std::pair<int, std::vector<float> >(i->obj_id, pos));
 
             std::vector<float> dim = std::vector<float>();
-            pos.push_back(i->bbox_dim.x);
-            pos.push_back(i->bbox_dim.y);
-            pos.push_back(i->bbox_dim.z);
+            dim.push_back(i->bbox_dim.x);
+            dim.push_back(i->bbox_dim.y);
+            dim.push_back(i->bbox_dim.z);
             objectSizes.insert(std::pair<int, std::vector<float> >(i->obj_id, dim));
         }
     }
@@ -196,74 +196,53 @@ public:
 
     void setUpScene()
     {
-        //boost::lock_guard<boost::mutex> guard(objMutex);
+      std::vector<std::string> known = scene.getKnownObjectNames();
+      std::vector<moveit_msgs::CollisionObject> rmList;
+      for (std::vector<std::string>::iterator i = known.begin();
+           i != known.end(); i++) {
+        moveit_msgs::CollisionObject co;
+        co.header.frame_id = group.getPlanningFrame();
+        co.id = *i;
+        co.operation = co.REMOVE;
+        rmList.push_back(co);
+      }
+      scene.removeCollisionObjects(known);
+      ros::Duration(1).sleep();
 
-        std::vector<moveit_msgs::CollisionObject> collision_objects;
-        for (std::map<int, std::vector<float> >::iterator i = objectPoses.begin();
-             i != objectPoses.end(); i++) {
-            moveit_msgs::CollisionObject collision_object;
-            collision_object.header.frame_id = group.getPlanningFrame();
+      std::vector<moveit_msgs::CollisionObject> coList;
+      for (std::map<int, std::vector<float> >::iterator i = objectPoses.begin();
+           i != objectPoses.end(); i++) {
+        moveit_msgs::CollisionObject co;
+        co.header.frame_id = group.getPlanningFrame();
 
-            int objID = i->first;
-            std::stringstream ss;
-            ss << objID;
-            collision_object.id = ss.str();
-            ROS_INFO("Found obj with id %d", objID);
+        int objID = i->first;
+        std::stringstream ss;
+        ss << objID;
+        co.id = ss.str();
 
-            shape_msgs::SolidPrimitive primitive;
-            primitive.type = primitive.BOX;
-            primitive.dimensions.resize(3);
-            primitive.dimensions[0] = objectSizes[objID][0];
-            primitive.dimensions[1] = objectSizes[objID][1];
-            primitive.dimensions[2] = objectSizes[objID][2];
-            ROS_INFO("Made primitive");
+        geometry_msgs::Pose box_pose;
+        box_pose.position.x = i->second[0];
+        box_pose.position.y = i->second[1];
+        box_pose.position.z = i->second[2] + objectSizes[objID][2]/2.0;
+        box_pose.orientation = tf::createQuaternionMsgFromRollPitchYaw(i->second[5],
+                                                                       i->second[4],
+                                                                       -i->second[3]);
 
-            /* A pose for the box (specified relative to frame_id) */
-            geometry_msgs::Pose box_pose;
-            box_pose.position.x = i->second[0];
-            box_pose.position.y = i->second[1];
-            box_pose.position.z = i->second[2];
-            box_pose.orientation.w = 1.0;
-            ROS_INFO("Made pose");
+        shape_msgs::SolidPrimitive primitive;
+        primitive.type = primitive.BOX;
+        primitive.dimensions.resize(3);
+        primitive.dimensions[0] = objectSizes[objID][0]+0.02;
+        primitive.dimensions[1] = objectSizes[objID][1]+0.02;
+        primitive.dimensions[2] = objectSizes[objID][2]+0.02;
 
-            collision_object.primitives.push_back(primitive);
-            collision_object.primitive_poses.push_back(box_pose);
-            collision_object.operation = collision_object.ADD;
-            collision_objects.push_back(collision_object);
-        }
+        co.primitives.push_back(primitive);
+        co.primitive_poses.push_back(box_pose);
+        co.operation = co.ADD;
+        coList.push_back(co);
+      }
 
-       ROS_INFO("Adding objects into the world");
-       scene.addCollisionObjects(collision_objects);
- //        #self.scene.remove_world_object() <- broken
-//         co = CollisionObject()
-//         co.operation = CollisionObject.REMOVE
-//         co.header.frame_id = self.group.get_planning_frame()
-//         self.collision_pub.publish(co)
-//         rospy.sleep(0.1)
-
-//         self.obj_lock.acquire()
-//         try:
-//             for onum, o in self.perceived_objects.iteritems():
-//                 p = geometry_msgs.msg.Pose()
-//                 p.position.x = o[0].translation.x + (o[1].x/2.0)
-//                 p.position.y = o[0].translation.y - (o[1].y/2.0)
-//                 p.position.z = o[0].translation.z + (o[1].z/2.0)
-//                 p.orientation.x = o[0].rotation.x
-//                 p.orientation.y = o[0].rotation.y
-//                 p.orientation.z = o[0].rotation.z
-//                 p.orientation.w = o[0].rotation.w
-//                 ps = geometry_msgs.msg.PoseStamped()
-//                 ps.pose = p
-//                 ps.header.frame_id = self.group.get_planning_frame()
-
-//                 self.scene.add_box(str(onum), ps,
-//                                    (o[1].x+0.02,
-//                                     o[1].y+0.02,
-//                                     o[1].z+0.02))
-//                 rospy.sleep(0.1)
-
-//         finally:
-//             self.obj_lock.release()
+      scene.addCollisionObjects(coList);
+      ros::Duration(1).sleep();
 
 //         planep = geometry_msgs.msg.Pose()
 //         planep.position.x = 0.8
@@ -279,6 +258,29 @@ public:
 //         # add_plane is broken, I think, so I'm adding the table as a flat box
 //         self.scene.add_box("table", pps, (1, 1, 0.02))
     }
+
+  bool safetyCheck()
+  {
+    if (!checkPlans) return true;
+    std::string input;
+    std::cout << "Is this motion plan okay? ";
+    std::cin >> input;
+
+    if (input.find("y")!=std::string::npos)
+      {
+        ROS_INFO("Plan accepted; starting execution");
+        return true;
+      }
+
+    if (input.find("n")!=std::string::npos)
+      {
+        ROS_INFO("Plan rejected; cancelling execution");
+        return false;
+      }
+
+    ROS_INFO("Confusing input to safety check; cancelling execution");
+    return false;
+  }
 
     void homeArm()
     {
@@ -296,14 +298,10 @@ public:
         moveit::planning_interface::MoveGroup::Plan homePlan;
         bool success = group.plan(homePlan);
 
-        // XXX Safety!!
-        // if self.check_motion:
-        //     goahead = raw_input("Is this plan okay? ")
-        //     if goahead == "y" or goahead == "yes":
-        //         rospy.loginfo("Motion plan approved. Execution starting.")
-        //     else:
-        //         rospy.loginfo("Motion execution cancelled.")
-        //         return
+        if (!safetyCheck()) {
+          state = FAILURE;
+          return;
+        }
 
         bool moveSuccess = group.execute(homePlan);
         state = WAIT;
@@ -312,9 +310,6 @@ public:
     void moveToXYZTarget(float x, float y, float z)
     {
         //self.set_up_scene()
-
-        //target_rpy = [0, -math.pi/4.0, 0]
-        //target_quat = rpy2quat(target_rpy)
 
         geometry_msgs::Quaternion q =
             tf::createQuaternionMsgFromRollPitchYaw(0, M_PI/4.0, 0);
@@ -328,14 +323,10 @@ public:
         moveit::planning_interface::MoveGroup::Plan xyzPlan;
         bool success = group.plan(xyzPlan);
 
-        // XXX Safety!!
-        // if self.check_motion:
-        //     goahead = raw_input("Is this plan okay? ")
-        //     if goahead == "y" or goahead == "yes":
-        //         rospy.loginfo("Motion plan approved. Execution starting.")
-        //     else:
-        //         rospy.loginfo("Motion execution cancelled.")
-        //         return
+        if (!safetyCheck()) {
+          state = FAILURE;
+          return;
+        }
 
         bool moveSuccess = group.execute(xyzPlan);
         state = WAIT;
