@@ -196,39 +196,44 @@ public:
 
     void setUpScene()
     {
-        moveit_msgs::CollisionObject collision_object;
-        collision_object.header.frame_id = group.getPlanningFrame();
+        //boost::lock_guard<boost::mutex> guard(objMutex);
 
-        /* The id of the object is used to identify it. */
-        collision_object.id = "box1";
+        std::vector<moveit_msgs::CollisionObject> collision_objects;
+        for (std::map<int, std::vector<float> >::iterator i = objectPoses.begin();
+             i != objectPoses.end(); i++) {
+            moveit_msgs::CollisionObject collision_object;
+            collision_object.header.frame_id = group.getPlanningFrame();
 
-        /* Define a box to add to the world. */
-        shape_msgs::SolidPrimitive primitive;
-        primitive.type = primitive.BOX;
-        primitive.dimensions.resize(3);
-        primitive.dimensions[0] = 0.4;
-        primitive.dimensions[1] = 0.1;
-        primitive.dimensions[2] = 0.4;
+            int objID = i->first;
+            std::stringstream ss;
+            ss << objID;
+            collision_object.id = ss.str();
+            ROS_INFO("Found obj with id %d", objID);
 
-       /* A pose for the box (specified relative to frame_id) */
-       geometry_msgs::Pose box_pose;
-       box_pose.orientation.w = 1.0;
-       box_pose.position.x =  0.6;
-       box_pose.position.y = -0.4;
-       box_pose.position.z =  1.2;
+            shape_msgs::SolidPrimitive primitive;
+            primitive.type = primitive.BOX;
+            primitive.dimensions.resize(3);
+            primitive.dimensions[0] = objectSizes[objID][0];
+            primitive.dimensions[1] = objectSizes[objID][1];
+            primitive.dimensions[2] = objectSizes[objID][2];
+            ROS_INFO("Made primitive");
 
-       collision_object.primitives.push_back(primitive);
-       collision_object.primitive_poses.push_back(box_pose);
-       collision_object.operation = collision_object.ADD;
+            /* A pose for the box (specified relative to frame_id) */
+            geometry_msgs::Pose box_pose;
+            box_pose.position.x = i->second[0];
+            box_pose.position.y = i->second[1];
+            box_pose.position.z = i->second[2];
+            box_pose.orientation.w = 1.0;
+            ROS_INFO("Made pose");
 
-       std::vector<moveit_msgs::CollisionObject> collision_objects;
-       collision_objects.push_back(collision_object);
+            collision_object.primitives.push_back(primitive);
+            collision_object.primitive_poses.push_back(box_pose);
+            collision_object.operation = collision_object.ADD;
+            collision_objects.push_back(collision_object);
+        }
 
-       ROS_INFO("Adding an object into the world");
+       ROS_INFO("Adding objects into the world");
        scene.addCollisionObjects(collision_objects);
-
-/* Sleep so we have time to see the object in RViz */
-       sleep(2.0);
  //        #self.scene.remove_world_object() <- broken
 //         co = CollisionObject()
 //         co.operation = CollisionObject.REMOVE
