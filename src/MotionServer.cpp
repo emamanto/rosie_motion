@@ -8,6 +8,7 @@
 #include <map>
 #include <iostream>
 #include <sstream>
+#include <math.h>
 
 #include <boost/thread.hpp>
 
@@ -178,6 +179,7 @@ public:
     void handlePointCommand(int id)
     {
         ROS_INFO("POINT command recieved ok");
+        moveToXYZTarget(0.3, 0.1, 0.8);
     }
 
     void publishStatus(const ros::TimerEvent& e)
@@ -204,7 +206,6 @@ public:
 
         moveit::planning_interface::MoveGroup::Plan homePlan;
         bool success = group.plan(homePlan);
-        ROS_INFO("Planning is done");
 
         // XXX Safety!!
         // if self.check_motion:
@@ -216,6 +217,38 @@ public:
         //         return
 
         bool moveSuccess = group.execute(homePlan);
+        state = WAIT;
+    }
+
+    void moveToXYZTarget(float x, float y, float z)
+    {
+        //self.set_up_scene()
+
+        //target_rpy = [0, -math.pi/4.0, 0]
+        //target_quat = rpy2quat(target_rpy)
+
+        geometry_msgs::Quaternion q =
+            tf::createQuaternionMsgFromRollPitchYaw(0, -M_PI/4.0, 0);
+        geometry_msgs::Pose target = geometry_msgs::Pose();
+        target.orientation = q;
+        target.position.x = x;
+        target.position.y = y;
+        target.position.z = z;
+
+        group.setPoseTarget(target);
+        moveit::planning_interface::MoveGroup::Plan xyzPlan;
+        bool success = group.plan(xyzPlan);
+
+        // XXX Safety!!
+        // if self.check_motion:
+        //     goahead = raw_input("Is this plan okay? ")
+        //     if goahead == "y" or goahead == "yes":
+        //         rospy.loginfo("Motion plan approved. Execution starting.")
+        //     else:
+        //         rospy.loginfo("Motion execution cancelled.")
+        //         return
+
+        bool moveSuccess = group.execute(xyzPlan);
         state = WAIT;
     }
 
@@ -245,7 +278,6 @@ int main(int argc, char** argv)
     ros::init(argc, argv, "rosie_motion_server");
     MotionServer ms;
 
-    ROS_INFO("Motion Server created, going to spin.");
     ros::AsyncSpinner spinner(4);
     spinner.start();
     ros::waitForShutdown();
