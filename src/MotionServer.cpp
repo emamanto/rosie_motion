@@ -51,16 +51,16 @@ public:
     MotionServer(bool humanCheck=true) : state(WAIT),
                                          lastCommandTime(0),
                                          grabbedObject(-1),
-                                         checkPlans(humanCheck)
+                                         checkPlans(humanCheck),
+                                         group("arm")
     {
         ROS_INFO("RosieMotionServer starting up!");
         ros::NodeHandle n;
 
-        moveit::planning_interface::MoveGroup group("arm");
-        moveit::planning_interface::PlanningSceneInterface planning_scene_interface;
-
         ROS_INFO("Reference frame: %s", group.getPlanningFrame().c_str());
         ROS_INFO("EE frame: %s", group.getEndEffectorLink().c_str());
+
+        group.setMaxVelocityScalingFactor(0.3);
 
         obsSubscriber = n.subscribe("rosie_observations", 10,
                                     &MotionServer::obsCallback, this);
@@ -99,7 +99,7 @@ public:
         }
     }
 
-    void publish_status()
+    void publishStatus()
     {
         rosie_msgs::RobotAction msg = rosie_msgs::RobotAction();
         msg.utime = ros::Time::now().toNSec();
@@ -108,10 +108,38 @@ public:
         statusPublisher.publish(msg);
      }
 
+    void homeArm()
+    {
+        group.setStartStateToCurrentState();
+        std::vector<double> joints = std::vector<double>();
+        joints.push_back(1.32);
+        joints.push_back(0.7);
+        joints.push_back(0.0);
+        joints.push_back(-2.0);
+        joints.push_back(0.0);
+        joints.push_back(-0.57);
+        joints.push_back(0.0);
+        group.setJointValueTarget(joints);
+
+        moveit::planning_interface::MoveGroup::Plan homePlan;
+        bool success = group.plan(homePlan);
+
+        // XXX Safety!!
+        // if self.check_motion:
+        //     goahead = raw_input("Is this plan okay? ")
+        //     if goahead == "y" or goahead == "yes":
+        //         rospy.loginfo("Motion plan approved. Execution starting.")
+        //     else:
+        //         rospy.loginfo("Motion execution cancelled.")
+        //         return
+
+        bool moveSuccess = group.execute(homePlan);
+    }
+
     void runLoop()
     {
         ROS_INFO("Node is running");
-        publish_status();
+        publishStatus();
     }
 
 private:
@@ -122,6 +150,10 @@ private:
     long lastCommandTime;
     int grabbedObject;
     bool checkPlans;
+
+    moveit::planning_interface::MoveGroup group;
+    moveit::planning_interface::PlanningSceneInterface scene;
+
 
     std::map<int, std::vector<float> > objectPoses;
     std::map<int, std::vector<float> > objectSizes;
