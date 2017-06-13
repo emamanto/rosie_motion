@@ -64,6 +64,7 @@ public:
 
         obsSubscriber = n.subscribe("rosie_observations", 10,
                                     &MotionServer::obsCallback, this);
+        statusPublisher = n.advertise<rosie_msgs::RobotAction>("rosie_arm_status", 10);
     };
 
     void obsCallback(const rosie_msgs::Observations::ConstPtr& msg)
@@ -98,13 +99,24 @@ public:
         }
     }
 
+    void publish_status()
+    {
+        rosie_msgs::RobotAction msg = rosie_msgs::RobotAction();
+        msg.utime = ros::Time::now().toNSec();
+        msg.action = asToString(state).c_str();
+        msg.obj_id = grabbedObject;
+        statusPublisher.publish(msg);
+     }
+
     void runLoop()
     {
         ROS_INFO("Node is running");
+        publish_status();
     }
 
 private:
     ros::Subscriber obsSubscriber;
+    ros::Publisher statusPublisher;
 
     ActionState state;
     long lastCommandTime;
