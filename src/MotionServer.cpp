@@ -56,7 +56,6 @@ public:
                                          group("arm")
     {
         ROS_INFO("RosieMotionServer starting up!");
-        ros::NodeHandle n;
 
         ROS_INFO("Reference frame: %s", group.getPlanningFrame().c_str());
         ROS_INFO("EE frame: %s", group.getEndEffectorLink().c_str());
@@ -68,6 +67,9 @@ public:
         commSubscriber = n.subscribe("rosie_arm_commands", 10,
                                      &MotionServer::commandCallback, this);
         statusPublisher = n.advertise<rosie_msgs::RobotAction>("rosie_arm_status", 10);
+
+        pubTimer = n.createTimer(ros::Duration(0.1),
+                                 &MotionServer::publishStatus, this);
     };
 
     void obsCallback(const rosie_msgs::Observations::ConstPtr& msg)
@@ -178,7 +180,7 @@ public:
         ROS_INFO("POINT command recieved ok");
     }
 
-    void publishStatus()
+    void publishStatus(const ros::TimerEvent& e)
     {
         rosie_msgs::RobotAction msg = rosie_msgs::RobotAction();
         msg.utime = ros::Time::now().toNSec();
@@ -202,6 +204,7 @@ public:
 
         moveit::planning_interface::MoveGroup::Plan homePlan;
         bool success = group.plan(homePlan);
+        ROS_INFO("Planning is done");
 
         // XXX Safety!!
         // if self.check_motion:
@@ -216,16 +219,12 @@ public:
         state = WAIT;
     }
 
-    void runLoop()
-    {
-        ROS_INFO("Node is running");
-        publishStatus();
-    }
-
 private:
+    ros::NodeHandle n;
     ros::Subscriber obsSubscriber;
     ros::Subscriber commSubscriber;
     ros::Publisher statusPublisher;
+    ros::Timer pubTimer;
 
     ActionState state;
     long lastCommandTime;
@@ -234,7 +233,6 @@ private:
 
     moveit::planning_interface::MoveGroup group;
     moveit::planning_interface::PlanningSceneInterface scene;
-
 
     std::map<int, std::vector<float> > objectPoses;
     std::map<int, std::vector<float> > objectSizes;
@@ -247,12 +245,10 @@ int main(int argc, char** argv)
     ros::init(argc, argv, "rosie_motion_server");
     MotionServer ms;
 
-    ros::Rate loopRate(1);
-    while (ros::ok()) {
-        ros::spinOnce();
-        ms.runLoop();
-        loopRate.sleep();
-    }
+    ROS_INFO("Motion Server created, going to spin.");
+    ros::AsyncSpinner spinner(4);
+    spinner.start();
+    ros::waitForShutdown();
 
     return 0;
 }
