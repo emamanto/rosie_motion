@@ -58,9 +58,6 @@ public:
     {
         ROS_INFO("RosieMotionServer starting up!");
 
-        ROS_INFO("Reference frame: %s", group.getPlanningFrame().c_str());
-        ROS_INFO("EE frame: %s", group.getEndEffectorLink().c_str());
-
         group.setMaxVelocityScalingFactor(0.3);
 
         obsSubscriber = n.subscribe("rosie_observations", 10,
@@ -178,8 +175,13 @@ public:
 
     void handlePointCommand(int id)
     {
-        ROS_INFO("POINT command recieved ok");
-        moveToXYZTarget(0.3, 0.1, 0.8);
+        boost::lock_guard<boost::mutex> guard(objMutex);
+        float x = objectPoses[id][0] - 0.22;
+        float y = objectPoses[id][1];
+        float z = objectPoses[id][2] + 0.22;
+        moveToXYZTarget(x, y, z);
+        ros::Duration(1.0).sleep();
+        homeArm();
     }
 
     void publishStatus(const ros::TimerEvent& e)
@@ -228,7 +230,7 @@ public:
         //target_quat = rpy2quat(target_rpy)
 
         geometry_msgs::Quaternion q =
-            tf::createQuaternionMsgFromRollPitchYaw(0, -M_PI/4.0, 0);
+            tf::createQuaternionMsgFromRollPitchYaw(0, M_PI/4.0, 0);
         geometry_msgs::Pose target = geometry_msgs::Pose();
         target.orientation = q;
         target.position.x = x;
