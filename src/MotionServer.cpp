@@ -17,6 +17,7 @@
 #include <moveit/move_group_interface/move_group.h>
 #include <tf/transform_datatypes.h>
 
+#include "moveit_msgs/CollisionObject.h"
 #include "rosie_msgs/RobotCommand.h"
 #include "rosie_msgs/RobotAction.h"
 #include "rosie_msgs/Observations.h"
@@ -154,8 +155,8 @@ public:
         else if (msg->action.find("SCENE")!=std::string::npos){
             ROS_INFO("Handling build scene command");
             state = SCENE;
-            // setUpScene();
-            // state = WAIT;
+            setUpScene();
+            state = WAIT;
         }
         else {
             ROS_INFO("Unknown command type received");
@@ -192,6 +193,87 @@ public:
         msg.obj_id = grabbedObject;
         statusPublisher.publish(msg);
      }
+
+    void setUpScene()
+    {
+        moveit_msgs::CollisionObject collision_object;
+        collision_object.header.frame_id = group.getPlanningFrame();
+
+        /* The id of the object is used to identify it. */
+        collision_object.id = "box1";
+
+        /* Define a box to add to the world. */
+        shape_msgs::SolidPrimitive primitive;
+        primitive.type = primitive.BOX;
+        primitive.dimensions.resize(3);
+        primitive.dimensions[0] = 0.4;
+        primitive.dimensions[1] = 0.1;
+        primitive.dimensions[2] = 0.4;
+
+       /* A pose for the box (specified relative to frame_id) */
+       geometry_msgs::Pose box_pose;
+       box_pose.orientation.w = 1.0;
+       box_pose.position.x =  0.6;
+       box_pose.position.y = -0.4;
+       box_pose.position.z =  1.2;
+
+       collision_object.primitives.push_back(primitive);
+       collision_object.primitive_poses.push_back(box_pose);
+       collision_object.operation = collision_object.ADD;
+
+       std::vector<moveit_msgs::CollisionObject> collision_objects;
+       collision_objects.push_back(collision_object);
+
+       ROS_INFO("Adding an object into the world");
+       scene.addCollisionObjects(collision_objects);
+
+/* Sleep so we have time to see the object in RViz */
+       sleep(2.0);
+ //        #self.scene.remove_world_object() <- broken
+//         co = CollisionObject()
+//         co.operation = CollisionObject.REMOVE
+//         co.header.frame_id = self.group.get_planning_frame()
+//         self.collision_pub.publish(co)
+//         rospy.sleep(0.1)
+
+//         self.obj_lock.acquire()
+//         try:
+//             for onum, o in self.perceived_objects.iteritems():
+//                 p = geometry_msgs.msg.Pose()
+//                 p.position.x = o[0].translation.x + (o[1].x/2.0)
+//                 p.position.y = o[0].translation.y - (o[1].y/2.0)
+//                 p.position.z = o[0].translation.z + (o[1].z/2.0)
+//                 p.orientation.x = o[0].rotation.x
+//                 p.orientation.y = o[0].rotation.y
+//                 p.orientation.z = o[0].rotation.z
+//                 p.orientation.w = o[0].rotation.w
+//                 ps = geometry_msgs.msg.PoseStamped()
+//                 ps.pose = p
+//                 ps.header.frame_id = self.group.get_planning_frame()
+
+//                 self.scene.add_box(str(onum), ps,
+//                                    (o[1].x+0.02,
+//                                     o[1].y+0.02,
+//                                     o[1].z+0.02))
+//                 rospy.sleep(0.1)
+
+//         finally:
+//             self.obj_lock.release()
+
+//         planep = geometry_msgs.msg.Pose()
+//         planep.position.x = 0.8
+//         planep.position.y = 0.0
+//         planep.position.z = (self.current_table[3] + self.current_table[0]*0.8 +
+//                              self.current_table[1]*0.0) / -self.current_table[2]
+//         planep.position.z += 0.01
+
+//         planep.orientation.w = 1.0
+//         pps = geometry_msgs.msg.PoseStamped()
+//         pps.pose = planep
+//         pps.header.frame_id = self.group.get_planning_frame()
+//         # add_plane is broken, I think, so I'm adding the table as a flat box
+//         self.scene.add_box("table", pps, (1, 1, 0.02))
+    }
 
     void homeArm()
     {
