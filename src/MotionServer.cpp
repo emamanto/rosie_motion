@@ -7,6 +7,7 @@
 #include <string>
 #include <map>
 #include <iostream>
+#include <sstream>
 
 #include <boost/thread.hpp>
 
@@ -64,6 +65,8 @@ public:
 
         obsSubscriber = n.subscribe("rosie_observations", 10,
                                     &MotionServer::obsCallback, this);
+        commSubscriber = n.subscribe("rosie_arm_commands", 10,
+                                     &MotionServer::commandCallback, this);
         statusPublisher = n.advertise<rosie_msgs::RobotAction>("rosie_arm_status", 10);
     };
 
@@ -97,6 +100,82 @@ public:
             pos.push_back(i->bbox_dim.z);
             objectSizes.insert(std::pair<int, std::vector<float> >(i->obj_id, dim));
         }
+    }
+
+    void commandCallback(const rosie_msgs::RobotCommand::ConstPtr& msg)
+    {
+        if (asToString(state) == msg->action || msg->utime == lastCommandTime)
+            return;
+
+        lastCommandTime = msg->utime;
+        if (msg->action.find("GRAB")!=std::string::npos)
+        {
+            state = GRAB;
+            std::string num = msg->action.substr(msg->action.find("=")+1);
+            ROS_INFO("Handling pickup command for object %s", num.c_str());
+
+            int idNum;
+            std::stringstream ss(num);
+            if (!(ss >> idNum)) {
+                ROS_INFO("Invalid object ID number %s", num.c_str());
+                return;
+            }
+
+            handleGrabCommand(idNum);
+        }
+        else if (msg->action.find("DROP")!=std::string::npos){
+            ROS_INFO("Handling putdown command");
+            state = DROP;
+            std::vector<float> t = std::vector<float>();
+            t.push_back(msg->dest.translation.x);
+            t.push_back(msg->dest.translation.y);
+            t.push_back(msg->dest.translation.z);
+            handleDropCommand(t);
+        }
+        else if (msg->action.find("POINT")!=std::string::npos){
+            state = POINT;
+            std::string num = msg->action.substr(msg->action.find("=")+1);
+            ROS_INFO("Handling point command for object %s", num.c_str());
+
+            int idNum;
+            std::stringstream ss(num);
+            if (!(ss >> idNum)) {
+                ROS_INFO("Invalid object ID number %s", num.c_str());
+                return;
+            }
+
+            handlePointCommand(idNum);
+        }
+        else if (msg->action.find("HOME")!=std::string::npos){
+            ROS_INFO("Handling home command");
+            state = HOME;
+            homeArm();
+        }
+        else if (msg->action.find("SCENE")!=std::string::npos){
+            ROS_INFO("Handling build scene command");
+            state = SCENE;
+            // setUpScene();
+            // state = WAIT;
+        }
+        else {
+            ROS_INFO("Unknown command type received");
+            state = FAILURE;
+        }
+    }
+
+    void handleGrabCommand(int id)
+    {
+        ROS_INFO("GRAB command recieved ok");
+    }
+
+    void handleDropCommand(std::vector<float> target)
+    {
+        ROS_INFO("DROP command recieved ok");
+    }
+
+    void handlePointCommand(int id)
+    {
+        ROS_INFO("POINT command recieved ok");
     }
 
     void publishStatus()
@@ -134,6 +213,7 @@ public:
         //         return
 
         bool moveSuccess = group.execute(homePlan);
+        state = WAIT;
     }
 
     void runLoop()
@@ -144,6 +224,7 @@ public:
 
 private:
     ros::Subscriber obsSubscriber;
+    ros::Subscriber commSubscriber;
     ros::Publisher statusPublisher;
 
     ActionState state;
