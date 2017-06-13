@@ -241,22 +241,32 @@ public:
         coList.push_back(co);
       }
 
+      moveit_msgs::CollisionObject planeobj;
+      planeobj.header.frame_id = group.getPlanningFrame();
+      planeobj.id = "table";
+
+      geometry_msgs::Pose planep;
+      planep.position.x = 0.8;
+      planep.position.y = 0.0;
+      planep.position.z = ((currentTable[3] + currentTable[0]*0.8 +
+                            currentTable[1]*0.0) / -currentTable[2]) + 0.02;
+      planep.orientation.w = 1.0;
+
+      shape_msgs::SolidPrimitive primitive;
+      primitive.type = primitive.BOX;
+      primitive.dimensions.resize(3);
+      primitive.dimensions[0] = 1;
+      primitive.dimensions[1] = 1;
+      primitive.dimensions[2] = 0.02;
+
+      planeobj.primitives.push_back(primitive);
+      planeobj.primitive_poses.push_back(planep);
+      planeobj.operation = planeobj.ADD;
+      coList.push_back(planeobj);
+
       scene.addCollisionObjects(coList);
       ros::Duration(1).sleep();
 
-//         planep = geometry_msgs.msg.Pose()
-//         planep.position.x = 0.8
-//         planep.position.y = 0.0
-//         planep.position.z = (self.current_table[3] + self.current_table[0]*0.8 +
-//                              self.current_table[1]*0.0) / -self.current_table[2]
-//         planep.position.z += 0.01
-
-//         planep.orientation.w = 1.0
-//         pps = geometry_msgs.msg.PoseStamped()
-//         pps.pose = planep
-//         pps.header.frame_id = self.group.get_planning_frame()
-//         # add_plane is broken, I think, so I'm adding the table as a flat box
-//         self.scene.add_box("table", pps, (1, 1, 0.02))
     }
 
   bool safetyCheck()
