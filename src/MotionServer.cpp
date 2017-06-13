@@ -16,6 +16,7 @@
 #include <moveit/planning_scene_interface/planning_scene_interface.h>
 #include <moveit/move_group_interface/move_group.h>
 #include <tf/transform_datatypes.h>
+#include <actionlib/client/simple_action_client.h>
 
 #include "moveit_msgs/CollisionObject.h"
 #include "rosie_msgs/RobotCommand.h"
@@ -51,11 +52,12 @@ public:
         }
     }
 
-    MotionServer(bool humanCheck=true) : state(WAIT),
-                                         lastCommandTime(0),
-                                         grabbedObject(-1),
-                                         checkPlans(humanCheck),
-                                         group("arm")
+  MotionServer(bool humanCheck=true) : state(WAIT),
+                                       lastCommandTime(0),
+                                       grabbedObject(-1),
+                                       checkPlans(humanCheck),
+                                       group("arm"),
+                                       gripper("gripper_controller/gripper_action", true)
     {
         ROS_INFO("RosieMotionServer starting up!");
 
@@ -66,6 +68,9 @@ public:
         commSubscriber = n.subscribe("rosie_arm_commands", 10,
                                      &MotionServer::commandCallback, this);
         statusPublisher = n.advertise<rosie_msgs::RobotAction>("rosie_arm_status", 10);
+
+        gripper.waitForServer();
+        closeGripper();
 
         pubTimer = n.createTimer(ros::Duration(0.1),
                                  &MotionServer::publishStatus, this);
@@ -105,8 +110,8 @@ public:
 
     void commandCallback(const rosie_msgs::RobotCommand::ConstPtr& msg)
     {
-        if (asToString(state) == msg->action || msg->utime == lastCommandTime)
-            return;
+      if (asToString(state) == msg->action || msg->utime == lastCommandTime)
+        return;
 
         lastCommandTime = msg->utime;
         if (msg->action.find("GRAB")!=std::string::npos)
@@ -122,6 +127,7 @@ public:
                 return;
             }
 
+            setUpScene();
             handleGrabCommand(idNum);
         }
         else if (msg->action.find("DROP")!=std::string::npos){
@@ -131,6 +137,7 @@ public:
             t.push_back(msg->dest.translation.x);
             t.push_back(msg->dest.translation.y);
             t.push_back(msg->dest.translation.z);
+            setUpScene();
             handleDropCommand(t);
         }
         else if (msg->action.find("POINT")!=std::string::npos){
@@ -144,12 +151,13 @@ public:
                 ROS_INFO("Invalid object ID number %s", num.c_str());
                 return;
             }
-
+            setUpScene();
             handlePointCommand(idNum);
         }
         else if (msg->action.find("HOME")!=std::string::npos){
             ROS_INFO("Handling home command");
             state = HOME;
+            setUpScene();
             homeArm();
         }
         else if (msg->action.find("SCENE")!=std::string::npos){
@@ -166,7 +174,37 @@ public:
 
     void handleGrabCommand(int id)
     {
-        ROS_INFO("GRAB command recieved ok");
+        boost::lock_guard<boost::mutex> guard(objMutex);
+        float x = objectPoses[id][0] - 0.22;
+        float y = objectPoses[id][1];
+        float z = objectPoses[id][2] + 0.22;
+        moveToXYZTarget(x, y, z);
+        ros::Duration(1.0).sleep();
+
+        openGripper();
+
+        std::vector<geometry_msgs::Pose> waypoints;
+        waypoints.push_back(group.getCurrentPose().pose);
+        geometry_msgs::Pose gp = waypoints[0];
+        gp.position.x += 0.05;
+        gp.position.z -= 0.05;
+        waypoints.push_back(gp);
+
+        moveit_msgs::RobotTrajectory inTraj;
+        double frac = group.computeCartesianPath(waypoints,
+                                                 0.01, 0.0,
+                                                 inTraj,
+                                                 false);
+        if (!safetyCheck()) {
+          state = FAILURE;
+          return;
+        }
+        moveit::planning_interface::MoveGroup::Plan p;
+        p.trajectory_ = inTraj;
+        bool moveSuccess = group.execute(p);
+
+        closeGripper();
+        homeArm();
     }
 
     void handleDropCommand(std::vector<float> target)
@@ -317,10 +355,28 @@ public:
         state = WAIT;
     }
 
+  void closeGripper()
+  {
+    control_msgs::GripperCommandGoal gripperGoal;
+    gripperGoal.command.max_effort = 0.0;
+    gripperGoal.command.position = 0.0;
+
+    gripper.sendGoal(gripperGoal);
+    gripper.waitForResult(ros::Duration(4.0));
+  }
+
+  void openGripper()
+  {
+    control_msgs::GripperCommandGoal gripperGoal;
+    gripperGoal.command.max_effort = 0.0;
+    gripperGoal.command.position = 0.1;
+
+    gripper.sendGoal(gripperGoal);
+    gripper.waitForResult(ros::Duration(4.0));
+  }
+
     void moveToXYZTarget(float x, float y, float z)
     {
-        //self.set_up_scene()
-
         geometry_msgs::Quaternion q =
             tf::createQuaternionMsgFromRollPitchYaw(0, M_PI/4.0, 0);
         geometry_msgs::Pose target = geometry_msgs::Pose();
@@ -347,6 +403,7 @@ private:
     ros::Subscriber obsSubscriber;
     ros::Subscriber commSubscriber;
     ros::Publisher statusPublisher;
+    actionlib::SimpleActionClient<control_msgs::GripperCommandAction> gripper;
     ros::Timer pubTimer;
 
     ActionState state;
