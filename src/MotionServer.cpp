@@ -68,9 +68,16 @@ public:
         commSubscriber = n.subscribe("rosie_arm_commands", 10,
                                      &MotionServer::commandCallback, this);
         statusPublisher = n.advertise<rosie_msgs::RobotAction>("rosie_arm_status", 10);
+        goalPublisher = n.advertise<geometry_msgs::PoseStamped>("rosie_grasp_target", 10);
 
         gripper.waitForServer();
         closeGripper();
+
+        graspGoal.pose.position.x = 0;
+        graspGoal.pose.position.y = 0;
+        graspGoal.pose.position.z = 0;
+        graspGoal.pose.orientation.w = 1.0;
+        graspGoal.header.frame_id = group.getPlanningFrame();
 
         pubTimer = n.createTimer(ros::Duration(0.1),
                                  &MotionServer::publishStatus, this);
@@ -174,10 +181,14 @@ public:
 
     void handleGrabCommand(int id)
     {
+      float x, y, z;
+      {
         boost::lock_guard<boost::mutex> guard(objMutex);
-        float x = objectPoses[id][0] - 0.22;
-        float y = objectPoses[id][1];
-        float z = objectPoses[id][2] + 0.22;
+        x = objectPoses[id][0] - (objectSizes[id][0]/2.0) - 0.25;
+        y = objectPoses[id][1];
+        z = objectPoses[id][2] + (objectSizes[id][2]/2.0) + 0.25;
+      }
+
         bool reachSuccess = moveToXYZTarget(x, y, z);
         if (!reachSuccess) return;
 
@@ -187,8 +198,8 @@ public:
         std::vector<geometry_msgs::Pose> waypoints;
         waypoints.push_back(group.getCurrentPose().pose);
         geometry_msgs::Pose gp = waypoints[0];
-        gp.position.x += 0.08;
-        gp.position.z -= 0.08;
+        gp.position.x += 0.1;
+        gp.position.z -= 0.1;
         waypoints.push_back(gp);
 
         moveit_msgs::RobotTrajectory inTraj;
@@ -266,6 +277,7 @@ public:
         msg.action = asToString(state).c_str();
         msg.obj_id = grabbedObject;
         statusPublisher.publish(msg);
+        goalPublisher.publish(graspGoal);
      }
 
     void setUpScene()
@@ -279,10 +291,12 @@ public:
         co.id = *i;
         co.operation = co.REMOVE;
         rmList.push_back(co);
+        ROS_INFO("Removing %s", std::string(co.id).c_str());
       }
       scene.removeCollisionObjects(known);
       ros::Duration(1).sleep();
 
+      boost::lock_guard<boost::mutex> guard(objMutex);
       std::vector<moveit_msgs::CollisionObject> coList;
       for (std::map<int, std::vector<float> >::iterator i = objectPoses.begin();
            i != objectPoses.end(); i++) {
@@ -313,6 +327,7 @@ public:
           co.primitive_poses.push_back(box_pose);
           co.operation = co.ADD;
           coList.push_back(co);
+          ROS_INFO("Adding %d", objID);
       }
       moveit_msgs::CollisionObject planeobj;
       planeobj.header.frame_id = group.getPlanningFrame();
@@ -420,6 +435,10 @@ public:
         target.position.y = y;
         target.position.z = z;
 
+        graspGoal.pose = target;
+        graspGoal.header.frame_id = group.getPlanningFrame();
+        ros::Duration(1.0).sleep();
+
         group.setPoseTarget(target);
         moveit::planning_interface::MoveGroup::Plan xyzPlan;
         bool success = group.plan(xyzPlan);
@@ -440,6 +459,8 @@ private:
     ros::Subscriber obsSubscriber;
     ros::Subscriber commSubscriber;
     ros::Publisher statusPublisher;
+    ros::Publisher goalPublisher;
+    geometry_msgs::PoseStamped graspGoal;
     actionlib::SimpleActionClient<control_msgs::GripperCommandAction> gripper;
     ros::Timer pubTimer;
 
