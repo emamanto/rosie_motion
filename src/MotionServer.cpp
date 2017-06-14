@@ -59,7 +59,15 @@ public:
                                        group("arm"),
                                        gripper("gripper_controller/gripper_action", true)
     {
-        ROS_INFO("RosieMotionServer starting up!");
+        if (!n.getParam("/rosie_motion_server/human_check", checkPlans)) {
+          ROS_INFO("Missing human_check parameter, keeping checks on.");
+        }
+        else if (checkPlans == false) {
+          ROS_INFO("Human checks on motion planning are OFF.");
+        }
+        else {
+          ROS_INFO("Human checks on motion planning are on.");
+        }
 
         group.setMaxVelocityScalingFactor(0.3);
 
@@ -81,6 +89,8 @@ public:
 
         pubTimer = n.createTimer(ros::Duration(0.1),
                                  &MotionServer::publishStatus, this);
+
+        ROS_INFO("RosieMotionServer READY!");
     };
 
     void obsCallback(const rosie_msgs::Observations::ConstPtr& msg)
