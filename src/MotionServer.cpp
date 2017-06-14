@@ -208,7 +208,7 @@ public:
           return;
         }
 
-        float x = objectPoses[id][0] - (objectSizes[id][0]/2.0) - 0.2;
+        float x = objectPoses[id][0] - (objectSizes[id][0]/2.0) - 0.15;
         float y = objectPoses[id][1];
         float z = objectPoses[id][2] + (objectSizes[id][2]/2.0) + 0.2;
 
@@ -226,8 +226,8 @@ public:
         std::vector<geometry_msgs::Pose> waypoints;
         waypoints.push_back(group.getCurrentPose().pose);
         geometry_msgs::Pose gp = waypoints[0];
-        gp.position.x += 0.1;
-        gp.position.z -= 0.1;
+        gp.position.x += 0.06;
+        gp.position.z -= 0.08;
         waypoints.push_back(gp);
 
         moveit_msgs::RobotTrajectory inTraj;
@@ -252,6 +252,8 @@ public:
         allowed.push_back("l_gripper_finger_link");
         allowed.push_back("gripper_link");
         group.attachObject(ss.str(), group.getEndEffectorLink(), allowed);
+        grabbedObject = id;
+        grabbedObjSize = objectSizes[id];
 
         std::vector<std::string> attached;
         attached.push_back(ss.str());
@@ -284,10 +286,15 @@ public:
 
     void handleDropCommand(std::vector<float> target)
     {
-        float zTarg = ((currentTable[3] + currentTable[0]*target[0] +
-                        currentTable[1]*target[1]) / -currentTable[2]) + 0.3;
+      if (grabbedObject == -1) {
+        ROS_INFO("Cannot drop because robot is not holding an object.");
+        return;
+      }
 
-        bool reachSuccess = moveToXYZTarget(target[0], target[1], zTarg);
+        float zTable = ((currentTable[3] + currentTable[0]*target[0] +
+                         currentTable[1]*target[1]) / -currentTable[2]);
+
+        bool reachSuccess = moveToXYZTarget(target[0], target[1], zTable+0.3);
 
         if (!reachSuccess) {
           state = FAILURE;
@@ -321,7 +328,41 @@ public:
         // closeGripper();
 
         group.detachObject();
-        ros::Duration(2.0).sleep();
+
+        moveit_msgs::CollisionObject droppedObj;
+        droppedObj.header.frame_id = group.getPlanningFrame();
+
+        std::stringstream ss;
+        ss << grabbedObject;
+        droppedObj.id = ss.str();
+
+        std::vector<std::string> toRem;
+        toRem.push_back(ss.str());
+        scene.removeCollisionObjects(toRem);
+        ros::Duration(1.0).sleep();
+
+        geometry_msgs::Pose dropP;
+        dropP.position.x = target[0] + 0.1;
+        dropP.position.y = target[1];
+        dropP.position.z = zTable + grabbedObjSize[2] + 0.02;
+        dropP.orientation.w = 1.0;
+
+        shape_msgs::SolidPrimitive primitive;
+        primitive.type = primitive.BOX;
+        primitive.dimensions.resize(3);
+        primitive.dimensions[0] = grabbedObjSize[0]+0.02;
+        primitive.dimensions[1] = grabbedObjSize[1]+0.02;
+        primitive.dimensions[2] = grabbedObjSize[2]+0.02;
+
+        droppedObj.primitives.push_back(primitive);
+        droppedObj.primitive_poses.push_back(dropP);
+        droppedObj.operation = droppedObj.ADD;
+
+        std::vector<moveit_msgs::CollisionObject> toAdd;
+        toAdd.push_back(droppedObj);
+        scene.addCollisionObjects(toAdd);
+
+        ros::Duration(1.0).sleep();
         closeGripper();
 
         // std::vector<geometry_msgs::Pose> waypoints2;
@@ -565,6 +606,7 @@ private:
     ActionState state;
     long lastCommandTime;
     int grabbedObject;
+    std::vector<float> grabbedObjSize;
     bool checkPlans;
     bool isSimRobot;
 
