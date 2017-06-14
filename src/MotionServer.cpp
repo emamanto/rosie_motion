@@ -264,9 +264,15 @@ public:
     void handlePointCommand(int id)
     {
         boost::lock_guard<boost::mutex> guard(objMutex);
-        float x = objectPoses[id][0] - 0.22;
+        if (objectSizes.find(id) == objectSizes.end()) {
+          ROS_INFO("Object ID %d is not being perceived", id);
+          return;
+        }
+
+        float x = objectPoses[id][0] - (objectSizes[id][0]/2.0) - 0.2;
         float y = objectPoses[id][1];
-        float z = objectPoses[id][2] + 0.22;
+        float z = objectPoses[id][2] + (objectSizes[id][2]/2.0) + 0.2;
+
         if (!moveToXYZTarget(x, y, z)) return;
         ros::Duration(1.0).sleep();
         homeArm();
