@@ -10,6 +10,7 @@
 
 <node name="rosie_motion_server" pkg="rosie_motion" type="motionserver" output="screen">
 <param name="human_check" type="bool" value="false"/>
+<param name="rosie_is_sim" type="bool" value="true"/>
 </node>
 
 </launch>

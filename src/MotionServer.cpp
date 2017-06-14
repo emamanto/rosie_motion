@@ -59,14 +59,24 @@ public:
                                        group("arm"),
                                        gripper("gripper_controller/gripper_action", true)
     {
-        if (!n.getParam("/rosie_motion_server/human_check", checkPlans)) {
-          ROS_INFO("Missing human_check parameter, keeping checks on.");
+        if (!n.getParam("/rosie_motion_server/rosie_is_sim", isSimRobot)) {
+          ROS_INFO("RosieMotionServer is missing rosie_is_sim, assuming real robot.");
         }
-        else if (checkPlans == false) {
-          ROS_INFO("Human checks on motion planning are OFF.");
+        else if (isSimRobot == true) {
+          ROS_INFO("RosieMotionServer is expecting a simulated robot.");
         }
         else {
-          ROS_INFO("Human checks on motion planning are on.");
+          ROS_INFO("RosieMotionServer is expecting a real robot.");
+        }
+
+        if (!n.getParam("/rosie_motion_server/human_check", checkPlans)) {
+          ROS_INFO("RosieMotionServer is missing human_check parameter, keeping checks on.");
+        }
+        else if (checkPlans == false) {
+          ROS_INFO("RosieMotionServer human checks on motion planning are OFF.");
+        }
+        else {
+          ROS_INFO("RosieMotionServer human checks on motion planning are on.");
         }
 
         group.setMaxVelocityScalingFactor(0.3);
@@ -550,6 +560,7 @@ private:
     long lastCommandTime;
     int grabbedObject;
     bool checkPlans;
+    bool isSimRobot;
 
     moveit::planning_interface::MoveGroup group;
     moveit::planning_interface::PlanningSceneInterface scene;
