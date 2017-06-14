@@ -181,13 +181,15 @@ public:
 
     void handleGrabCommand(int id)
     {
-      float x, y, z;
-      {
         boost::lock_guard<boost::mutex> guard(objMutex);
-        x = objectPoses[id][0] - (objectSizes[id][0]/2.0) - 0.25;
-        y = objectPoses[id][1];
-        z = objectPoses[id][2] + (objectSizes[id][2]/2.0) + 0.25;
-      }
+        if (objectSizes.find(id) == objectSizes.end()) {
+          ROS_INFO("Object ID %d is not being perceived", id);
+          return;
+        }
+
+        float x = objectPoses[id][0] - (objectSizes[id][0]/2.0) - 0.2;
+        float y = objectPoses[id][1];
+        float z = objectPoses[id][2] + (objectSizes[id][2]/2.0) + 0.2;
 
         bool reachSuccess = moveToXYZTarget(x, y, z);
         if (!reachSuccess) return;
