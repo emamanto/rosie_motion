@@ -1,6 +1,0 @@
-<launch>
-
-<node name="rosie_home_arm" pkg="rosie_motion" type="clear_and_home.py" output="screen" >
-</node>
-
-</launch>

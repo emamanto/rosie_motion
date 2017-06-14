@@ -35,8 +35,7 @@ public:
                       POINT,
                       DROP,
                       FAILURE,
-                      SCENE,
-                      EMPTY};
+                      SCENE};
 
     static std::string asToString(ActionState a)
     {
@@ -49,7 +48,6 @@ public:
             case DROP: return "DROP";
             case FAILURE: return "FAILURE";
             case SCENE: return "SCENE";
-            case EMPTY: return "EMPTY";
             default: return "WTF";
         }
     }
@@ -168,13 +166,6 @@ public:
             setUpScene();
             state = WAIT;
         }
-        else if (msg->action.find("EMPTY")!=std::string::npos){
-            ROS_INFO("Handling empty scene command");
-            state = SCENE;
-            setUpScene(true);
-            homeArm();
-            state = WAIT;
-        }
         else {
             ROS_INFO("Unknown command type received");
             state = FAILURE;
@@ -277,7 +268,7 @@ public:
         statusPublisher.publish(msg);
      }
 
-    void setUpScene(bool emptyTable = false)
+    void setUpScene()
     {
       std::vector<std::string> known = scene.getKnownObjectNames();
       std::vector<moveit_msgs::CollisionObject> rmList;
@@ -293,9 +284,8 @@ public:
       ros::Duration(1).sleep();
 
       std::vector<moveit_msgs::CollisionObject> coList;
-      if (!emptyTable) {
-        for (std::map<int, std::vector<float> >::iterator i = objectPoses.begin();
-             i != objectPoses.end(); i++) {
+      for (std::map<int, std::vector<float> >::iterator i = objectPoses.begin();
+           i != objectPoses.end(); i++) {
           moveit_msgs::CollisionObject co;
           co.header.frame_id = group.getPlanningFrame();
 
@@ -323,7 +313,6 @@ public:
           co.primitive_poses.push_back(box_pose);
           co.operation = co.ADD;
           coList.push_back(co);
-        }
       }
       moveit_msgs::CollisionObject planeobj;
       planeobj.header.frame_id = group.getPlanningFrame();
