@@ -217,9 +217,15 @@ public:
         closeGripper();
         std::stringstream ss;
         ss << id;
-        group.attachObject(ss.str(), "r_gripper_finger_link");
+        std::vector<std::string> allowed;
+        allowed.push_back("r_gripper_finger_link");
+        allowed.push_back("l_gripper_finger_link");
+        allowed.push_back("gripper_link");
+        group.attachObject(ss.str(), group.getEndEffectorLink(), allowed);
+
         std::vector<std::string> attached;
         attached.push_back(ss.str());
+
         scene.removeCollisionObjects(attached);
         ros::Duration(2.0).sleep();
 
