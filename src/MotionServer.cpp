@@ -184,6 +184,7 @@ public:
         boost::lock_guard<boost::mutex> guard(objMutex);
         if (objectSizes.find(id) == objectSizes.end()) {
           ROS_INFO("Object ID %d is not being perceived", id);
+          state = FAILURE;
           return;
         }
 
@@ -192,7 +193,10 @@ public:
         float z = objectPoses[id][2] + (objectSizes[id][2]/2.0) + 0.2;
 
         bool reachSuccess = moveToXYZTarget(x, y, z);
-        if (!reachSuccess) return;
+        if (!reachSuccess) {
+          state = FAILURE;
+          return;
+        }
 
         ros::Duration(1.0).sleep();
         openGripper();
@@ -258,7 +262,67 @@ public:
 
     void handleDropCommand(std::vector<float> target)
     {
-        ROS_INFO("DROP command recieved ok");
+        float zTarg = ((currentTable[3] + currentTable[0]*target[0] +
+                        currentTable[1]*target[1]) / -currentTable[2]) + 0.3;
+
+        bool reachSuccess = moveToXYZTarget(target[0], target[1], zTarg);
+
+        if (!reachSuccess) {
+          state = FAILURE;
+          return;
+        }
+
+        ros::Duration(1.0).sleep();
+        openGripper();
+
+        // std::vector<geometry_msgs::Pose> waypoints;
+        // waypoints.push_back(group.getCurrentPose().pose);
+        // geometry_msgs::Pose gp = waypoints[0];
+        // gp.position.x += 0.1;
+        // gp.position.z -= 0.1;
+        // waypoints.push_back(gp);
+
+        // moveit_msgs::RobotTrajectory inTraj;
+        // double frac = group.computeCartesianPath(waypoints,
+        //                                          0.01, 0.0,
+        //                                          inTraj,
+        //                                          false);
+        // if (!safetyCheck()) {
+        //   state = FAILURE;
+        //   return;
+        // }
+
+        // moveit::planning_interface::MoveGroup::Plan p;
+        // p.trajectory_ = inTraj;
+        // bool moveSuccess = group.execute(p);
+
+        // closeGripper();
+
+        group.detachObject();
+        ros::Duration(2.0).sleep();
+        closeGripper();
+
+        // std::vector<geometry_msgs::Pose> waypoints2;
+        // waypoints2.push_back(group.getCurrentPose().pose);
+        // geometry_msgs::Pose bp = waypoints2[0];
+        // bp.position.x -= 0.08;
+        // bp.position.z += 0.08;
+        // waypoints2.push_back(bp);
+        // moveit_msgs::RobotTrajectory outTraj;
+        // double frac2 = group.computeCartesianPath(waypoints2,
+        //                                          0.01, 0.0,
+        //                                          outTraj,
+        //                                          false);
+        // if (!safetyCheck()) {
+        //   state = FAILURE;
+        //   return;
+        // }
+
+        // moveit::planning_interface::MoveGroup::Plan p2;
+        // p2.trajectory_ = outTraj;
+        // bool outSuccess = group.execute(p2);
+
+        homeArm();
     }
 
     void handlePointCommand(int id)
