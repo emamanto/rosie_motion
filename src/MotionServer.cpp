@@ -35,7 +35,8 @@ public:
                       POINT,
                       DROP,
                       FAILURE,
-                      SCENE};
+                      SCENE,
+                      EMPTY};
 
     static std::string asToString(ActionState a)
     {
@@ -48,6 +49,7 @@ public:
             case DROP: return "DROP";
             case FAILURE: return "FAILURE";
             case SCENE: return "SCENE";
+            case EMPTY: return "EMPTY";
             default: return "WTF";
         }
     }
@@ -157,13 +159,20 @@ public:
         else if (msg->action.find("HOME")!=std::string::npos){
             ROS_INFO("Handling home command");
             state = HOME;
-            setUpScene();
             homeArm();
+            state = WAIT;
         }
         else if (msg->action.find("SCENE")!=std::string::npos){
             ROS_INFO("Handling build scene command");
             state = SCENE;
             setUpScene();
+            state = WAIT;
+        }
+        else if (msg->action.find("EMPTY")!=std::string::npos){
+            ROS_INFO("Handling empty scene command");
+            state = SCENE;
+            setUpScene(true);
+            homeArm();
             state = WAIT;
         }
         else {
@@ -178,16 +187,17 @@ public:
         float x = objectPoses[id][0] - 0.22;
         float y = objectPoses[id][1];
         float z = objectPoses[id][2] + 0.22;
-        moveToXYZTarget(x, y, z);
-        ros::Duration(1.0).sleep();
+        bool reachSuccess = moveToXYZTarget(x, y, z);
+        if (!reachSuccess) return;
 
+        ros::Duration(1.0).sleep();
         openGripper();
 
         std::vector<geometry_msgs::Pose> waypoints;
         waypoints.push_back(group.getCurrentPose().pose);
         geometry_msgs::Pose gp = waypoints[0];
-        gp.position.x += 0.05;
-        gp.position.z -= 0.05;
+        gp.position.x += 0.08;
+        gp.position.z -= 0.08;
         waypoints.push_back(gp);
 
         moveit_msgs::RobotTrajectory inTraj;
@@ -199,11 +209,40 @@ public:
           state = FAILURE;
           return;
         }
+
         moveit::planning_interface::MoveGroup::Plan p;
         p.trajectory_ = inTraj;
         bool moveSuccess = group.execute(p);
 
         closeGripper();
+        std::stringstream ss;
+        ss << id;
+        group.attachObject(ss.str(), "r_gripper_finger_link");
+        std::vector<std::string> attached;
+        attached.push_back(ss.str());
+        scene.removeCollisionObjects(attached);
+        ros::Duration(2.0).sleep();
+
+        std::vector<geometry_msgs::Pose> waypoints2;
+        waypoints2.push_back(group.getCurrentPose().pose);
+        geometry_msgs::Pose bp = waypoints2[0];
+        bp.position.x -= 0.08;
+        bp.position.z += 0.08;
+        waypoints2.push_back(bp);
+        moveit_msgs::RobotTrajectory outTraj;
+        double frac2 = group.computeCartesianPath(waypoints2,
+                                                 0.01, 0.0,
+                                                 outTraj,
+                                                 false);
+        if (!safetyCheck()) {
+          state = FAILURE;
+          return;
+        }
+
+        moveit::planning_interface::MoveGroup::Plan p2;
+        p2.trajectory_ = outTraj;
+        bool outSuccess = group.execute(p2);
+
         homeArm();
     }
 
@@ -218,7 +257,7 @@ public:
         float x = objectPoses[id][0] - 0.22;
         float y = objectPoses[id][1];
         float z = objectPoses[id][2] + 0.22;
-        moveToXYZTarget(x, y, z);
+        if (!moveToXYZTarget(x, y, z)) return;
         ros::Duration(1.0).sleep();
         homeArm();
     }
@@ -232,7 +271,7 @@ public:
         statusPublisher.publish(msg);
      }
 
-    void setUpScene()
+    void setUpScene(bool emptyTable = false)
     {
       std::vector<std::string> known = scene.getKnownObjectNames();
       std::vector<moveit_msgs::CollisionObject> rmList;
@@ -248,37 +287,38 @@ public:
       ros::Duration(1).sleep();
 
       std::vector<moveit_msgs::CollisionObject> coList;
-      for (std::map<int, std::vector<float> >::iterator i = objectPoses.begin();
-           i != objectPoses.end(); i++) {
-        moveit_msgs::CollisionObject co;
-        co.header.frame_id = group.getPlanningFrame();
+      if (!emptyTable) {
+        for (std::map<int, std::vector<float> >::iterator i = objectPoses.begin();
+             i != objectPoses.end(); i++) {
+          moveit_msgs::CollisionObject co;
+          co.header.frame_id = group.getPlanningFrame();
 
-        int objID = i->first;
-        std::stringstream ss;
-        ss << objID;
-        co.id = ss.str();
+          int objID = i->first;
+          std::stringstream ss;
+          ss << objID;
+          co.id = ss.str();
 
-        geometry_msgs::Pose box_pose;
-        box_pose.position.x = i->second[0];
-        box_pose.position.y = i->second[1];
-        box_pose.position.z = i->second[2] + objectSizes[objID][2]/2.0;
-        box_pose.orientation = tf::createQuaternionMsgFromRollPitchYaw(i->second[5],
-                                                                       i->second[4],
-                                                                       -i->second[3]);
+          geometry_msgs::Pose box_pose;
+          box_pose.position.x = i->second[0];
+          box_pose.position.y = i->second[1];
+          box_pose.position.z = i->second[2] + objectSizes[objID][2]/2.0;
+          box_pose.orientation = tf::createQuaternionMsgFromRollPitchYaw(i->second[5],
+                                                                         i->second[4],
+                                                                         -i->second[3]);
 
-        shape_msgs::SolidPrimitive primitive;
-        primitive.type = primitive.BOX;
-        primitive.dimensions.resize(3);
-        primitive.dimensions[0] = objectSizes[objID][0]+0.02;
-        primitive.dimensions[1] = objectSizes[objID][1]+0.02;
-        primitive.dimensions[2] = objectSizes[objID][2]+0.02;
+          shape_msgs::SolidPrimitive primitive;
+          primitive.type = primitive.BOX;
+          primitive.dimensions.resize(3);
+          primitive.dimensions[0] = objectSizes[objID][0]+0.02;
+          primitive.dimensions[1] = objectSizes[objID][1]+0.02;
+          primitive.dimensions[2] = objectSizes[objID][2]+0.02;
 
-        co.primitives.push_back(primitive);
-        co.primitive_poses.push_back(box_pose);
-        co.operation = co.ADD;
-        coList.push_back(co);
+          co.primitives.push_back(primitive);
+          co.primitive_poses.push_back(box_pose);
+          co.operation = co.ADD;
+          coList.push_back(co);
+        }
       }
-
       moveit_msgs::CollisionObject planeobj;
       planeobj.header.frame_id = group.getPlanningFrame();
       planeobj.id = "table";
@@ -375,7 +415,7 @@ public:
     gripper.waitForResult(ros::Duration(4.0));
   }
 
-    void moveToXYZTarget(float x, float y, float z)
+    bool moveToXYZTarget(float x, float y, float z)
     {
         geometry_msgs::Quaternion q =
             tf::createQuaternionMsgFromRollPitchYaw(0, M_PI/4.0, 0);
@@ -388,14 +428,16 @@ public:
         group.setPoseTarget(target);
         moveit::planning_interface::MoveGroup::Plan xyzPlan;
         bool success = group.plan(xyzPlan);
+        if (!success) return false;
 
         if (!safetyCheck()) {
           state = FAILURE;
-          return;
+          return false;
         }
 
         bool moveSuccess = group.execute(xyzPlan);
         state = WAIT;
+        return moveSuccess;
     }
 
 private:
