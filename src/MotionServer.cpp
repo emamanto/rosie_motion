@@ -202,15 +202,16 @@ public:
     void handleGrabCommand(int id)
     {
         boost::lock_guard<boost::mutex> guard(objMutex);
-        if (objectSizes.find(id) == objectSizes.end()) {
+        if (objectSizes.find(id) == objectSizes.end() ||
+            objectPoses.find(id) == objectSizes.end()) {
           ROS_INFO("Object ID %d is not being perceived", id);
           state = FAILURE;
           return;
         }
 
-        float x = objectPoses[id][0] - (objectSizes[id][0]/2.0) - 0.15;
+        float x = objectPoses[id][0] - (objectSizes[id][0]/2.0) - 0.16;
         float y = objectPoses[id][1];
-        float z = objectPoses[id][2] + (objectSizes[id][2]/2.0) + 0.2;
+        float z = objectPoses[id][2] + (objectSizes[id][2]/2.0) + 0.22;
 
         if (isSimRobot) y -= 0.02;
 
@@ -230,6 +231,7 @@ public:
         gp.position.z -= 0.08;
         waypoints.push_back(gp);
 
+        group.setStartStateToCurrentState();
         moveit_msgs::RobotTrajectory inTraj;
         double frac = group.computeCartesianPath(waypoints,
                                                  0.01, 0.0,
@@ -259,7 +261,7 @@ public:
         attached.push_back(ss.str());
 
         scene.removeCollisionObjects(attached);
-        ros::Duration(2.0).sleep();
+        ros::Duration(0.5).sleep();
 
         std::vector<geometry_msgs::Pose> waypoints2;
         waypoints2.push_back(group.getCurrentPose().pose);
@@ -267,6 +269,8 @@ public:
         bp.position.x -= 0.08;
         bp.position.z += 0.08;
         waypoints2.push_back(bp);
+
+        group.setStartStateToCurrentState();
         moveit_msgs::RobotTrajectory outTraj;
         double frac2 = group.computeCartesianPath(waypoints2,
                                                  0.01, 0.0,
@@ -288,6 +292,7 @@ public:
     {
       if (grabbedObject == -1) {
         ROS_INFO("Cannot drop because robot is not holding an object.");
+        state = FAILURE;
         return;
       }
 
@@ -310,10 +315,11 @@ public:
       std::vector<geometry_msgs::Pose> waypoints;
       waypoints.push_back(group.getCurrentPose().pose);
       geometry_msgs::Pose gp = waypoints[0];
-      gp.position.x += 0.06;
-      gp.position.z -= 0.05;
+      gp.position.x += 0.05;
+      gp.position.z -= 0.03;
       waypoints.push_back(gp);
 
+      group.setStartStateToCurrentState();
       moveit_msgs::RobotTrajectory inTraj;
       double frac = group.computeCartesianPath(waypoints,
                                                0.01, 0.0,
@@ -365,6 +371,7 @@ public:
       toAdd.push_back(droppedObj);
       scene.addCollisionObjects(toAdd);
 
+      grabbedObject = -1;
       ros::Duration(0.5).sleep();
 
       std::vector<geometry_msgs::Pose> waypoints2;
@@ -373,6 +380,8 @@ public:
       bp.position.x -= 0.08;
       bp.position.z += 0.08;
       waypoints2.push_back(bp);
+
+      group.setStartStateToCurrentState();
       moveit_msgs::RobotTrajectory outTraj;
       double frac2 = group.computeCartesianPath(waypoints2,
                                                 0.01, 0.0,
@@ -396,7 +405,8 @@ public:
     void handlePointCommand(int id)
     {
         boost::lock_guard<boost::mutex> guard(objMutex);
-        if (objectSizes.find(id) == objectSizes.end()) {
+        if (objectSizes.find(id) == objectSizes.end()||
+            objectPoses.find(id) == objectSizes.end()) {
           ROS_INFO("Object ID %d is not being perceived", id);
           return;
         }
@@ -423,16 +433,6 @@ public:
     void setUpScene()
     {
       std::vector<std::string> known = scene.getKnownObjectNames();
-      std::vector<moveit_msgs::CollisionObject> rmList;
-      for (std::vector<std::string>::iterator i = known.begin();
-           i != known.end(); i++) {
-        moveit_msgs::CollisionObject co;
-        co.header.frame_id = group.getPlanningFrame();
-        co.id = *i;
-        co.operation = co.REMOVE;
-        rmList.push_back(co);
-        ROS_INFO("Removing %s", std::string(co.id).c_str());
-      }
       scene.removeCollisionObjects(known);
       ros::Duration(1).sleep();
 
@@ -471,7 +471,7 @@ public:
           co.primitive_poses.push_back(box_pose);
           co.operation = co.ADD;
           coList.push_back(co);
-          ROS_INFO("Adding %d", objID);
+          //ROS_INFO("Adding %d", objID);
       }
       moveit_msgs::CollisionObject planeobj;
       planeobj.header.frame_id = group.getPlanningFrame();
@@ -546,7 +546,11 @@ public:
         }
 
         bool moveSuccess = group.execute(homePlan);
-        state = WAIT;
+        if (!moveSuccess) {
+          state = FAILURE;
+        } else {
+          state = WAIT;
+        }
     }
 
   void closeGripper()
@@ -571,6 +575,7 @@ public:
 
     bool moveToXYZTarget(float x, float y, float z)
     {
+      group.setStartStateToCurrentState();
         geometry_msgs::Quaternion q =
             tf::createQuaternionMsgFromRollPitchYaw(0, M_PI/4.0, 0);
         geometry_msgs::Pose target = geometry_msgs::Pose();
