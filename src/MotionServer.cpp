@@ -291,101 +291,106 @@ public:
         return;
       }
 
-        float zTable = ((currentTable[3] + currentTable[0]*target[0] +
-                         currentTable[1]*target[1]) / -currentTable[2]);
+      float tableH = ((currentTable[3] + currentTable[0]*target[0] +
+                       currentTable[1]*target[1]) / -currentTable[2]) + 0.02;
 
-        bool reachSuccess = moveToXYZTarget(target[0], target[1], zTable+0.3);
+      if (target[2] == -1) target[2] = tableH;
+      if (isSimRobot) target[1] -= 0.02;
 
-        if (!reachSuccess) {
-          state = FAILURE;
-          return;
-        }
+      bool reachSuccess = moveToXYZTarget(target[0] - (grabbedObjSize[0]/2.0) - 0.15,
+                                          target[1],
+                                          target[2] + (grabbedObjSize[2]/2.0) + 0.2);
 
-        ros::Duration(1.0).sleep();
-        openGripper();
+      if (!reachSuccess) {
+        state = FAILURE;
+        return;
+      }
 
-        // std::vector<geometry_msgs::Pose> waypoints;
-        // waypoints.push_back(group.getCurrentPose().pose);
-        // geometry_msgs::Pose gp = waypoints[0];
-        // gp.position.x += 0.1;
-        // gp.position.z -= 0.1;
-        // waypoints.push_back(gp);
+      ros::Duration(0.5).sleep();
+      std::vector<geometry_msgs::Pose> waypoints;
+      waypoints.push_back(group.getCurrentPose().pose);
+      geometry_msgs::Pose gp = waypoints[0];
+      gp.position.x += 0.06;
+      gp.position.z -= 0.05;
+      waypoints.push_back(gp);
 
-        // moveit_msgs::RobotTrajectory inTraj;
-        // double frac = group.computeCartesianPath(waypoints,
-        //                                          0.01, 0.0,
-        //                                          inTraj,
-        //                                          false);
-        // if (!safetyCheck()) {
-        //   state = FAILURE;
-        //   return;
-        // }
+      moveit_msgs::RobotTrajectory inTraj;
+      double frac = group.computeCartesianPath(waypoints,
+                                               0.01, 0.0,
+                                               inTraj,
+                                               false);
+      if (!safetyCheck()) {
+        state = FAILURE;
+        return;
+      }
 
-        // moveit::planning_interface::MoveGroup::Plan p;
-        // p.trajectory_ = inTraj;
-        // bool moveSuccess = group.execute(p);
+      moveit::planning_interface::MoveGroup::Plan p;
+      p.trajectory_ = inTraj;
+      bool moveSuccess = group.execute(p);
+      ros::Duration(0.5).sleep();
+      openGripper();
 
-        // closeGripper();
+      group.detachObject();
 
-        group.detachObject();
+      moveit_msgs::CollisionObject droppedObj;
+      droppedObj.header.frame_id = group.getPlanningFrame();
 
-        moveit_msgs::CollisionObject droppedObj;
-        droppedObj.header.frame_id = group.getPlanningFrame();
+      std::stringstream ss;
+      ss << grabbedObject;
+      droppedObj.id = ss.str();
 
-        std::stringstream ss;
-        ss << grabbedObject;
-        droppedObj.id = ss.str();
+      std::vector<std::string> toRem;
+      toRem.push_back(ss.str());
+      scene.removeCollisionObjects(toRem);
+      ros::Duration(1.0).sleep();
 
-        std::vector<std::string> toRem;
-        toRem.push_back(ss.str());
-        scene.removeCollisionObjects(toRem);
-        ros::Duration(1.0).sleep();
+      geometry_msgs::Pose dropP;
+      dropP.position.x = target[0];
+      dropP.position.y = target[1];
+      dropP.position.z = target[2] + grabbedObjSize[2] + 0.02;
+      dropP.orientation.w = 1.0;
 
-        geometry_msgs::Pose dropP;
-        dropP.position.x = target[0] + 0.1;
-        dropP.position.y = target[1];
-        dropP.position.z = zTable + grabbedObjSize[2] + 0.02;
-        dropP.orientation.w = 1.0;
+      shape_msgs::SolidPrimitive primitive;
+      primitive.type = primitive.BOX;
+      primitive.dimensions.resize(3);
+      primitive.dimensions[0] = grabbedObjSize[0]+0.02;
+      primitive.dimensions[1] = grabbedObjSize[1]+0.02;
+      primitive.dimensions[2] = grabbedObjSize[2]+0.02;
 
-        shape_msgs::SolidPrimitive primitive;
-        primitive.type = primitive.BOX;
-        primitive.dimensions.resize(3);
-        primitive.dimensions[0] = grabbedObjSize[0]+0.02;
-        primitive.dimensions[1] = grabbedObjSize[1]+0.02;
-        primitive.dimensions[2] = grabbedObjSize[2]+0.02;
+      droppedObj.primitives.push_back(primitive);
+      droppedObj.primitive_poses.push_back(dropP);
+      droppedObj.operation = droppedObj.ADD;
 
-        droppedObj.primitives.push_back(primitive);
-        droppedObj.primitive_poses.push_back(dropP);
-        droppedObj.operation = droppedObj.ADD;
+      std::vector<moveit_msgs::CollisionObject> toAdd;
+      toAdd.push_back(droppedObj);
+      scene.addCollisionObjects(toAdd);
 
-        std::vector<moveit_msgs::CollisionObject> toAdd;
-        toAdd.push_back(droppedObj);
-        scene.addCollisionObjects(toAdd);
+      ros::Duration(0.5).sleep();
 
-        ros::Duration(1.0).sleep();
-        closeGripper();
+      std::vector<geometry_msgs::Pose> waypoints2;
+      waypoints2.push_back(group.getCurrentPose().pose);
+      geometry_msgs::Pose bp = waypoints2[0];
+      bp.position.x -= 0.08;
+      bp.position.z += 0.08;
+      waypoints2.push_back(bp);
+      moveit_msgs::RobotTrajectory outTraj;
+      double frac2 = group.computeCartesianPath(waypoints2,
+                                                0.01, 0.0,
+                                                outTraj,
+                                                false);
+      if (!safetyCheck()) {
+        state = FAILURE;
+        return;
+      }
 
-        // std::vector<geometry_msgs::Pose> waypoints2;
-        // waypoints2.push_back(group.getCurrentPose().pose);
-        // geometry_msgs::Pose bp = waypoints2[0];
-        // bp.position.x -= 0.08;
-        // bp.position.z += 0.08;
-        // waypoints2.push_back(bp);
-        // moveit_msgs::RobotTrajectory outTraj;
-        // double frac2 = group.computeCartesianPath(waypoints2,
-        //                                          0.01, 0.0,
-        //                                          outTraj,
-        //                                          false);
-        // if (!safetyCheck()) {
-        //   state = FAILURE;
-        //   return;
-        // }
+      moveit::planning_interface::MoveGroup::Plan p2;
+      p2.trajectory_ = outTraj;
+      bool outSuccess = group.execute(p2);
 
-        // moveit::planning_interface::MoveGroup::Plan p2;
-        // p2.trajectory_ = outTraj;
-        // bool outSuccess = group.execute(p2);
+      ros::Duration(0.5).sleep();
 
-        homeArm();
+      closeGripper();
+      homeArm();
     }
 
     void handlePointCommand(int id)
@@ -551,7 +556,7 @@ public:
     gripperGoal.command.position = 0.0;
 
     gripper.sendGoal(gripperGoal);
-    gripper.waitForResult(ros::Duration(4.0));
+    gripper.waitForResult(ros::Duration(2.0));
   }
 
   void openGripper()
@@ -561,7 +566,7 @@ public:
     gripperGoal.command.position = 0.1;
 
     gripper.sendGoal(gripperGoal);
-    gripper.waitForResult(ros::Duration(4.0));
+    gripper.waitForResult(ros::Duration(2.0));
   }
 
     bool moveToXYZTarget(float x, float y, float z)

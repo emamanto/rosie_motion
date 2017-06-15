@@ -10,14 +10,14 @@ if __name__ == '__main__':
     rospy.init_node("rosie_putdown")
 
     targ = raw_input("Location? (x for random) ")
-    nums = ["0.2", "0.2"]
+    nums = ["0.8", "0.1", "-1"]
     if targ != "x":
         nums = targ.split(" ")
 
     dest = Transform()
     dest.translation.x = float(nums[0])
     dest.translation.y = float(nums[1])
-    dest.translation.z = 0
+    dest.translation.z = float(nums[2])
     dest.rotation.w = 1.0
 
     pub = rospy.Publisher("/rosie_arm_commands", RobotCommand, queue_size=10)
