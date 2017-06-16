@@ -187,6 +187,12 @@ public:
             homeArm();
             state = WAIT;
         }
+        else if (msg->action.find("RESET")!=std::string::npos){
+            ROS_INFO("Handling reset command");
+            state = HOME;
+            homeArm();
+            state = WAIT;
+        }
         else if (msg->action.find("SCENE")!=std::string::npos){
             ROS_INFO("Handling build scene command");
             state = SCENE;
@@ -194,8 +200,8 @@ public:
             state = WAIT;
         }
         else {
-            ROS_INFO("Unknown command type received");
-            state = FAILURE;
+          ROS_INFO("Unknown command %s received", msg->action.c_str());
+          state = FAILURE;
         }
     }
 
@@ -548,7 +554,12 @@ public:
         group.setJointValueTarget(joints);
 
         moveit::planning_interface::MoveGroup::Plan homePlan;
-        bool success = group.plan(homePlan);
+        moveit::planning_interface::MoveItErrorCode success = group.plan(homePlan);
+        if (!success) {
+          ROS_INFO("Planning failed with error code %d", success.val);
+          state = FAILURE;
+          return;
+        }
 
         if (!safetyCheck()) {
           state = FAILURE;
@@ -601,8 +612,11 @@ public:
 
         group.setPoseTarget(target);
         moveit::planning_interface::MoveGroup::Plan xyzPlan;
-        bool success = group.plan(xyzPlan);
-        if (!success) return false;
+        moveit::planning_interface::MoveItErrorCode success = group.plan(xyzPlan);
+        if (!success) {
+          ROS_INFO("Planning failed with error code %d", success.val);
+          return false;
+        }
 
         if (!safetyCheck()) {
           state = FAILURE;
