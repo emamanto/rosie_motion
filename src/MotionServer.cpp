@@ -244,7 +244,9 @@ public:
 
         moveit::planning_interface::MoveGroup::Plan p;
         p.trajectory_ = inTraj;
-        bool moveSuccess = group.execute(p);
+        moveit::planning_interface::MoveItErrorCode moveSuccess = group.execute(p);
+        if (!moveSuccess) ROS_INFO("Execution failed with error code %d",
+                                   moveSuccess.val);
 
         closeGripper();
         std::stringstream ss;
@@ -283,7 +285,9 @@ public:
 
         moveit::planning_interface::MoveGroup::Plan p2;
         p2.trajectory_ = outTraj;
-        bool outSuccess = group.execute(p2);
+        moveit::planning_interface::MoveItErrorCode outSuccess = group.execute(p2);
+        if (!outSuccess) ROS_INFO("Execution failed with error code %d",
+                                   outSuccess.val);
 
         homeArm();
     }
@@ -332,7 +336,10 @@ public:
 
       moveit::planning_interface::MoveGroup::Plan p;
       p.trajectory_ = inTraj;
-      bool moveSuccess = group.execute(p);
+      moveit::planning_interface::MoveItErrorCode moveSuccess = group.execute(p);
+      if (!moveSuccess) ROS_INFO("Execution failed with error code %d",
+                                 moveSuccess.val);
+
       ros::Duration(0.5).sleep();
       openGripper();
 
@@ -394,7 +401,10 @@ public:
 
       moveit::planning_interface::MoveGroup::Plan p2;
       p2.trajectory_ = outTraj;
-      bool outSuccess = group.execute(p2);
+      moveit::planning_interface::MoveItErrorCode outSuccess = group.execute(p2);
+      if (!outSuccess) ROS_INFO("Execution failed with error code %d",
+                                outSuccess.val);
+
 
       ros::Duration(0.5).sleep();
 
@@ -545,8 +555,9 @@ public:
           return;
         }
 
-        bool moveSuccess = group.execute(homePlan);
+        moveit::planning_interface::MoveItErrorCode moveSuccess = group.execute(homePlan);
         if (!moveSuccess) {
+          ROS_INFO("Execution failed with error code %d", moveSuccess.val);
           state = FAILURE;
         } else {
           state = WAIT;
@@ -598,8 +609,11 @@ public:
           return false;
         }
 
-        bool moveSuccess = group.execute(xyzPlan);
-        return moveSuccess;
+        moveit::planning_interface::MoveItErrorCode moveSuccess = group.execute(xyzPlan);
+        if (!moveSuccess) {
+          ROS_INFO("Execution failed with error code %d", moveSuccess.val);
+        }
+        return bool(moveSuccess);
     }
 
 private:
