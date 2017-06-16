@@ -57,6 +57,7 @@ public:
                                        lastCommandTime(0),
                                        grabbedObject(-1),
                                        checkPlans(humanCheck),
+                                       gripperClosed(false),
                                        group("arm"),
                                        gripper("gripper_controller/gripper_action", true)
     {
@@ -86,11 +87,13 @@ public:
                                     &MotionServer::obsCallback, this);
         commSubscriber = n.subscribe("rosie_arm_commands", 10,
                                      &MotionServer::commandCallback, this);
+        jointsSubscriber = n.subscribe("joint_states", 10,
+                                     &MotionServer::jointCallback, this);
+
         statusPublisher = n.advertise<rosie_msgs::RobotAction>("rosie_arm_status", 10);
         goalPublisher = n.advertise<geometry_msgs::PoseStamped>("rosie_grasp_target", 10);
 
         gripper.waitForServer();
-        closeGripper();
 
         graspGoal.pose.position.x = 0;
         graspGoal.pose.position.y = 0;
@@ -136,11 +139,23 @@ public:
         }
     }
 
+  void jointCallback(const sensor_msgs::JointState::ConstPtr& msg)
+  {
+    int finger1 = msg->position.size()-1;
+    int finger2 = msg->position.size()-2;
+
+    if (msg->position[finger1] < 0.005 && msg->position[finger2] < 0.005) {
+      gripperClosed = true;
+    } else {
+      gripperClosed = false;
+    }
+  }
     void commandCallback(const rosie_msgs::RobotCommand::ConstPtr& msg)
     {
       if (asToString(state) == msg->action || msg->utime == lastCommandTime)
         return;
 
+        failureReason = "none";
         lastCommandTime = msg->utime;
         if (msg->action.find("GRAB")!=std::string::npos)
         {
@@ -186,21 +201,18 @@ public:
             ROS_INFO("Handling home command");
             state = HOME;
             homeArm();
-            failureReason = "none";
             state = WAIT;
         }
         else if (msg->action.find("RESET")!=std::string::npos){
             ROS_INFO("Handling reset command");
             state = HOME;
             homeArm();
-            failureReason = "none";
             state = WAIT;
         }
         else if (msg->action.find("SCENE")!=std::string::npos){
             ROS_INFO("Handling build scene command");
             state = SCENE;
             setUpScene();
-            failureReason = "none";
             state = WAIT;
         }
         else {
@@ -226,7 +238,7 @@ public:
         float z = objectPoses[id][2] + (objectSizes[id][2]/2.0) + 0.22;
 
         if (isSimRobot) y -= 0.02;
- 
+
         bool reachSuccess = moveToXYZTarget(x, y, z);
         if (!reachSuccess) return;
 
@@ -258,9 +270,28 @@ public:
         if (!moveSuccess) {
           ROS_INFO("Execution failed with error code %d", moveSuccess.val);
           failureReason = "execution";
+          homeArm();
+          state = FAILURE;
+          return;
         }
 
         closeGripper();
+
+        if (gripperClosed) {
+          ROS_INFO("Robot seems to have missed block %d", id);
+          std::stringstream ss;
+          ss << id;
+          std::vector<std::string> missed;
+          missed.push_back(ss.str());
+          scene.removeCollisionObjects(missed);
+          ros::Duration(0.5).sleep();
+
+          homeArm();
+          failureReason = "execution";
+          state = FAILURE;
+          return;
+        }
+
         std::stringstream ss;
         ss << id;
         std::vector<std::string> allowed;
@@ -303,7 +334,23 @@ public:
                                    outSuccess.val);
 
         homeArm();
-        failureReason = "none";
+
+        if (gripperClosed) {
+          ROS_INFO("Robot seems to have dropped block %d", id);
+          grabbedObject = -1;
+
+          std::stringstream ss;
+          ss << id;
+          std::vector<std::string> missed;
+          missed.push_back(ss.str());
+          scene.removeCollisionObjects(missed);
+          ros::Duration(0.5).sleep();
+
+          homeArm();
+          failureReason = "execution";
+          state = FAILURE;
+          return;
+        }
     }
 
     void handleDropCommand(std::vector<float> target)
@@ -350,8 +397,13 @@ public:
       moveit::planning_interface::MoveGroup::Plan p;
       p.trajectory_ = inTraj;
       moveit::planning_interface::MoveItErrorCode moveSuccess = group.execute(p);
-      if (!moveSuccess) ROS_INFO("Execution failed with error code %d",
-                                 moveSuccess.val);
+      if (!moveSuccess) {
+        ROS_INFO("Execution failed with error code %d", moveSuccess.val);
+        homeArm();
+        failureReason = "execution";
+        state = FAILURE;
+        return;
+      }
 
       ros::Duration(0.5).sleep();
       openGripper();
@@ -584,7 +636,6 @@ public:
           failureReason = "execution";
           state = FAILURE;
         } else {
-          failureReason = "none";
           state = WAIT;
         }
     }
@@ -655,6 +706,7 @@ private:
     ros::NodeHandle n;
     ros::Subscriber obsSubscriber;
     ros::Subscriber commSubscriber;
+    ros::Subscriber jointsSubscriber;
     ros::Publisher statusPublisher;
     ros::Publisher goalPublisher;
     geometry_msgs::PoseStamped graspGoal;
@@ -666,6 +718,7 @@ private:
     long lastCommandTime;
     int grabbedObject;
     std::vector<float> grabbedObjSize;
+    bool gripperClosed;
     bool checkPlans;
     bool isSimRobot;
 
