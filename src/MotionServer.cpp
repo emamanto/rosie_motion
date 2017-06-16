@@ -599,7 +599,6 @@ public:
         }
 
         bool moveSuccess = group.execute(xyzPlan);
-        state = WAIT;
         return moveSuccess;
     }
 
