@@ -53,6 +53,7 @@ public:
     }
 
   MotionServer(bool humanCheck=true) : state(WAIT),
+                                       failureReason("none"),
                                        lastCommandTime(0),
                                        grabbedObject(-1),
                                        checkPlans(humanCheck),
@@ -185,22 +186,26 @@ public:
             ROS_INFO("Handling home command");
             state = HOME;
             homeArm();
+            failureReason = "none";
             state = WAIT;
         }
         else if (msg->action.find("RESET")!=std::string::npos){
             ROS_INFO("Handling reset command");
             state = HOME;
             homeArm();
+            failureReason = "none";
             state = WAIT;
         }
         else if (msg->action.find("SCENE")!=std::string::npos){
             ROS_INFO("Handling build scene command");
             state = SCENE;
             setUpScene();
+            failureReason = "none";
             state = WAIT;
         }
         else {
           ROS_INFO("Unknown command %s received", msg->action.c_str());
+          failureReason = "unknowncommand";
           state = FAILURE;
         }
     }
@@ -211,6 +216,7 @@ public:
         if (objectSizes.find(id) == objectSizes.end() ||
             objectPoses.find(id) == objectSizes.end()) {
           ROS_INFO("Object ID %d is not being perceived", id);
+          failureReason = "invalidpickup";
           state = FAILURE;
           return;
         }
@@ -222,10 +228,7 @@ public:
         if (isSimRobot) y -= 0.02;
 
         bool reachSuccess = moveToXYZTarget(x, y, z);
-        if (!reachSuccess) {
-          state = FAILURE;
-          return;
-        }
+        if (!reachSuccess) return;
 
         ros::Duration(0.5).sleep();
         openGripper();
@@ -244,6 +247,7 @@ public:
                                                  inTraj,
                                                  false);
         if (!safetyCheck()) {
+          failureReason = "safety";
           state = FAILURE;
           return;
         }
@@ -251,8 +255,10 @@ public:
         moveit::planning_interface::MoveGroup::Plan p;
         p.trajectory_ = inTraj;
         moveit::planning_interface::MoveItErrorCode moveSuccess = group.execute(p);
-        if (!moveSuccess) ROS_INFO("Execution failed with error code %d",
-                                   moveSuccess.val);
+        if (!moveSuccess) {
+          ROS_INFO("Execution failed with error code %d", moveSuccess.val);
+          failureReason = "execution";
+        }
 
         closeGripper();
         std::stringstream ss;
@@ -285,6 +291,7 @@ public:
                                                  outTraj,
                                                  false);
         if (!safetyCheck()) {
+          failureReason = "safety";
           state = FAILURE;
           return;
         }
@@ -296,12 +303,14 @@ public:
                                    outSuccess.val);
 
         homeArm();
+        failureReason = "none";
     }
 
     void handleDropCommand(std::vector<float> target)
     {
       if (grabbedObject == -1) {
         ROS_INFO("Cannot drop because robot is not holding an object.");
+        failureReason = "invaliddrop";
         state = FAILURE;
         return;
       }
@@ -316,10 +325,7 @@ public:
                                           target[1],
                                           target[2] + (grabbedObjSize[2]/2.0) + 0.2);
 
-      if (!reachSuccess) {
-        state = FAILURE;
-        return;
-      }
+      if (!reachSuccess) return;
 
       ros::Duration(0.5).sleep();
       std::vector<geometry_msgs::Pose> waypoints;
@@ -336,6 +342,7 @@ public:
                                                inTraj,
                                                false);
       if (!safetyCheck()) {
+        failureReason = "safety";
         state = FAILURE;
         return;
       }
@@ -401,6 +408,7 @@ public:
                                                 outTraj,
                                                 false);
       if (!safetyCheck()) {
+        failureReason = "safety";
         state = FAILURE;
         return;
       }
@@ -441,6 +449,7 @@ public:
         rosie_msgs::RobotAction msg = rosie_msgs::RobotAction();
         msg.utime = ros::Time::now().toNSec();
         msg.action = asToString(state).c_str();
+        msg.failure_reason = failureReason;
         msg.obj_id = grabbedObject;
         statusPublisher.publish(msg);
         goalPublisher.publish(graspGoal);
@@ -557,11 +566,13 @@ public:
         moveit::planning_interface::MoveItErrorCode success = group.plan(homePlan);
         if (!success) {
           ROS_INFO("Planning failed with error code %d", success.val);
+          failureReason = "planning";
           state = FAILURE;
           return;
         }
 
         if (!safetyCheck()) {
+          failureReason = "safety";
           state = FAILURE;
           return;
         }
@@ -569,8 +580,10 @@ public:
         moveit::planning_interface::MoveItErrorCode moveSuccess = group.execute(homePlan);
         if (!moveSuccess) {
           ROS_INFO("Execution failed with error code %d", moveSuccess.val);
+          failureReason = "execution";
           state = FAILURE;
         } else {
+          failureReason = "none";
           state = WAIT;
         }
     }
@@ -615,10 +628,13 @@ public:
         moveit::planning_interface::MoveItErrorCode success = group.plan(xyzPlan);
         if (!success) {
           ROS_INFO("Planning failed with error code %d", success.val);
+          failureReason = "planning";
+          state = FAILURE;
           return false;
         }
 
         if (!safetyCheck()) {
+          failureReason = "safety";
           state = FAILURE;
           return false;
         }
@@ -626,8 +642,12 @@ public:
         moveit::planning_interface::MoveItErrorCode moveSuccess = group.execute(xyzPlan);
         if (!moveSuccess) {
           ROS_INFO("Execution failed with error code %d", moveSuccess.val);
+          failureReason = "execution";
+          state = FAILURE;
+          return false;
         }
-        return bool(moveSuccess);
+
+        return true;
     }
 
 private:
@@ -641,6 +661,7 @@ private:
     ros::Timer pubTimer;
 
     ActionState state;
+    std::string failureReason;
     long lastCommandTime;
     int grabbedObject;
     std::vector<float> grabbedObjSize;
