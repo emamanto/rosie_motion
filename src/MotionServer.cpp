@@ -226,7 +226,7 @@ public:
         float z = objectPoses[id][2] + (objectSizes[id][2]/2.0) + 0.22;
 
         if (isSimRobot) y -= 0.02;
-
+ 
         bool reachSuccess = moveToXYZTarget(x, y, z);
         if (!reachSuccess) return;
 
@@ -476,10 +476,11 @@ public:
           geometry_msgs::Pose box_pose;
           box_pose.position.x = i->second[0];
           box_pose.position.y = i->second[1];
-          box_pose.position.z = i->second[2]; //+ objectSizes[objID][2]/2.0;
+          box_pose.position.z = i->second[2];
           if (isSimRobot) {
               box_pose.position.y -= 0.02;
-              box_pose.position.x += 0.01;
+              box_pose.position.x += 0.02;
+              box_pose.position.z += 0.02;
           }
           box_pose.orientation = tf::createQuaternionMsgFromRollPitchYaw(i->second[5],
                                                                          i->second[4],
