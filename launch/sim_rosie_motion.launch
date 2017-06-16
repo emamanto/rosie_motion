@@ -8,7 +8,9 @@
 <include file="$(find fetch_moveit_config)/launch/move_group.launch" >
 </include>
 
-<node name="rosie_motion_server" pkg="rosie_motion" type="motion_server.py" output="screen" args="check_motion_plans=false">
+<node name="rosie_motion_server" pkg="rosie_motion" type="motionserver" output="screen">
+<param name="human_check" type="bool" value="false"/>
+<param name="rosie_is_sim" type="bool" value="true"/>
 </node>
 
 </launch>

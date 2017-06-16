@@ -6,19 +6,25 @@ project(rosie_motion)
 ## is used, also find other catkin packages
 find_package(catkin REQUIRED COMPONENTS
   moveit_python
+  moveit_core
+  moveit_ros_move_group
+  moveit_ros_planning
+  moveit_ros_planning_interface
+  pluginlib
+  geometric_shapes
   rosie_msgs
+  roscpp
   rospy
   std_msgs
+  geometry_msgs
+  actionlib_msgs
+  actionlib
 )
+
+generate_messages (DEPENDENCIES actionlib_msgs rosie_msgs)
 
 ## System dependencies are found with CMake's conventions
 # find_package(Boost REQUIRED COMPONENTS system)
-
-
-## Uncomment this if the package has a setup.py. This macro ensures
-## modules and global scripts declared therein get installed
-## See http://ros.org/doc/api/catkin/html/user_guide/setup_dot_py.html
-# catkin_python_setup()
 
 ################################################
 ## Declare ROS messages, services and actions ##
@@ -44,33 +50,6 @@ find_package(catkin REQUIRED COMPONENTS
 ##   * uncomment the generate_messages entry below
 ##   * add every package in MSG_DEP_SET to generate_messages(DEPENDENCIES ...)
 
-## Generate messages in the 'msg' folder
-# add_message_files(
-#   FILES
-#   Message1.msg
-#   Message2.msg
-# )
-
-## Generate services in the 'srv' folder
-# add_service_files(
-#   FILES
-#   Service1.srv
-#   Service2.srv
-# )
-
-## Generate actions in the 'action' folder
-# add_action_files(
-#   FILES
-#   Action1.action
-#   Action2.action
-# )
-
-## Generate added messages and services with any dependencies listed here
-# generate_messages(
-#   DEPENDENCIES
-#   rosie_msgs#   std_msgs
-# )
-
 ################################################
 ## Declare ROS dynamic reconfigure parameters ##
 ################################################
@@ -85,12 +64,6 @@ find_package(catkin REQUIRED COMPONENTS
 ##   * uncomment the "generate_dynamic_reconfigure_options" section below
 ##     and list every .cfg file to be processed
 
-## Generate dynamic reconfigure parameters in the 'cfg' folder
-# generate_dynamic_reconfigure_options(
-#   cfg/DynReconf1.cfg
-#   cfg/DynReconf2.cfg
-# )
-
 ###################################
 ## catkin specific configuration ##
 ###################################
@@ -103,7 +76,7 @@ find_package(catkin REQUIRED COMPONENTS
 catkin_package(
 #  INCLUDE_DIRS include
 #  LIBRARIES rosie_motion
-#  CATKIN_DEPENDS moveit_python rosie_msgs rospy std_msgs
+CATKIN_DEPENDS moveit_core moveit_ros_planning_interface moveit_ros_move_group
 #  DEPENDS system_lib
 )
 
@@ -187,3 +160,6 @@ include_directories(
 
 ## Add folders to be run by python nosetests
 # catkin_add_nosetests(test)
+
+add_executable(motionserver src/MotionServer.cpp)
+target_link_libraries(motionserver ${catkin_LIBRARIES})
