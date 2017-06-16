@@ -53,6 +53,7 @@ public:
     }
 
   MotionServer(bool humanCheck=true) : state(WAIT),
+                                       failureReason("none"),
                                        lastCommandTime(0),
                                        grabbedObject(-1),
                                        checkPlans(humanCheck),
@@ -185,17 +186,27 @@ public:
             ROS_INFO("Handling home command");
             state = HOME;
             homeArm();
+            failureReason = "none";
+            state = WAIT;
+        }
+        else if (msg->action.find("RESET")!=std::string::npos){
+            ROS_INFO("Handling reset command");
+            state = HOME;
+            homeArm();
+            failureReason = "none";
             state = WAIT;
         }
         else if (msg->action.find("SCENE")!=std::string::npos){
             ROS_INFO("Handling build scene command");
             state = SCENE;
             setUpScene();
+            failureReason = "none";
             state = WAIT;
         }
         else {
-            ROS_INFO("Unknown command type received");
-            state = FAILURE;
+          ROS_INFO("Unknown command %s received", msg->action.c_str());
+          failureReason = "unknowncommand";
+          state = FAILURE;
         }
     }
 
@@ -205,6 +216,7 @@ public:
         if (objectSizes.find(id) == objectSizes.end() ||
             objectPoses.find(id) == objectSizes.end()) {
           ROS_INFO("Object ID %d is not being perceived", id);
+          failureReason = "invalidpickup";
           state = FAILURE;
           return;
         }
@@ -214,12 +226,9 @@ public:
         float z = objectPoses[id][2] + (objectSizes[id][2]/2.0) + 0.22;
 
         if (isSimRobot) y -= 0.02;
-
+ 
         bool reachSuccess = moveToXYZTarget(x, y, z);
-        if (!reachSuccess) {
-          state = FAILURE;
-          return;
-        }
+        if (!reachSuccess) return;
 
         ros::Duration(0.5).sleep();
         openGripper();
@@ -238,13 +247,18 @@ public:
                                                  inTraj,
                                                  false);
         if (!safetyCheck()) {
+          failureReason = "safety";
           state = FAILURE;
           return;
         }
 
         moveit::planning_interface::MoveGroup::Plan p;
         p.trajectory_ = inTraj;
-        bool moveSuccess = group.execute(p);
+        moveit::planning_interface::MoveItErrorCode moveSuccess = group.execute(p);
+        if (!moveSuccess) {
+          ROS_INFO("Execution failed with error code %d", moveSuccess.val);
+          failureReason = "execution";
+        }
 
         closeGripper();
         std::stringstream ss;
@@ -277,21 +291,26 @@ public:
                                                  outTraj,
                                                  false);
         if (!safetyCheck()) {
+          failureReason = "safety";
           state = FAILURE;
           return;
         }
 
         moveit::planning_interface::MoveGroup::Plan p2;
         p2.trajectory_ = outTraj;
-        bool outSuccess = group.execute(p2);
+        moveit::planning_interface::MoveItErrorCode outSuccess = group.execute(p2);
+        if (!outSuccess) ROS_INFO("Execution failed with error code %d",
+                                   outSuccess.val);
 
         homeArm();
+        failureReason = "none";
     }
 
     void handleDropCommand(std::vector<float> target)
     {
       if (grabbedObject == -1) {
         ROS_INFO("Cannot drop because robot is not holding an object.");
+        failureReason = "invaliddrop";
         state = FAILURE;
         return;
       }
@@ -306,10 +325,7 @@ public:
                                           target[1],
                                           target[2] + (grabbedObjSize[2]/2.0) + 0.2);
 
-      if (!reachSuccess) {
-        state = FAILURE;
-        return;
-      }
+      if (!reachSuccess) return;
 
       ros::Duration(0.5).sleep();
       std::vector<geometry_msgs::Pose> waypoints;
@@ -326,13 +342,17 @@ public:
                                                inTraj,
                                                false);
       if (!safetyCheck()) {
+        failureReason = "safety";
         state = FAILURE;
         return;
       }
 
       moveit::planning_interface::MoveGroup::Plan p;
       p.trajectory_ = inTraj;
-      bool moveSuccess = group.execute(p);
+      moveit::planning_interface::MoveItErrorCode moveSuccess = group.execute(p);
+      if (!moveSuccess) ROS_INFO("Execution failed with error code %d",
+                                 moveSuccess.val);
+
       ros::Duration(0.5).sleep();
       openGripper();
 
@@ -388,13 +408,17 @@ public:
                                                 outTraj,
                                                 false);
       if (!safetyCheck()) {
+        failureReason = "safety";
         state = FAILURE;
         return;
       }
 
       moveit::planning_interface::MoveGroup::Plan p2;
       p2.trajectory_ = outTraj;
-      bool outSuccess = group.execute(p2);
+      moveit::planning_interface::MoveItErrorCode outSuccess = group.execute(p2);
+      if (!outSuccess) ROS_INFO("Execution failed with error code %d",
+                                outSuccess.val);
+
 
       ros::Duration(0.5).sleep();
 
@@ -425,6 +449,7 @@ public:
         rosie_msgs::RobotAction msg = rosie_msgs::RobotAction();
         msg.utime = ros::Time::now().toNSec();
         msg.action = asToString(state).c_str();
+        msg.failure_reason = failureReason;
         msg.obj_id = grabbedObject;
         statusPublisher.publish(msg);
         goalPublisher.publish(graspGoal);
@@ -451,10 +476,11 @@ public:
           geometry_msgs::Pose box_pose;
           box_pose.position.x = i->second[0];
           box_pose.position.y = i->second[1];
-          box_pose.position.z = i->second[2] + objectSizes[objID][2]/2.0;
+          box_pose.position.z = i->second[2];
           if (isSimRobot) {
               box_pose.position.y -= 0.02;
-              box_pose.position.x += 0.01;
+              box_pose.position.x += 0.02;
+              box_pose.position.z += 0.02;
           }
           box_pose.orientation = tf::createQuaternionMsgFromRollPitchYaw(i->second[5],
                                                                          i->second[4],
@@ -538,17 +564,27 @@ public:
         group.setJointValueTarget(joints);
 
         moveit::planning_interface::MoveGroup::Plan homePlan;
-        bool success = group.plan(homePlan);
-
-        if (!safetyCheck()) {
+        moveit::planning_interface::MoveItErrorCode success = group.plan(homePlan);
+        if (!success) {
+          ROS_INFO("Planning failed with error code %d", success.val);
+          failureReason = "planning";
           state = FAILURE;
           return;
         }
 
-        bool moveSuccess = group.execute(homePlan);
+        if (!safetyCheck()) {
+          failureReason = "safety";
+          state = FAILURE;
+          return;
+        }
+
+        moveit::planning_interface::MoveItErrorCode moveSuccess = group.execute(homePlan);
         if (!moveSuccess) {
+          ROS_INFO("Execution failed with error code %d", moveSuccess.val);
+          failureReason = "execution";
           state = FAILURE;
         } else {
+          failureReason = "none";
           state = WAIT;
         }
     }
@@ -590,16 +626,29 @@ public:
 
         group.setPoseTarget(target);
         moveit::planning_interface::MoveGroup::Plan xyzPlan;
-        bool success = group.plan(xyzPlan);
-        if (!success) return false;
-
-        if (!safetyCheck()) {
+        moveit::planning_interface::MoveItErrorCode success = group.plan(xyzPlan);
+        if (!success) {
+          ROS_INFO("Planning failed with error code %d", success.val);
+          failureReason = "planning";
           state = FAILURE;
           return false;
         }
 
-        bool moveSuccess = group.execute(xyzPlan);
-        return moveSuccess;
+        if (!safetyCheck()) {
+          failureReason = "safety";
+          state = FAILURE;
+          return false;
+        }
+
+        moveit::planning_interface::MoveItErrorCode moveSuccess = group.execute(xyzPlan);
+        if (!moveSuccess) {
+          ROS_INFO("Execution failed with error code %d", moveSuccess.val);
+          failureReason = "execution";
+          state = FAILURE;
+          return false;
+        }
+
+        return true;
     }
 
 private:
@@ -613,6 +662,7 @@ private:
     ros::Timer pubTimer;
 
     ActionState state;
+    std::string failureReason;
     long lastCommandTime;
     int grabbedObject;
     std::vector<float> grabbedObjSize;
