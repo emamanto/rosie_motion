@@ -476,7 +476,7 @@ public:
           geometry_msgs::Pose box_pose;
           box_pose.position.x = i->second[0];
           box_pose.position.y = i->second[1];
-          box_pose.position.z = i->second[2] + objectSizes[objID][2]/2.0;
+          box_pose.position.z = i->second[2]; //+ objectSizes[objID][2]/2.0;
           if (isSimRobot) {
               box_pose.position.y -= 0.02;
               box_pose.position.x += 0.01;
