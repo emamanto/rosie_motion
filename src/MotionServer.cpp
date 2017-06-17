@@ -375,7 +375,7 @@ public:
       if (target[2] == -1) target[2] = tableH;
       if (isSimRobot) target[1] -= 0.02;
 
-      bool reachSuccess = moveToXYZTarget(target[0] - (grabbedObjSize[0]/2.0) - 0.15,
+      bool reachSuccess = moveToXYZTarget(target[0] - (grabbedObjSize[0]/2.0) - 0.13,
                                           target[1],
                                           target[2] + (grabbedObjSize[2]/2.0) + 0.2);
 
