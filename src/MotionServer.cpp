@@ -54,6 +54,7 @@ public:
 
   MotionServer(bool humanCheck=true) : state(WAIT),
                                        failureReason("none"),
+                                       numRetries(3),
                                        lastCommandTime(0),
                                        grabbedObject(-1),
                                        checkPlans(humanCheck),
@@ -80,6 +81,7 @@ public:
         else {
           ROS_INFO("RosieMotionServer human checks on motion planning are on.");
         }
+        ros::param::set("/move_group/trajectory_execution/allowed_start_tolerance", 0.0);
 
         group.setMaxVelocityScalingFactor(0.3);
 
@@ -141,10 +143,15 @@ public:
 
   void jointCallback(const sensor_msgs::JointState::ConstPtr& msg)
   {
-    int finger1 = msg->position.size()-1;
-    int finger2 = msg->position.size()-2;
+    int pos1 = -1;
+    int pos2 = -1;
+    for (int i = 0; i < msg->name.size(); i++) {
+      if (msg->name[i] == "l_gripper_finger_joint") pos1 = i;
+      else if (msg->name[i] == "r_gripper_finger_joint") pos2 = i;
+    }
+    if (pos1 == -1 || pos2 == -1) return;
 
-    if (msg->position[finger1] < 0.005 && msg->position[finger2] < 0.005) {
+    if (msg->position[pos1] < 0.005 && msg->position[pos2] < 0.005) {
       gripperClosed = true;
     } else {
       gripperClosed = false;
@@ -511,6 +518,7 @@ public:
     {
       std::vector<std::string> known = scene.getKnownObjectNames();
       scene.removeCollisionObjects(known);
+      ROS_INFO("Removing known collision objects");
       ros::Duration(1).sleep();
 
       boost::lock_guard<boost::mutex> guard(objMutex);
@@ -524,15 +532,15 @@ public:
           std::stringstream ss;
           ss << objID;
           co.id = ss.str();
+          ROS_INFO("Adding object %s", co.id.c_str());
 
           geometry_msgs::Pose box_pose;
           box_pose.position.x = i->second[0];
           box_pose.position.y = i->second[1];
-          box_pose.position.z = i->second[2];
+          box_pose.position.z = i->second[2] + 0.02;
           if (isSimRobot) {
               box_pose.position.y -= 0.02;
               box_pose.position.x += 0.02;
-              box_pose.position.z += 0.02;
           }
           box_pose.orientation = tf::createQuaternionMsgFromRollPitchYaw(i->second[5],
                                                                          i->second[4],
@@ -616,7 +624,15 @@ public:
         group.setJointValueTarget(joints);
 
         moveit::planning_interface::MoveGroup::Plan homePlan;
-        moveit::planning_interface::MoveItErrorCode success = group.plan(homePlan);
+
+        int tries = 0;
+        moveit::planning_interface::MoveItErrorCode success;
+        while(tries < numRetries) {
+          tries++;
+          success = group.plan(homePlan);
+          if (success) break;
+        }
+
         if (!success) {
           ROS_INFO("Planning failed with error code %d", success.val);
           failureReason = "planning";
@@ -677,7 +693,15 @@ public:
 
         group.setPoseTarget(target);
         moveit::planning_interface::MoveGroup::Plan xyzPlan;
-        moveit::planning_interface::MoveItErrorCode success = group.plan(xyzPlan);
+
+        int tries = 0;
+        moveit::planning_interface::MoveItErrorCode success;
+        while (tries < numRetries) {
+          tries++;
+          success = group.plan(xyzPlan);
+          if (success) break;
+        }
+
         if (!success) {
           ROS_INFO("Planning failed with error code %d", success.val);
           failureReason = "planning";
@@ -715,6 +739,7 @@ private:
 
     ActionState state;
     std::string failureReason;
+    int numRetries;
     long lastCommandTime;
     int grabbedObject;
     std::vector<float> grabbedObjSize;
