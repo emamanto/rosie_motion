@@ -83,7 +83,7 @@ public:
         }
         ros::param::set("/move_group/trajectory_execution/allowed_start_tolerance", 0.0);
 
-        group.setMaxVelocityScalingFactor(0.3);
+        group.setMaxVelocityScalingFactor(0.4);
 
         obsSubscriber = n.subscribe("rosie_observations", 10,
                                     &MotionServer::obsCallback, this);
@@ -257,6 +257,7 @@ public:
         geometry_msgs::Pose gp = waypoints[0];
         gp.position.x += 0.06;
         gp.position.z -= 0.08;
+        if (isSimRobot) gp.position.z -= 0.02;
         waypoints.push_back(gp);
 
         group.setStartStateToCurrentState();
@@ -320,6 +321,7 @@ public:
         geometry_msgs::Pose bp = waypoints2[0];
         bp.position.x -= 0.08;
         bp.position.z += 0.08;
+        if (isSimRobot) bp.position.z += 0.02;
         waypoints2.push_back(bp);
 
         group.setStartStateToCurrentState();
@@ -353,7 +355,6 @@ public:
           scene.removeCollisionObjects(missed);
           ros::Duration(0.5).sleep();
 
-          homeArm();
           failureReason = "execution";
           state = FAILURE;
           return;
@@ -377,7 +378,7 @@ public:
 
       bool reachSuccess = moveToXYZTarget(target[0] - (grabbedObjSize[0]/2.0) - 0.13,
                                           target[1],
-                                          target[2] + (grabbedObjSize[2]/2.0) + 0.2);
+                                          target[2] + (grabbedObjSize[2]/2.0) + 0.22);
 
       if (!reachSuccess) return;
 
@@ -386,7 +387,7 @@ public:
       waypoints.push_back(group.getCurrentPose().pose);
       geometry_msgs::Pose gp = waypoints[0];
       gp.position.x += 0.05;
-      gp.position.z -= 0.03;
+      gp.position.z -= 0.06;
       waypoints.push_back(gp);
 
       group.setStartStateToCurrentState();
@@ -457,7 +458,7 @@ public:
       waypoints2.push_back(group.getCurrentPose().pose);
       geometry_msgs::Pose bp = waypoints2[0];
       bp.position.x -= 0.08;
-      bp.position.z += 0.08;
+      bp.position.z += 0.06;
       waypoints2.push_back(bp);
 
       group.setStartStateToCurrentState();
@@ -477,7 +478,6 @@ public:
       moveit::planning_interface::MoveItErrorCode outSuccess = group.execute(p2);
       if (!outSuccess) ROS_INFO("Execution failed with error code %d",
                                 outSuccess.val);
-
 
       ros::Duration(0.5).sleep();
 
