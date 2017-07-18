@@ -34,6 +34,7 @@ public:
                       GRAB,
                       POINT,
                       DROP,
+                      PUSH,
                       FAILURE,
                       SCENE};
 
@@ -46,6 +47,7 @@ public:
             case GRAB: return "GRAB";
             case POINT: return "POINT";
             case DROP: return "DROP";
+            case PUSH: return "PUSH";
             case FAILURE: return "FAILURE";
             case SCENE: return "SCENE";
             default: return "WTF";
@@ -189,6 +191,25 @@ public:
             t.push_back(msg->dest.translation.z);
             setUpScene();
             handleDropCommand(t);
+        }
+        else if (msg->action.find("PUSH")!=std::string::npos){
+            state = PUSH;
+            std::string num = msg->action.substr(msg->action.find("=")+1);
+            ROS_INFO("Handling push command for object %s", num.c_str());
+
+            int idNum;
+            std::stringstream ss(num);
+            if (!(ss >> idNum)) {
+                ROS_INFO("Invalid object ID number %s", num.c_str());
+                return;
+            }
+
+            std::vector<float> t = std::vector<float>();
+            t.push_back(msg->dest.translation.x);
+            t.push_back(msg->dest.translation.y);
+
+            setUpScene();
+            handlePushCommand(idNum, t);
         }
         else if (msg->action.find("POINT")!=std::string::npos){
             state = POINT;
@@ -485,6 +506,130 @@ public:
       homeArm();
     }
 
+    void handlePushCommand(int id, std::vector<float> pV)
+    {
+        boost::lock_guard<boost::mutex> guard(objMutex);
+        if (objectSizes.find(id) == objectSizes.end() ||
+            objectPoses.find(id) == objectSizes.end()) {
+          ROS_INFO("Object ID %d is not being perceived", id);
+          failureReason = "invalidpush";
+          state = FAILURE;
+          return;
+        }
+
+        float x = objectPoses[id][0];
+        float y = objectPoses[id][1];
+        float z = objectPoses[id][2] + (objectSizes[id][2]/2.0 + 0.13);
+
+
+        // push in x direction
+        if (pV[1] == 0 && pV[0] < 0) {
+          x += ((objectSizes[id][0]/2.0) + 0.02);
+        }
+        else if (pV[1] == 0 && pV[0] > 0) {
+          x -= ((objectSizes[id][0]/2.0) + 0.17);
+        }
+        // push in y direction
+        else if (pV[0] == 0 && pV[1] < 0) {
+          y += ((objectSizes[id][1]/2.0) + 0.1);
+          x -= 0.07;
+        }
+        else if (pV[0] == 0 && pV[1] > 0) {
+          y -= ((objectSizes[id][1]/2.0) + 0.1);
+          x -= 0.07;
+        }
+
+        bool reachSuccess = moveToXYZTarget(x, y, z);
+        if (!reachSuccess) return;
+
+        ros::Duration(0.5).sleep();
+        setGripperTo(0.04);
+        ros::Duration(0.5).sleep();
+
+        std::vector<geometry_msgs::Pose> waypoints;
+        waypoints.push_back(group.getCurrentPose().pose);
+        geometry_msgs::Pose pp = waypoints[0];
+        if (pV[1] == 0) {
+          if (pV[0] < 0) {
+            pp.position.x += pV[0] - 0.05;
+          }
+          else {
+            pp.position.x += pV[0] + 0.03;
+          }
+        }
+
+        if (pV[0] == 0) {
+          if (pV[1] < 0) {
+            pp.position.y += pV[1] - 0.03;
+          }
+          else {
+            pp.position.y += pV[1] + 0.03;
+          }
+        }
+
+        waypoints.push_back(pp);
+
+        group.setStartStateToCurrentState();
+        moveit_msgs::RobotTrajectory pushTraj;
+        double frac = group.computeCartesianPath(waypoints,
+                                                 0.01, 0.0,
+                                                 pushTraj,
+                                                 false);
+        if (!safetyCheck()) {
+          failureReason = "safety";
+          state = FAILURE;
+          return;
+        }
+
+        moveit::planning_interface::MoveGroup::Plan p;
+        p.trajectory_ = pushTraj;
+        moveit::planning_interface::MoveItErrorCode moveSuccess = group.execute(p);
+        if (!moveSuccess) {
+          ROS_INFO("Execution failed with error code %d", moveSuccess.val);
+          failureReason = "execution";
+          homeArm();
+          state = FAILURE;
+          return;
+        }
+
+        ros::Duration(0.5).sleep();
+
+        waypoints.clear();
+        waypoints.push_back(group.getCurrentPose().pose);
+        geometry_msgs::Pose op = waypoints[0];
+        op.position.x -= pV[0]*0.1;
+        op.position.y -= pV[1]*0.1;
+
+        waypoints.push_back(op);
+
+        group.setStartStateToCurrentState();
+        moveit_msgs::RobotTrajectory outTraj;
+        frac = group.computeCartesianPath(waypoints,
+                                          0.01, 0.0,
+                                          outTraj,
+                                          false);
+        if (!safetyCheck()) {
+          failureReason = "safety";
+          state = FAILURE;
+          return;
+        }
+
+        moveit::planning_interface::MoveGroup::Plan p2;
+        p2.trajectory_ = outTraj;
+        moveit::planning_interface::MoveItErrorCode outSuccess = group.execute(p2);
+        if (!outSuccess) {
+          ROS_INFO("Execution failed with error code %d", moveSuccess.val);
+          failureReason = "execution";
+          homeArm();
+          state = FAILURE;
+          return;
+        }
+
+        ros::Duration(0.5).sleep();
+
+        homeArm();
+    }
+
     void handlePointCommand(int id)
     {
         boost::lock_guard<boost::mutex> guard(objMutex);
@@ -518,7 +663,7 @@ public:
     {
       std::vector<std::string> known = scene.getKnownObjectNames();
       scene.removeCollisionObjects(known);
-      ROS_INFO("Removing known collision objects");
+      //ROS_INFO("Removing known collision objects");
       ros::Duration(1).sleep();
 
       boost::lock_guard<boost::mutex> guard(objMutex);
@@ -532,7 +677,7 @@ public:
           std::stringstream ss;
           ss << objID;
           co.id = ss.str();
-          ROS_INFO("Adding object %s", co.id.c_str());
+          //ROS_INFO("Adding object %s", co.id.c_str());
 
           geometry_msgs::Pose box_pose;
           box_pose.position.x = i->second[0];
@@ -557,7 +702,6 @@ public:
           co.primitive_poses.push_back(box_pose);
           co.operation = co.ADD;
           coList.push_back(co);
-          //ROS_INFO("Adding %d", objID);
       }
       moveit_msgs::CollisionObject planeobj;
       planeobj.header.frame_id = group.getPlanningFrame();
@@ -671,6 +815,16 @@ public:
     control_msgs::GripperCommandGoal gripperGoal;
     gripperGoal.command.max_effort = 0.0;
     gripperGoal.command.position = 0.1;
+
+    gripper.sendGoal(gripperGoal);
+    gripper.waitForResult(ros::Duration(2.0));
+  }
+
+  void setGripperTo(float m)
+  {
+    control_msgs::GripperCommandGoal gripperGoal;
+    gripperGoal.command.max_effort = 0.0;
+    gripperGoal.command.position = m;
 
     gripper.sendGoal(gripperGoal);
     gripper.waitForResult(ros::Duration(2.0));
