@@ -267,8 +267,8 @@ public:
 
         if (isSimRobot) y -= 0.02;
 
-        bool reachSuccess = moveToXYZTarget(x, y, z);
-        if (!reachSuccess) return;
+        if (!planToXYZTarget(x, y, z)) return;;
+        if (!executeCurrentPlan()) return;
 
         ros::Duration(0.5).sleep();
         openGripper();
@@ -397,11 +397,11 @@ public:
       if (target[2] == -1) target[2] = tableH;
       if (isSimRobot) target[1] -= 0.02;
 
-      bool reachSuccess = moveToXYZTarget(target[0] - (grabbedObjSize[0]/2.0) - 0.13,
-                                          target[1],
-                                          target[2] + (grabbedObjSize[2]/2.0) + 0.22);
+      if (!planToXYZTarget(target[0] - (grabbedObjSize[0]/2.0) - 0.13,
+                           target[1],
+                           target[2] + (grabbedObjSize[2]/2.0) + 0.22)) return;
 
-      if (!reachSuccess) return;
+      if (!executeCurrentPlan()) return;
 
       ros::Duration(0.5).sleep();
       std::vector<geometry_msgs::Pose> waypoints;
@@ -539,8 +539,8 @@ public:
           x -= 0.07;
         }
 
-        bool reachSuccess = moveToXYZTarget(x, y, z);
-        if (!reachSuccess) return;
+        if (!planToXYZTarget(x, y, z)) return;
+        if (!executeCurrentPlan()) return;
 
         ros::Duration(0.5).sleep();
         setGripperTo(0.04);
@@ -643,7 +643,8 @@ public:
         float y = objectPoses[id][1];
         float z = objectPoses[id][2] + (objectSizes[id][2]/2.0) + 0.2;
 
-        if (!moveToXYZTarget(x, y, z)) return;
+        if (!planToXYZTarget(x, y, z)) return;
+        if (!executeCurrentPlan()) return;
         ros::Duration(1.0).sleep();
         homeArm();
     }
@@ -802,22 +803,12 @@ public:
 
   void closeGripper()
   {
-    control_msgs::GripperCommandGoal gripperGoal;
-    gripperGoal.command.max_effort = 0.0;
-    gripperGoal.command.position = 0.0;
-
-    gripper.sendGoal(gripperGoal);
-    gripper.waitForResult(ros::Duration(2.0));
+    setGripperTo(0.0);
   }
 
   void openGripper()
   {
-    control_msgs::GripperCommandGoal gripperGoal;
-    gripperGoal.command.max_effort = 0.0;
-    gripperGoal.command.position = 0.1;
-
-    gripper.sendGoal(gripperGoal);
-    gripper.waitForResult(ros::Duration(2.0));
+    setGripperTo(0.1);
   }
 
   void setGripperTo(float m)
@@ -830,7 +821,7 @@ public:
     gripper.waitForResult(ros::Duration(2.0));
   }
 
-    bool moveToXYZTarget(float x, float y, float z)
+    bool planToXYZTarget(float x, float y, float z)
     {
       group.setStartStateToCurrentState();
         geometry_msgs::Quaternion q =
@@ -858,18 +849,25 @@ public:
 
         if (!success) {
           ROS_INFO("Planning failed with error code %d", success.val);
+          currentPlan = moveit::planning_interface::MoveGroup::Plan();
           failureReason = "planning";
           state = FAILURE;
           return false;
         }
 
+        currentPlan = xyzPlan;
+        return true;
+    }
+
+    bool executeCurrentPlan()
+    {
         if (!safetyCheck()) {
           failureReason = "safety";
           state = FAILURE;
           return false;
         }
 
-        moveit::planning_interface::MoveItErrorCode moveSuccess = group.execute(xyzPlan);
+        moveit::planning_interface::MoveItErrorCode moveSuccess = group.execute(currentPlan);
         if (!moveSuccess) {
           ROS_INFO("Execution failed with error code %d", moveSuccess.val);
           failureReason = "execution";
@@ -879,6 +877,7 @@ public:
 
         return true;
     }
+
 
 private:
     ros::NodeHandle n;
@@ -892,6 +891,7 @@ private:
     ros::Timer pubTimer;
 
     ActionState state;
+    moveit::planning_interface::MoveGroup::Plan currentPlan;
     std::string failureReason;
     int numRetries;
     long lastCommandTime;
