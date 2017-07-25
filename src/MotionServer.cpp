@@ -267,7 +267,7 @@ public:
 
         if (isSimRobot) y -= 0.02;
 
-        if (!planToXYZTarget(x, y, z)) return;;
+        if (!planToXYZTarget(x, y, z)) return;
         if (!executeCurrentPlan()) return;
 
         ros::Duration(0.5).sleep();
@@ -287,22 +287,11 @@ public:
                                                  0.01, 0.0,
                                                  inTraj,
                                                  false);
-        if (!safetyCheck()) {
-          failureReason = "safety";
-          state = FAILURE;
-          return;
-        }
 
-        moveit::planning_interface::MoveGroup::Plan p;
-        p.trajectory_ = inTraj;
-        moveit::planning_interface::MoveItErrorCode moveSuccess = group.execute(p);
-        if (!moveSuccess) {
-          ROS_INFO("Execution failed with error code %d", moveSuccess.val);
-          failureReason = "execution";
-          homeArm();
-          state = FAILURE;
-          return;
-        }
+        currentPlan = moveit::planning_interface::MoveGroup::Plan();
+        currentPlan.trajectory_ = inTraj;
+
+        if (!executeCurrentPlan()) return;
 
         closeGripper();
 
@@ -351,17 +340,11 @@ public:
                                                  0.01, 0.0,
                                                  outTraj,
                                                  false);
-        if (!safetyCheck()) {
-          failureReason = "safety";
-          state = FAILURE;
-          return;
-        }
 
-        moveit::planning_interface::MoveGroup::Plan p2;
-        p2.trajectory_ = outTraj;
-        moveit::planning_interface::MoveItErrorCode outSuccess = group.execute(p2);
-        if (!outSuccess) ROS_INFO("Execution failed with error code %d",
-                                   outSuccess.val);
+        currentPlan = moveit::planning_interface::MoveGroup::Plan();
+        currentPlan.trajectory_ = outTraj;
+
+        if (!executeCurrentPlan()) return;
 
         homeArm();
 
@@ -417,22 +400,11 @@ public:
                                                0.01, 0.0,
                                                inTraj,
                                                false);
-      if (!safetyCheck()) {
-        failureReason = "safety";
-        state = FAILURE;
-        return;
-      }
 
-      moveit::planning_interface::MoveGroup::Plan p;
-      p.trajectory_ = inTraj;
-      moveit::planning_interface::MoveItErrorCode moveSuccess = group.execute(p);
-      if (!moveSuccess) {
-        ROS_INFO("Execution failed with error code %d", moveSuccess.val);
-        homeArm();
-        failureReason = "execution";
-        state = FAILURE;
-        return;
-      }
+      currentPlan = moveit::planning_interface::MoveGroup::Plan();
+      currentPlan.trajectory_ = inTraj;
+
+      if (!executeCurrentPlan()) return;
 
       ros::Duration(0.5).sleep();
       openGripper();
@@ -488,17 +460,11 @@ public:
                                                 0.01, 0.0,
                                                 outTraj,
                                                 false);
-      if (!safetyCheck()) {
-        failureReason = "safety";
-        state = FAILURE;
-        return;
-      }
 
-      moveit::planning_interface::MoveGroup::Plan p2;
-      p2.trajectory_ = outTraj;
-      moveit::planning_interface::MoveItErrorCode outSuccess = group.execute(p2);
-      if (!outSuccess) ROS_INFO("Execution failed with error code %d",
-                                outSuccess.val);
+      currentPlan = moveit::planning_interface::MoveGroup::Plan();
+      currentPlan.trajectory_ = outTraj;
+
+      if (!executeCurrentPlan()) return;
 
       ros::Duration(0.5).sleep();
 
@@ -575,22 +541,11 @@ public:
                                                  0.01, 0.0,
                                                  pushTraj,
                                                  false);
-        if (!safetyCheck()) {
-          failureReason = "safety";
-          state = FAILURE;
-          return;
-        }
 
-        moveit::planning_interface::MoveGroup::Plan p;
-        p.trajectory_ = pushTraj;
-        moveit::planning_interface::MoveItErrorCode moveSuccess = group.execute(p);
-        if (!moveSuccess) {
-          ROS_INFO("Execution failed with error code %d", moveSuccess.val);
-          failureReason = "execution";
-          homeArm();
-          state = FAILURE;
-          return;
-        }
+        currentPlan = moveit::planning_interface::MoveGroup::Plan();
+        currentPlan.trajectory_ = pushTraj;
+
+        if (!executeCurrentPlan()) return;
 
         ros::Duration(0.5).sleep();
 
@@ -608,22 +563,11 @@ public:
                                           0.01, 0.0,
                                           outTraj,
                                           false);
-        if (!safetyCheck()) {
-          failureReason = "safety";
-          state = FAILURE;
-          return;
-        }
 
-        moveit::planning_interface::MoveGroup::Plan p2;
-        p2.trajectory_ = outTraj;
-        moveit::planning_interface::MoveItErrorCode outSuccess = group.execute(p2);
-        if (!outSuccess) {
-          ROS_INFO("Execution failed with error code %d", moveSuccess.val);
-          failureReason = "execution";
-          homeArm();
-          state = FAILURE;
-          return;
-        }
+        currentPlan = moveit::planning_interface::MoveGroup::Plan();
+        currentPlan.trajectory_ = outTraj;
+
+        if (!executeCurrentPlan()) return;
 
         ros::Duration(0.5).sleep();
 
