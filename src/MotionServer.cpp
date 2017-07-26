@@ -267,7 +267,7 @@ public:
 
         if (isSimRobot) y -= 0.02;
 
-        if (!planToXYZTarget(x, y, z)) return;
+        if (!planToXYZAngleTarget(x, y, z, M_PI/4.0, 0)) return;
         if (!executeCurrentPlan()) return;
 
         ros::Duration(0.5).sleep();
@@ -380,9 +380,10 @@ public:
       if (target[2] == -1) target[2] = tableH;
       if (isSimRobot) target[1] -= 0.02;
 
-      if (!planToXYZTarget(target[0] - (grabbedObjSize[0]/2.0) - 0.13,
-                           target[1],
-                           target[2] + (grabbedObjSize[2]/2.0) + 0.22)) return;
+      if (!planToXYZAngleTarget(target[0] - (grabbedObjSize[0]/2.0) - 0.13,
+                                target[1],
+                                target[2] + (grabbedObjSize[2]/2.0) + 0.22,
+                                M_PI/4.0, 0)) return;
 
       if (!executeCurrentPlan()) return;
 
@@ -505,7 +506,7 @@ public:
           x -= 0.07;
         }
 
-        if (!planToXYZTarget(x, y, z)) return;
+        if (!planToXYZAngleTarget(x, y, z, M_PI/4.0, 0)) return;
         if (!executeCurrentPlan()) return;
 
         ros::Duration(0.5).sleep();
@@ -587,7 +588,7 @@ public:
         float y = objectPoses[id][1];
         float z = objectPoses[id][2] + (objectSizes[id][2]/2.0) + 0.2;
 
-        if (!planToXYZTarget(x, y, z)) return;
+        if (!planToXYZAngleTarget(x, y, z, M_PI/4.0, 0)) return;
         if (!executeCurrentPlan()) return;
         ros::Duration(1.0).sleep();
         homeArm();
@@ -765,11 +766,11 @@ public:
     gripper.waitForResult(ros::Duration(2.0));
   }
 
-    bool planToXYZTarget(float x, float y, float z)
+    bool planToXYZAngleTarget(float x, float y, float z, float pitch, float yaw)
     {
       group.setStartStateToCurrentState();
         geometry_msgs::Quaternion q =
-            tf::createQuaternionMsgFromRollPitchYaw(0, M_PI/4.0, 0);
+            tf::createQuaternionMsgFromRollPitchYaw(0, pitch, yaw);
         geometry_msgs::Pose target = geometry_msgs::Pose();
         target.orientation = q;
         target.position.x = x;
@@ -822,6 +823,10 @@ public:
         return true;
     }
 
+  std::vector<float> fingertipToEEFrame(std::vector<float> fingertip,
+                                        std::vector<float> handRPY)
+  {
+  }
 
 private:
     ros::NodeHandle n;
