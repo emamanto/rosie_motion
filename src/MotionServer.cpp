@@ -61,6 +61,7 @@ public:
                                        grabbedObject(-1),
                                        checkPlans(humanCheck),
                                        gripperClosed(false),
+                                       fingerToWrist(-0.16645, 0, 0),
                                        group("arm"),
                                        gripper("gripper_controller/gripper_action", true)
     {
@@ -588,7 +589,8 @@ public:
         float y = objectPoses[id][1];
         float z = objectPoses[id][2] + (objectSizes[id][2]/2.0) + 0.2;
 
-        if (!planToXYZAngleTarget(x, y, z, M_PI/4.0, 0)) return;
+        std::vector<float> targ = fingertipToEEFrame(x, y, z, 0, M_PI/4.0, 0);
+        if (!planToXYZAngleTarget(targ[0], targ[1], targ[2], M_PI/4.0, 0)) return;
         if (!executeCurrentPlan()) return;
         ros::Duration(1.0).sleep();
         homeArm();
@@ -823,9 +825,42 @@ public:
         return true;
     }
 
+  std::vector<float> fingertipToEEFrame(float fx, float fy, float fz,
+                                        float hr, float hp, float hy)
+  {
+    std::vector<float> finger;
+    finger.push_back(fx);
+    finger.push_back(fy);
+    finger.push_back(fz);
+
+    std::vector<float> ang;
+    ang.push_back(hr);
+    ang.push_back(hp);
+    ang.push_back(hy);
+
+    return fingertipToEEFrame(finger, ang);
+  }
+
   std::vector<float> fingertipToEEFrame(std::vector<float> fingertip,
                                         std::vector<float> handRPY)
   {
+    tf::Quaternion q = tf::createQuaternionFromRPY(handRPY[0],
+                                                   handRPY[1],
+                                                   handRPY[2]);
+    tf::Transform full_t = tf::Transform(q, fingerToWrist);
+
+    tf::Vector3 v3 = tf::Vector3(fingertip[0],
+                                 fingertip[1],
+                                 fingertip[2]);
+
+    tf::Vector3 out = full_t*v3;
+
+    std::vector<float> res;
+    res.push_back(out.x());
+    res.push_back(out.y());
+    res.push_back(out.z());
+
+    return res;
   }
 
 private:
@@ -849,6 +884,7 @@ private:
     bool gripperClosed;
     bool checkPlans;
     bool isSimRobot;
+    tf::Vector3 fingerToWrist;
 
     moveit::planning_interface::MoveGroup group;
     moveit::planning_interface::PlanningSceneInterface scene;
