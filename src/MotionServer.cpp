@@ -62,6 +62,7 @@ public:
                                        checkPlans(humanCheck),
                                        gripperClosed(false),
                                        fingerToWrist(-0.16645, 0, 0),
+                                       approachOffset(0.12, 0, 0),
                                        group("arm"),
                                        gripper("gripper_controller/gripper_action", true)
     {
@@ -105,6 +106,11 @@ public:
         graspGoal.pose.position.z = 0;
         graspGoal.pose.orientation.w = 1.0;
         graspGoal.header.frame_id = group.getPlanningFrame();
+
+        approachAngles.push_back(M_PI/2.0);
+        approachAngles.push_back(M_PI/3.0);
+        approachAngles.push_back(M_PI/4.0);
+        approachAngles.push_back(2.0*M_PI/3.0);
 
         pubTimer = n.createTimer(ros::Duration(0.1),
                                  &MotionServer::publishStatus, this);
@@ -585,16 +591,36 @@ public:
           return;
         }
 
-        float x = objectPoses[id][0];
-        float y = objectPoses[id][1];
-        float z = objectPoses[id][2] + 0.1;
+        float a = planToGraspPosition(objectPoses[id][0],
+                                      objectPoses[id][1],
+                                      objectPoses[id][2]);
 
-        if (!planToXYZAngleTarget(x, y, z, M_PI/4.0, 0)) return;
+        if (a == -1) return;
         if (!executeCurrentPlan()) return;
         ros::Duration(1.0).sleep();
         homeArm();
     }
 
+
+  float planToGraspPosition(float objx, float objy, float objz)
+  {
+    float foundAngle = -1;
+    for (std::vector<float>::iterator i = approachAngles.begin();
+         i != approachAngles.end(); i++) {
+      tf::Transform rot = tf::Transform(tf::createQuaternionFromRPY(0.0,
+                                                                    *i,
+                                                                    0.0));
+      tf::Vector3 ob = tf::Vector3(objx, objy, objz);
+      tf::Vector3 trans = rot*approachOffset;
+
+      tf::Vector3 out = ob-trans;
+      if (planToXYZAngleTarget(out.x(), out.y(), out.z(), *i, 0)) {
+        foundAngle = *i;
+        break;
+      }
+    }
+    return foundAngle;
+  }
     void publishStatus(const ros::TimerEvent& e)
     {
         rosie_msgs::RobotAction msg = rosie_msgs::RobotAction();
@@ -894,6 +920,10 @@ private:
     bool checkPlans;
     bool isSimRobot;
     tf::Vector3 fingerToWrist;
+
+    // Grasp position variations
+    std::vector<float> approachAngles;
+    tf::Vector3 approachOffset;
 
     moveit::planning_interface::MoveGroup group;
     moveit::planning_interface::PlanningSceneInterface scene;
