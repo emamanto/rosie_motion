@@ -63,6 +63,8 @@ public:
                                        gripperClosed(false),
                                        fingerToWrist(-0.16645, 0, 0),
                                        approachOffset(0.12, 0, 0),
+                                       grabMotion(0.10, 0, 0),
+                                       dropMotion(0.08, 0, 0),
                                        group("arm"),
                                        gripper("gripper_controller/gripper_action", true)
     {
@@ -268,24 +270,39 @@ public:
           return;
         }
 
-        float x = objectPoses[id][0] - (objectSizes[id][0]/2.0) - 0.16;
-        float y = objectPoses[id][1];
-        float z = objectPoses[id][2] + (objectSizes[id][2]/2.0) + 0.22;
+        float adjustedY = objectPoses[id][1];
+        if (isSimRobot) adjustedY -= 0.02;
 
-        if (isSimRobot) y -= 0.02;
+        float a = planToGraspPosition(objectPoses[id][0],
+                                      adjustedY,
+                                      objectPoses[id][2]);
 
-        if (!planToXYZAngleTarget(x, y, z, M_PI/4.0, 0)) return;
+        if (a == -1) return;
         if (!executeCurrentPlan()) return;
 
         ros::Duration(0.5).sleep();
         openGripper();
 
+
         std::vector<geometry_msgs::Pose> waypoints;
         waypoints.push_back(group.getCurrentPose().pose);
+
         geometry_msgs::Pose gp = waypoints[0];
-        gp.position.x += 0.06;
-        gp.position.z -= 0.08;
-        if (isSimRobot) gp.position.z -= 0.02;
+
+        tf::Transform rot = tf::Transform(tf::createQuaternionFromRPY(0.0,
+                                                                      a,
+                                                                      0.0));
+        tf::Vector3 ob = tf::Vector3(gp.position.x,
+                                     gp.position.y,
+                                     gp.position.z);
+        tf::Vector3 trans = rot*grabMotion;
+        tf::Vector3 out = ob+trans;
+
+        gp.position.x = out.x();
+        gp.position.y = out.y();
+        gp.position.z = out.z();
+
+        //if (isSimRobot) gp.position.z -= 0.02;
         waypoints.push_back(gp);
 
         group.setStartStateToCurrentState();
@@ -924,6 +941,8 @@ private:
     // Grasp position variations
     std::vector<float> approachAngles;
     tf::Vector3 approachOffset;
+    tf::Vector3 grabMotion;
+    tf::Vector3 dropMotion;
 
     moveit::planning_interface::MoveGroup group;
     moveit::planning_interface::PlanningSceneInterface scene;
