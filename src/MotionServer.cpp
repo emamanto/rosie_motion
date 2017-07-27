@@ -585,12 +585,11 @@ public:
           return;
         }
 
-        float x = objectPoses[id][0] - (objectSizes[id][0]/2.0) - 0.2;
+        float x = objectPoses[id][0];
         float y = objectPoses[id][1];
-        float z = objectPoses[id][2] + (objectSizes[id][2]/2.0) + 0.2;
+        float z = objectPoses[id][2] + 0.1;
 
-        std::vector<float> targ = fingertipToEEFrame(x, y, z, 0, M_PI/4.0, 0);
-        if (!planToXYZAngleTarget(targ[0], targ[1], targ[2], M_PI/4.0, 0)) return;
+        if (!planToXYZAngleTarget(x, y, z, M_PI/4.0, 0)) return;
         if (!executeCurrentPlan()) return;
         ros::Duration(1.0).sleep();
         homeArm();
@@ -775,11 +774,19 @@ public:
             tf::createQuaternionMsgFromRollPitchYaw(0, pitch, yaw);
         geometry_msgs::Pose target = geometry_msgs::Pose();
         target.orientation = q;
-        target.position.x = x;
-        target.position.y = y;
-        target.position.z = z;
 
-        graspGoal.pose = target;
+        std::vector<float> targ = fingertipToEEFrame(x, y, z, 0, pitch, yaw);
+        target.position.x = targ[0];
+        target.position.y = targ[1];
+        target.position.z = targ[2];
+
+        geometry_msgs::Pose fingerTarget = geometry_msgs::Pose();
+        fingerTarget.orientation = q;
+        fingerTarget.position.x = x;
+        fingerTarget.position.y = y;
+        fingerTarget.position.z = z;
+
+        graspGoal.pose = fingerTarget;
         graspGoal.header.frame_id = group.getPlanningFrame();
         ros::Duration(1.0).sleep();
 
@@ -847,13 +854,15 @@ public:
     tf::Quaternion q = tf::createQuaternionFromRPY(handRPY[0],
                                                    handRPY[1],
                                                    handRPY[2]);
-    tf::Transform full_t = tf::Transform(q, fingerToWrist);
-
-    tf::Vector3 v3 = tf::Vector3(fingertip[0],
+    tf::Transform rot = tf::Transform(q);
+    tf::Vector3 ft = tf::Vector3(fingertip[0],
                                  fingertip[1],
                                  fingertip[2]);
+    tf::Vector3 trans = rot*tf::Vector3(fingerToWrist[0],
+                                        fingerToWrist[1],
+                                        fingerToWrist[2]);
 
-    tf::Vector3 out = full_t*v3;
+    tf::Vector3 out = ft+trans;
 
     std::vector<float> res;
     res.push_back(out.x());
