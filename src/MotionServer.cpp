@@ -273,16 +273,16 @@ public:
         float adjustedY = objectPoses[id][1];
         if (isSimRobot) adjustedY -= 0.02;
 
-        float a = planToGraspPosition(objectPoses[id][0],
+        float a = planToGraspPosition(objectPoses[id][0] + 0.02,
                                       adjustedY,
                                       objectPoses[id][2]);
 
+        preferredDropAngle = a;
         if (a == -1) return;
         if (!executeCurrentPlan()) return;
 
         ros::Duration(0.5).sleep();
         openGripper();
-
 
         std::vector<geometry_msgs::Pose> waypoints;
         waypoints.push_back(group.getCurrentPose().pose);
@@ -302,8 +302,8 @@ public:
         gp.position.y = out.y();
         gp.position.z = out.z();
 
-        //if (isSimRobot) gp.position.z -= 0.02;
         waypoints.push_back(gp);
+        geometry_msgs::Pose returnto = waypoints[0];
 
         group.setStartStateToCurrentState();
         moveit_msgs::RobotTrajectory inTraj;
@@ -352,11 +352,7 @@ public:
 
         std::vector<geometry_msgs::Pose> waypoints2;
         waypoints2.push_back(group.getCurrentPose().pose);
-        geometry_msgs::Pose bp = waypoints2[0];
-        bp.position.x -= 0.08;
-        bp.position.z += 0.08;
-        if (isSimRobot) bp.position.z += 0.02;
-        waypoints2.push_back(bp);
+        waypoints2.push_back(returnto);
 
         group.setStartStateToCurrentState();
         moveit_msgs::RobotTrajectory outTraj;
@@ -404,20 +400,44 @@ public:
       if (target[2] == -1) target[2] = tableH;
       if (isSimRobot) target[1] -= 0.02;
 
-      if (!planToXYZAngleTarget(target[0] - (grabbedObjSize[0]/2.0) - 0.13,
-                                target[1],
-                                target[2] + (grabbedObjSize[2]/2.0) + 0.22,
-                                M_PI/4.0, 0)) return;
+      // Try the angle you picked it up at first
+      tf::Transform pRot = tf::Transform(tf::createQuaternionFromRPY(0.0,
+                                                                    preferredDropAngle,
+                                                                    0.0));
+      tf::Vector3 tV = tf::Vector3(target[0], target[1], target[2] + 0.02);
+      tf::Vector3 transIn = pRot*approachOffset;
 
+      tf::Vector3 in = tV-transIn;
+      float a = -1;
+      if (planToXYZAngleTarget(in.x(), in.y(), in.z(), preferredDropAngle, 0)) {
+        a = preferredDropAngle;
+      } else {
+        a = planToGraspPosition(target[0], target[1], target[2] + 0.02);
+      }
+      preferredDropAngle = -1;
+
+      if (a == -1) return;
       if (!executeCurrentPlan()) return;
 
       ros::Duration(0.5).sleep();
       std::vector<geometry_msgs::Pose> waypoints;
       waypoints.push_back(group.getCurrentPose().pose);
       geometry_msgs::Pose gp = waypoints[0];
-      gp.position.x += 0.05;
-      gp.position.z -= 0.06;
+      tf::Transform rot = tf::Transform(tf::createQuaternionFromRPY(0.0,
+                                                                    a,
+                                                                    0.0));
+      tf::Vector3 ob = tf::Vector3(gp.position.x,
+                                   gp.position.y,
+                                   gp.position.z);
+      tf::Vector3 trans = rot*dropMotion;
+      tf::Vector3 out = ob+trans;
+
+      gp.position.x = out.x();
+      gp.position.y = out.y();
+      gp.position.z = out.z();
+
       waypoints.push_back(gp);
+      geometry_msgs::Pose returnto = waypoints[0];
 
       group.setStartStateToCurrentState();
       moveit_msgs::RobotTrajectory inTraj;
@@ -474,10 +494,7 @@ public:
 
       std::vector<geometry_msgs::Pose> waypoints2;
       waypoints2.push_back(group.getCurrentPose().pose);
-      geometry_msgs::Pose bp = waypoints2[0];
-      bp.position.x -= 0.08;
-      bp.position.z += 0.06;
-      waypoints2.push_back(bp);
+      waypoints2.push_back(returnto);
 
       group.setStartStateToCurrentState();
       moveit_msgs::RobotTrajectory outTraj;
@@ -940,6 +957,7 @@ private:
 
     // Grasp position variations
     std::vector<float> approachAngles;
+    float preferredDropAngle;
     tf::Vector3 approachOffset;
     tf::Vector3 grabMotion;
     tf::Vector3 dropMotion;
