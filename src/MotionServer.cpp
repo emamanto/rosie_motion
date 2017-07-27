@@ -62,9 +62,9 @@ public:
                                        checkPlans(humanCheck),
                                        gripperClosed(false),
                                        fingerToWrist(-0.16645, 0, 0),
-                                       approachOffset(0.12, 0, 0),
-                                       grabMotion(0.10, 0, 0),
-                                       dropMotion(0.08, 0, 0),
+                                       approachOffset(0.1, 0, 0),
+                                       grabMotion(0.1, 0, 0),
+                                       dropMotion(0.06, 0, 0),
                                        group("arm"),
                                        gripper("gripper_controller/gripper_action", true)
     {
@@ -275,7 +275,7 @@ public:
 
         float a = planToGraspPosition(objectPoses[id][0] + 0.02,
                                       adjustedY,
-                                      objectPoses[id][2]);
+                                      objectPoses[id][2] + objectSizes[id][2]/2.0);
 
         preferredDropAngle = a;
         if (a == -1) return;
@@ -400,11 +400,13 @@ public:
       if (target[2] == -1) target[2] = tableH;
       if (isSimRobot) target[1] -= 0.02;
 
+      target[2] += (grabbedObjSize[2]/2.0 + 0.02);
+
       // Try the angle you picked it up at first
       tf::Transform pRot = tf::Transform(tf::createQuaternionFromRPY(0.0,
                                                                     preferredDropAngle,
                                                                     0.0));
-      tf::Vector3 tV = tf::Vector3(target[0], target[1], target[2] + 0.02);
+      tf::Vector3 tV = tf::Vector3(target[0], target[1], target[2]);
       tf::Vector3 transIn = pRot*approachOffset;
 
       tf::Vector3 in = tV-transIn;
@@ -412,7 +414,7 @@ public:
       if (planToXYZAngleTarget(in.x(), in.y(), in.z(), preferredDropAngle, 0)) {
         a = preferredDropAngle;
       } else {
-        a = planToGraspPosition(target[0], target[1], target[2] + 0.02);
+        a = planToGraspPosition(target[0], target[1], target[2]);
       }
       preferredDropAngle = -1;
 
@@ -471,7 +473,7 @@ public:
       geometry_msgs::Pose dropP;
       dropP.position.x = target[0];
       dropP.position.y = target[1];
-      dropP.position.z = target[2] + grabbedObjSize[2] + 0.02;
+      dropP.position.z = target[2] + 0.02;
       dropP.orientation.w = 1.0;
 
       shape_msgs::SolidPrimitive primitive;
@@ -627,7 +629,7 @@ public:
 
         float a = planToGraspPosition(objectPoses[id][0],
                                       objectPoses[id][1],
-                                      objectPoses[id][2]);
+                                      objectPoses[id][2] + objectSizes[id][2]/2.0);
 
         if (a == -1) return;
         if (!executeCurrentPlan()) return;
