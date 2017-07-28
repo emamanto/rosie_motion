@@ -473,7 +473,7 @@ public:
       geometry_msgs::Pose dropP;
       dropP.position.x = target[0];
       dropP.position.y = target[1];
-      dropP.position.z = target[2] + 0.02;
+      dropP.position.z = target[2];
       dropP.orientation.w = 1.0;
 
       shape_msgs::SolidPrimitive primitive;
@@ -641,20 +641,28 @@ public:
   float planToGraspPosition(float objx, float objy, float objz)
   {
     float foundAngle = -1;
-    for (std::vector<float>::iterator i = approachAngles.begin();
-         i != approachAngles.end(); i++) {
-      tf::Transform rot = tf::Transform(tf::createQuaternionFromRPY(0.0,
-                                                                    *i,
-                                                                    0.0));
-      tf::Vector3 ob = tf::Vector3(objx, objy, objz);
-      tf::Vector3 trans = rot*approachOffset;
+    int tries = 0;
 
-      tf::Vector3 out = ob-trans;
-      if (planToXYZAngleTarget(out.x(), out.y(), out.z(), *i, 0)) {
-        foundAngle = *i;
-        break;
+    while (tries < numRetries) {
+      for (std::vector<float>::iterator i = approachAngles.begin();
+           i != approachAngles.end(); i++) {
+        tf::Transform rot = tf::Transform(tf::createQuaternionFromRPY(0.0,
+                                                                      *i,
+                                                                      0.0));
+        tf::Vector3 ob = tf::Vector3(objx, objy, objz);
+        tf::Vector3 trans = rot*approachOffset;
+
+        tf::Vector3 out = ob-trans;
+        if (planToXYZAngleTarget(out.x(), out.y(), out.z(), *i, 0)) {
+          foundAngle = *i;
+          break;
+        }
       }
+
+      if (foundAngle != -1) break;
+      tries++;
     }
+
     return foundAngle;
   }
     void publishStatus(const ros::TimerEvent& e)
@@ -855,16 +863,8 @@ public:
         group.setPoseTarget(target);
         moveit::planning_interface::MoveGroup::Plan xyzPlan;
 
-        int tries = 0;
-        moveit::planning_interface::MoveItErrorCode success;
-        while (tries < numRetries) {
-          tries++;
-          success = group.plan(xyzPlan);
-          if (success) break;
-        }
-
+        moveit::planning_interface::MoveItErrorCode success = group.plan(xyzPlan);
         if (!success) {
-          ROS_INFO("Planning failed with error code %d", success.val);
           currentPlan = moveit::planning_interface::MoveGroup::Plan();
           failureReason = "planning";
           state = FAILURE;
