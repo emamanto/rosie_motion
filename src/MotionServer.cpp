@@ -529,51 +529,106 @@ public:
 
         float x = objectPoses[id][0];
         float y = objectPoses[id][1];
-        float z = objectPoses[id][2] + (objectSizes[id][2]/2.0 + 0.13);
+        float z = objectPoses[id][2];
+        //if (z < 0.04) z = 0.04;
 
+        setGripperTo(0.03);
+        ros::Duration(0.5).sleep();
 
+        bool found = false;
         // push in x direction
-        if (pV[1] == 0 && pV[0] < 0) {
-          x += ((objectSizes[id][0]/2.0) + 0.02);
-        }
-        else if (pV[1] == 0 && pV[0] > 0) {
-          x -= ((objectSizes[id][0]/2.0) + 0.17);
+        if (pV[1] == 0) {
+          if (pV[0] < 0) {
+            //x += ((objectSizes[id][0]/2.0) + 0.05);
+            found = planToXYZQuaternionTarget(x, y, z,
+                                              yawPitchToQuat(0, 2*M_PI/3.0));
+          }
+          else if (pV[0] > 0) {
+            //x -= ((objectSizes[id][0]/2.0) + 0.05);
+            found = planToXYZQuaternionTarget(x, y, z,
+                                              yawPitchToQuat(0, M_PI/3.0));
+          }
+
+          if (!found && !planToXYZQuaternionTarget(x, y, z,
+                                                   yawPitchToQuat(0, M_PI/2.0)))
+            return;
         }
         // push in y direction
-        else if (pV[0] == 0 && pV[1] < 0) {
-          y += ((objectSizes[id][1]/2.0) + 0.1);
-          x -= 0.07;
-        }
-        else if (pV[0] == 0 && pV[1] > 0) {
-          y -= ((objectSizes[id][1]/2.0) + 0.1);
-          x -= 0.07;
+        else if (pV[0] == 0) {
+          if (pV[1] < 0) {
+            //y += ((objectSizes[id][0]/2.0) + 0.05);
+            found = planToXYZQuaternionTarget(x, y, z,
+                                              yawPitchToQuat(M_PI/2.0, 2*M_PI/3.0));
+          }
+          else if (pV[1] > 0) {
+            //y -= ((objectSizes[id][0]/2.0) + 0.05);
+            found = planToXYZQuaternionTarget(x, y, z,
+                                              yawPitchToQuat(M_PI/2.0, M_PI/3.0));
+          }
+
+          if (!found && !planToXYZQuaternionTarget(x, y, z,
+                                                   yawPitchToQuat(M_PI/2.0, M_PI/2.0)))
+            return;
         }
 
-        if (!planToXYZAngleTarget(x, y, z, M_PI/4.0, 0)) return;
         if (!executeCurrentPlan()) return;
 
         ros::Duration(0.5).sleep();
-        setGripperTo(0.04);
-        ros::Duration(0.5).sleep();
+
+        std::vector<geometry_msgs::Pose> setupWaypoints;
+        setupWaypoints.push_back(group.getCurrentPose().pose);
+        geometry_msgs::Pose iP = setupWaypoints[0];
+        if (pV[1] == 0) {
+          if (pV[0] < 0) {
+            iP.position.x -= 0.05;
+          }
+          else {
+            iP.position.x += 0.05;
+          }
+        }
+
+        if (pV[0] == 0) {
+          if (pV[1] < 0) {
+            iP.position.y -= 0.05;
+          }
+          else {
+            iP.position.y += 0.05;
+          }
+        }
+
+        setupWaypoints.push_back(iP);
+
+        group.setStartStateToCurrentState();
+        moveit_msgs::RobotTrajectory setupTraj;
+        double sFrac = group.computeCartesianPath(setupWaypoints,
+                                                  0.01, 0.0,
+                                                  setupTraj,
+                                                  false);
+
+        currentPlan = moveit::planning_interface::MoveGroup::Plan();
+        currentPlan.trajectory_ = setupTraj;
+
+        if (!executeCurrentPlan()) return;
+        ros::Duration(1.0).sleep();
 
         std::vector<geometry_msgs::Pose> waypoints;
         waypoints.push_back(group.getCurrentPose().pose);
         geometry_msgs::Pose pp = waypoints[0];
         if (pV[1] == 0) {
           if (pV[0] < 0) {
-            pp.position.x += pV[0] - 0.05;
+            pp.position.x += pV[0];
           }
           else {
-            pp.position.x += pV[0] + 0.03;
+            pp.position.x += pV[0];
           }
         }
 
         if (pV[0] == 0) {
           if (pV[1] < 0) {
-            pp.position.y += pV[1] - 0.03;
+            pp.position.y += pV[1];
           }
           else {
-            pp.position.y += pV[1] + 0.03;
+            pp.position.y += pV[1];
           }
         }
 
@@ -616,6 +671,18 @@ public:
         ros::Duration(0.5).sleep();
 
         homeArm();
+    }
+
+    tf::Quaternion yawPitchToQuat(float yaw, float pitch)
+    {
+      std::vector<float> res;
+
+      tf::Transform first = tf::Transform(tf::createQuaternionFromRPY(0, 0, yaw));
+      tf::Transform second = tf::Transform(tf::createQuaternionFromRPY(0, pitch, 0));
+
+      tf::Transform t = first*second;
+
+      return t.getRotation();
     }
 
     void handlePointCommand(int id)
@@ -837,42 +904,47 @@ public:
     gripper.waitForResult(ros::Duration(2.0));
   }
 
+  bool planToXYZQuaternionTarget(float x, float y, float z, tf::Quaternion q)
+  {
+    group.setStartStateToCurrentState();
+    geometry_msgs::Pose target = geometry_msgs::Pose();
+    geometry_msgs::Quaternion tq;
+    tf::quaternionTFToMsg(q, tq);
+    target.orientation = tq;
+
+    std::vector<float> targ = fingertipToEEFrame(x, y, z, q);
+    target.position.x = targ[0];
+    target.position.y = targ[1];
+    target.position.z = targ[2];
+
+    geometry_msgs::Pose fingerTarget = geometry_msgs::Pose();
+    fingerTarget.orientation = tq;
+    fingerTarget.position.x = x;
+    fingerTarget.position.y = y;
+    fingerTarget.position.z = z;
+
+    graspGoal.pose = fingerTarget;
+    graspGoal.header.frame_id = group.getPlanningFrame();
+    ros::Duration(1.0).sleep();
+
+    group.setPoseTarget(target);
+    moveit::planning_interface::MoveGroup::Plan xyzPlan;
+
+    moveit::planning_interface::MoveItErrorCode success = group.plan(xyzPlan);
+    if (!success) {
+      currentPlan = moveit::planning_interface::MoveGroup::Plan();
+      failureReason = "planning";
+      state = FAILURE;
+      return false;
+    }
+    currentPlan = xyzPlan;
+    return true;
+  }
+
     bool planToXYZAngleTarget(float x, float y, float z, float pitch, float yaw)
     {
-      group.setStartStateToCurrentState();
-        geometry_msgs::Quaternion q =
-            tf::createQuaternionMsgFromRollPitchYaw(0, pitch, yaw);
-        geometry_msgs::Pose target = geometry_msgs::Pose();
-        target.orientation = q;
-
-        std::vector<float> targ = fingertipToEEFrame(x, y, z, 0, pitch, yaw);
-        target.position.x = targ[0];
-        target.position.y = targ[1];
-        target.position.z = targ[2];
-
-        geometry_msgs::Pose fingerTarget = geometry_msgs::Pose();
-        fingerTarget.orientation = q;
-        fingerTarget.position.x = x;
-        fingerTarget.position.y = y;
-        fingerTarget.position.z = z;
-
-        graspGoal.pose = fingerTarget;
-        graspGoal.header.frame_id = group.getPlanningFrame();
-        ros::Duration(1.0).sleep();
-
-        group.setPoseTarget(target);
-        moveit::planning_interface::MoveGroup::Plan xyzPlan;
-
-        moveit::planning_interface::MoveItErrorCode success = group.plan(xyzPlan);
-        if (!success) {
-          currentPlan = moveit::planning_interface::MoveGroup::Plan();
-          failureReason = "planning";
-          state = FAILURE;
-          return false;
-        }
-
-        currentPlan = xyzPlan;
-        return true;
+      tf::Quaternion q = tf::createQuaternionFromRPY(0, pitch, yaw);
+      return planToXYZQuaternionTarget(x, y, z, q);
     }
 
     bool executeCurrentPlan()
@@ -910,12 +982,20 @@ public:
     return fingertipToEEFrame(finger, ang);
   }
 
-  std::vector<float> fingertipToEEFrame(std::vector<float> fingertip,
-                                        std::vector<float> handRPY)
+  std::vector<float> fingertipToEEFrame(float fx, float fy, float fz,
+                                        tf::Quaternion q)
   {
-    tf::Quaternion q = tf::createQuaternionFromRPY(handRPY[0],
-                                                   handRPY[1],
-                                                   handRPY[2]);
+    std::vector<float> finger;
+    finger.push_back(fx);
+    finger.push_back(fy);
+    finger.push_back(fz);
+
+    return fingertipToEEFrame(finger, q);
+  }
+
+  std::vector<float> fingertipToEEFrame(std::vector<float> fingertip,
+                                        tf::Quaternion q)
+  {
     tf::Transform rot = tf::Transform(q);
     tf::Vector3 ft = tf::Vector3(fingertip[0],
                                  fingertip[1],
@@ -932,6 +1012,15 @@ public:
     res.push_back(out.z());
 
     return res;
+  }
+
+  std::vector<float> fingertipToEEFrame(std::vector<float> fingertip,
+                                        std::vector<float> handRPY)
+  {
+    tf::Quaternion q = tf::createQuaternionFromRPY(handRPY[0],
+                                                   handRPY[1],
+                                                   handRPY[2]);
+    return fingertipToEEFrame(fingertip, q);
   }
 
 private:
