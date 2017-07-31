@@ -526,8 +526,8 @@ public:
 
         float x = objectPoses[id][0];
         float y = objectPoses[id][1];
-        float z = objectPoses[id][2];
-        //if (z < 0.04) z = 0.04;
+        float z = objectPoses[id][2] + objectSizes[id][2]/2.0 - 0.01;
+        if (z < 0.04) z = 0.04;
 
         setGripperTo(0.03);
         ros::Duration(0.5).sleep();
@@ -536,12 +536,12 @@ public:
         // push in x direction
         if (pV[1] == 0) {
           if (pV[0] < 0) {
-            x += ((objectSizes[id][0]/2.0) + 0.03);
+            x += ((objectSizes[id][0]/2.0) + 0.05);
             found = planToXYZQuaternionTarget(x, y, z,
                                               yawPitchToQuat(0, 2*M_PI/3.0));
           }
           else if (pV[0] > 0) {
-            x -= ((objectSizes[id][0]/2.0) + 0.03);
+            x -= ((objectSizes[id][0]/2.0) + 0.05);
             found = planToXYZQuaternionTarget(x, y, z,
                                               yawPitchToQuat(0, M_PI/3.0));
           }
@@ -553,12 +553,12 @@ public:
         // push in y direction
         else if (pV[0] == 0) {
           if (pV[1] < 0) {
-            y += ((objectSizes[id][0]/2.0) + 0.03);
+            y += ((objectSizes[id][0]/2.0) + 0.05);
             found = planToXYZQuaternionTarget(x, y, z,
                                               yawPitchToQuat(M_PI/2.0, 2*M_PI/3.0));
           }
           else if (pV[1] > 0) {
-            y -= ((objectSizes[id][0]/2.0) + 0.03);
+            y -= ((objectSizes[id][0]/2.0) + 0.05);
             found = planToXYZQuaternionTarget(x, y, z,
                                               yawPitchToQuat(M_PI/2.0, M_PI/3.0));
           }
@@ -577,19 +577,19 @@ public:
         geometry_msgs::Pose iP = setupWaypoints[0];
         if (pV[1] == 0) {
           if (pV[0] < 0) {
-            iP.position.x -= 0.03;
+            iP.position.x -= 0.04;
           }
           else {
-            iP.position.x += 0.03;
+            iP.position.x += 0.04;
           }
         }
 
         if (pV[0] == 0) {
           if (pV[1] < 0) {
-            iP.position.y -= 0.03;
+            iP.position.y -= 0.04;
           }
           else {
-            iP.position.y += 0.03;
+            iP.position.y += 0.04;
           }
         }
 
