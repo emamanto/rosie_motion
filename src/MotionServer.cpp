@@ -62,9 +62,9 @@ public:
                                        checkPlans(humanCheck),
                                        gripperClosed(false),
                                        fingerToWrist(-0.16645, 0, 0),
-                                       approachOffset(0.1, 0, 0),
-                                       grabMotion(0.1, 0, 0),
-                                       dropMotion(0.06, 0, 0),
+                                       approachOffset(0.08, 0, 0),
+                                       grabMotion(0.09, 0, 0),
+                                       dropMotion(0.07, 0, 0),
                                        group("arm"),
                                        gripper("gripper_controller/gripper_action", true)
     {
@@ -117,6 +117,7 @@ public:
         pubTimer = n.createTimer(ros::Duration(0.1),
                                  &MotionServer::publishStatus, this);
 
+        closeGripper();
         ROS_INFO("RosieMotionServer READY!");
     };
 
@@ -270,11 +271,8 @@ public:
           return;
         }
 
-        float adjustedY = objectPoses[id][1];
-        if (isSimRobot) adjustedY -= 0.02;
-
-        float a = planToGraspPosition(objectPoses[id][0] + 0.02,
-                                      adjustedY,
+        float a = planToGraspPosition(objectPoses[id][0],
+                                      objectPoses[id][1],
                                       objectPoses[id][2] + objectSizes[id][2]/2.0);
 
         preferredDropAngle = a;
@@ -301,6 +299,7 @@ public:
         gp.position.x = out.x();
         gp.position.y = out.y();
         gp.position.z = out.z();
+        if (gp.position.z < 0.03) gp.position.z = 0.03;
 
         waypoints.push_back(gp);
         geometry_msgs::Pose returnto = waypoints[0];
@@ -398,9 +397,7 @@ public:
                        currentTable[1]*target[1]) / -currentTable[2]) + 0.02;
 
       if (target[2] == -1) target[2] = tableH;
-      if (isSimRobot) target[1] -= 0.02;
-
-      target[2] += (grabbedObjSize[2]/2.0 + 0.02);
+      target[2] += grabbedObjSize[2] + 0.01;
 
       // Try the angle you picked it up at first
       tf::Transform pRot = tf::Transform(tf::createQuaternionFromRPY(0.0,
@@ -473,15 +470,15 @@ public:
       geometry_msgs::Pose dropP;
       dropP.position.x = target[0];
       dropP.position.y = target[1];
-      dropP.position.z = target[2];
+      dropP.position.z = target[2] - 0.01 - grabbedObjSize[2]/2.0;
       dropP.orientation.w = 1.0;
 
       shape_msgs::SolidPrimitive primitive;
       primitive.type = primitive.BOX;
       primitive.dimensions.resize(3);
-      primitive.dimensions[0] = grabbedObjSize[0]+0.02;
-      primitive.dimensions[1] = grabbedObjSize[1]+0.02;
-      primitive.dimensions[2] = grabbedObjSize[2]+0.02;
+      primitive.dimensions[0] = grabbedObjSize[0]+0.01;
+      primitive.dimensions[1] = grabbedObjSize[1]+0.01;
+      primitive.dimensions[2] = grabbedObjSize[2]+0.01;
 
       droppedObj.primitives.push_back(primitive);
       droppedObj.primitive_poses.push_back(dropP);
@@ -539,12 +536,12 @@ public:
         // push in x direction
         if (pV[1] == 0) {
           if (pV[0] < 0) {
-            //x += ((objectSizes[id][0]/2.0) + 0.05);
+            x += ((objectSizes[id][0]/2.0) + 0.03);
             found = planToXYZQuaternionTarget(x, y, z,
                                               yawPitchToQuat(0, 2*M_PI/3.0));
           }
           else if (pV[0] > 0) {
-            //x -= ((objectSizes[id][0]/2.0) + 0.05);
+            x -= ((objectSizes[id][0]/2.0) + 0.03);
             found = planToXYZQuaternionTarget(x, y, z,
                                               yawPitchToQuat(0, M_PI/3.0));
           }
@@ -556,12 +553,12 @@ public:
         // push in y direction
         else if (pV[0] == 0) {
           if (pV[1] < 0) {
-            //y += ((objectSizes[id][0]/2.0) + 0.05);
+            y += ((objectSizes[id][0]/2.0) + 0.03);
             found = planToXYZQuaternionTarget(x, y, z,
                                               yawPitchToQuat(M_PI/2.0, 2*M_PI/3.0));
           }
           else if (pV[1] > 0) {
-            //y -= ((objectSizes[id][0]/2.0) + 0.05);
+            y -= ((objectSizes[id][0]/2.0) + 0.03);
             found = planToXYZQuaternionTarget(x, y, z,
                                               yawPitchToQuat(M_PI/2.0, M_PI/3.0));
           }
@@ -580,19 +577,19 @@ public:
         geometry_msgs::Pose iP = setupWaypoints[0];
         if (pV[1] == 0) {
           if (pV[0] < 0) {
-            iP.position.x -= 0.05;
+            iP.position.x -= 0.03;
           }
           else {
-            iP.position.x += 0.05;
+            iP.position.x += 0.03;
           }
         }
 
         if (pV[0] == 0) {
           if (pV[1] < 0) {
-            iP.position.y -= 0.05;
+            iP.position.y -= 0.03;
           }
           else {
-            iP.position.y += 0.05;
+            iP.position.y += 0.03;
           }
         }
 
@@ -766,11 +763,7 @@ public:
           geometry_msgs::Pose box_pose;
           box_pose.position.x = i->second[0];
           box_pose.position.y = i->second[1];
-          box_pose.position.z = i->second[2] + 0.02;
-          if (isSimRobot) {
-              box_pose.position.y -= 0.02;
-              box_pose.position.x += 0.02;
-          }
+          box_pose.position.z = i->second[2];
           box_pose.orientation = tf::createQuaternionMsgFromRollPitchYaw(i->second[5],
                                                                          i->second[4],
                                                                          -i->second[3]);
@@ -778,9 +771,9 @@ public:
           shape_msgs::SolidPrimitive primitive;
           primitive.type = primitive.BOX;
           primitive.dimensions.resize(3);
-          primitive.dimensions[0] = objectSizes[objID][0]+0.02;
-          primitive.dimensions[1] = objectSizes[objID][1]+0.02;
-          primitive.dimensions[2] = objectSizes[objID][2]+0.02;
+          primitive.dimensions[0] = objectSizes[objID][0]+0.01;
+          primitive.dimensions[1] = objectSizes[objID][1]+0.01;
+          primitive.dimensions[2] = objectSizes[objID][2]+0.01;
 
           co.primitives.push_back(primitive);
           co.primitive_poses.push_back(box_pose);
@@ -795,7 +788,7 @@ public:
       planep.position.x = 0.8;
       planep.position.y = 0.0;
       planep.position.z = ((currentTable[3] + currentTable[0]*0.8 +
-                            currentTable[1]*0.0) / -currentTable[2]) + 0.02;
+                            currentTable[1]*0.0) / -currentTable[2]);
       planep.orientation.w = 1.0;
 
       shape_msgs::SolidPrimitive primitive;
