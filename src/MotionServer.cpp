@@ -632,7 +632,11 @@ public:
         currentPlan.trajectory_ = pushTraj;
 
         if (!executeCurrentPlan()) return;
-
+        std::stringstream ss;
+        ss << id;
+        std::vector<std::string> pushed;
+        pushed.push_back(ss.str());
+        scene.removeCollisionObjects(pushed);
         ros::Duration(0.5).sleep();
 
         waypoints.clear();
@@ -670,6 +674,29 @@ public:
 
         if (!executeCurrentPlan()) return;
 
+        moveit_msgs::CollisionObject pushedObj;
+        pushedObj.header.frame_id = group.getPlanningFrame();
+
+        shape_msgs::SolidPrimitive primitive;
+        primitive.type = primitive.BOX;
+        primitive.dimensions.resize(3);
+        primitive.dimensions[0] = objectSizes[id][0] + 0.01;
+        primitive.dimensions[1] = objectSizes[id][1] + 0.01;
+        primitive.dimensions[2] = objectSizes[id][2] + 0.01;
+
+        geometry_msgs::Pose pushP;
+        pushP.position.x = objectPoses[id][0] + pV[0];
+        pushP.position.y = objectPoses[id][1] + pV[1];
+        pushP.position.z = objectPoses[id][2];
+        pushP.orientation.w = 1.0;
+
+        pushedObj.primitives.push_back(primitive);
+        pushedObj.primitive_poses.push_back(pushP);
+        pushedObj.operation = pushedObj.ADD;
+
+        std::vector<moveit_msgs::CollisionObject> toAdd;
+        toAdd.push_back(pushedObj);
+        scene.addCollisionObjects(toAdd);
         ros::Duration(0.5).sleep();
 
         homeArm();
