@@ -65,6 +65,7 @@ public:
                                        approachOffset(0.08, 0, 0),
                                        grabMotion(0.09, 0, 0),
                                        dropMotion(0.07, 0, 0),
+                                       pushOffset(0.05),
                                        group("arm"),
                                        gripper("gripper_controller/gripper_action", true)
     {
@@ -536,12 +537,12 @@ public:
         // push in x direction
         if (pV[1] == 0) {
           if (pV[0] < 0) {
-            x += ((objectSizes[id][0]/2.0) + 0.05);
+            x += ((objectSizes[id][0]/2.0) + pushOffset);
             found = planToXYZQuaternionTarget(x, y, z,
                                               yawPitchToQuat(0, 2*M_PI/3.0));
           }
           else if (pV[0] > 0) {
-            x -= ((objectSizes[id][0]/2.0) + 0.05);
+            x -= ((objectSizes[id][0]/2.0) + pushOffset);
             found = planToXYZQuaternionTarget(x, y, z,
                                               yawPitchToQuat(0, M_PI/3.0));
           }
@@ -553,12 +554,12 @@ public:
         // push in y direction
         else if (pV[0] == 0) {
           if (pV[1] < 0) {
-            y += ((objectSizes[id][0]/2.0) + 0.05);
+            y += ((objectSizes[id][0]/2.0) + pushOffset);
             found = planToXYZQuaternionTarget(x, y, z,
                                               yawPitchToQuat(M_PI/2.0, 2*M_PI/3.0));
           }
           else if (pV[1] > 0) {
-            y -= ((objectSizes[id][0]/2.0) + 0.05);
+            y -= ((objectSizes[id][0]/2.0) + pushOffset);
             found = planToXYZQuaternionTarget(x, y, z,
                                               yawPitchToQuat(M_PI/2.0, M_PI/3.0));
           }
@@ -577,19 +578,19 @@ public:
         geometry_msgs::Pose iP = setupWaypoints[0];
         if (pV[1] == 0) {
           if (pV[0] < 0) {
-            iP.position.x -= 0.04;
+            iP.position.x -= (pushOffset - 0.01);
           }
           else {
-            iP.position.x += 0.04;
+            iP.position.x += (pushOffset - 0.01);
           }
         }
 
         if (pV[0] == 0) {
           if (pV[1] < 0) {
-            iP.position.y -= 0.04;
+            iP.position.y -= (pushOffset - 0.01);
           }
           else {
-            iP.position.y += 0.04;
+            iP.position.y += (pushOffset - 0.01);
           }
         }
 
@@ -612,21 +613,10 @@ public:
         waypoints.push_back(group.getCurrentPose().pose);
         geometry_msgs::Pose pp = waypoints[0];
         if (pV[1] == 0) {
-          if (pV[0] < 0) {
-            pp.position.x += pV[0];
-          }
-          else {
-            pp.position.x += pV[0];
-          }
+          pp.position.x += pV[0];
         }
-
-        if (pV[0] == 0) {
-          if (pV[1] < 0) {
-            pp.position.y += pV[1];
-          }
-          else {
-            pp.position.y += pV[1];
-          }
+        else if (pV[0] == 0) {
+          pp.position.y += pV[1];
         }
 
         waypoints.push_back(pp);
@@ -648,8 +638,23 @@ public:
         waypoints.clear();
         waypoints.push_back(group.getCurrentPose().pose);
         geometry_msgs::Pose op = waypoints[0];
-        op.position.x -= pV[0]*0.1;
-        op.position.y -= pV[1]*0.1;
+        if (pV[1] == 0) {
+          if (pV[0] < 0) {
+            op.position.x += pushOffset;
+          }
+          else {
+            op.position.x -= pushOffset;
+          }
+        }
+
+        if (pV[0] == 0) {
+          if (pV[1] < 0) {
+            op.position.y += pushOffset;
+          }
+          else {
+            op.position.y -= pushOffset;
+          }
+        }
 
         waypoints.push_back(op);
 
@@ -1045,6 +1050,7 @@ private:
     tf::Vector3 approachOffset;
     tf::Vector3 grabMotion;
     tf::Vector3 dropMotion;
+    float pushOffset;
 
     moveit::planning_interface::MoveGroup group;
     moveit::planning_interface::PlanningSceneInterface scene;
