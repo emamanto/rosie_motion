@@ -534,39 +534,48 @@ public:
         ros::Duration(0.5).sleep();
 
         bool found = false;
+        float handAngle = -1;
         // push in x direction
         if (pV[1] == 0) {
           if (pV[0] < 0) {
             x += ((objectSizes[id][0]/2.0) + pushOffset);
-            found = planToXYZQuaternionTarget(x, y, z,
-                                              yawPitchToQuat(0, 2*M_PI/3.0));
+            handAngle = 2*M_PI/3.0;
           }
           else if (pV[0] > 0) {
             x -= ((objectSizes[id][0]/2.0) + pushOffset);
-            found = planToXYZQuaternionTarget(x, y, z,
-                                              yawPitchToQuat(0, M_PI/3.0));
+            handAngle = M_PI/3.0;
           }
 
-          if (!found && !planToXYZQuaternionTarget(x, y, z,
-                                                   yawPitchToQuat(0, M_PI/2.0)))
-            return;
+          int tries = 0;
+          while (!found && tries < numRetries) {
+            found = planToXYZQuaternionTarget(x, y, z,
+                                              yawPitchToQuat(0, M_PI/2.0));
+            if (!found) found = planToXYZQuaternionTarget(x, y, z,
+                                                          yawPitchToQuat(0, handAngle));
+
+            tries++;
+          }
         }
         // push in y direction
         else if (pV[0] == 0) {
           if (pV[1] < 0) {
             y += ((objectSizes[id][0]/2.0) + pushOffset);
-            found = planToXYZQuaternionTarget(x, y, z,
-                                              yawPitchToQuat(M_PI/2.0, 2*M_PI/3.0));
+            handAngle  = 2*M_PI/3.0;
           }
           else if (pV[1] > 0) {
             y -= ((objectSizes[id][0]/2.0) + pushOffset);
-            found = planToXYZQuaternionTarget(x, y, z,
-                                              yawPitchToQuat(M_PI/2.0, M_PI/3.0));
+            handAngle  = M_PI/3.0;
           }
 
-          if (!found && !planToXYZQuaternionTarget(x, y, z,
-                                                   yawPitchToQuat(M_PI/2.0, M_PI/2.0)))
-            return;
+          int tries = 0;
+          while (!found && tries < numRetries) {
+            found = planToXYZQuaternionTarget(x, y, z,
+                                              yawPitchToQuat(M_PI/2.0, M_PI/2.0));
+            if (!found) found = planToXYZQuaternionTarget(x, y, z,
+                                                          yawPitchToQuat(M_PI/2.0, handAngle));
+
+            tries++;
+          }
         }
 
         if (!executeCurrentPlan()) return;
