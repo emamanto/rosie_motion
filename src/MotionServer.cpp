@@ -274,7 +274,8 @@ public:
 
         float a = planToGraspPosition(objectPoses[id][0],
                                       objectPoses[id][1],
-                                      objectPoses[id][2] + objectSizes[id][2]/2.0);
+                                      objectPoses[id][2] + objectSizes[id][2]/2.0,
+                                      -objectPoses[id][3]);
 
         preferredDropAngle = a;
         if (a == -1) return;
@@ -749,22 +750,25 @@ public:
     }
 
 
-  float planToGraspPosition(float objx, float objy, float objz)
+  float planToGraspPosition(float objx, float objy, float objz) {
+    return planToGraspPosition(objx, objy, objz, 0.0);
+  }
+
+  float planToGraspPosition(float objx, float objy, float objz, float yaw)
   {
+    ROS_INFO("Planning to a grasp yaw of: %f", yaw);
     float foundAngle = -1;
     int tries = 0;
 
     while (tries < numRetries) {
       for (std::vector<float>::iterator i = approachAngles.begin();
            i != approachAngles.end(); i++) {
-        tf::Transform rot = tf::Transform(tf::createQuaternionFromRPY(0.0,
-                                                                      *i,
-                                                                      0.0));
+        tf::Transform rot = tf::Transform(yawPitchToQuat(yaw, *i));
         tf::Vector3 ob = tf::Vector3(objx, objy, objz);
         tf::Vector3 trans = rot*approachOffset;
 
         tf::Vector3 out = ob-trans;
-        if (planToXYZAngleTarget(out.x(), out.y(), out.z(), *i, 0)) {
+        if (planToXYZAngleTarget(out.x(), out.y(), out.z(), *i, yaw)) {
           foundAngle = *i;
           break;
         }
