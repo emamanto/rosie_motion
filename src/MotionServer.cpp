@@ -137,14 +137,11 @@ public:
             pos.push_back(i->bbox_xyzrpy.translation.x);
             pos.push_back(i->bbox_xyzrpy.translation.y);
             pos.push_back(i->bbox_xyzrpy.translation.z);
+            objectPoses.insert(std::pair<int, std::vector<float> >(i->obj_id, pos));
+
             tf::Quaternion quat;
             tf::quaternionMsgToTF(i->bbox_xyzrpy.rotation, quat);
-            double roll, pitch, yaw;
-            tf::Matrix3x3(quat).getRPY(roll, pitch, yaw);
-            pos.push_back(float(roll));
-            pos.push_back(float(pitch));
-            pos.push_back(float(yaw));
-            objectPoses.insert(std::pair<int, std::vector<float> >(i->obj_id, pos));
+            objectRotations.insert(std::pair<int, tf::Quaternion>(i->obj_id, quat));
 
             std::vector<float> dim = std::vector<float>();
             dim.push_back(i->bbox_dim.x);
@@ -275,7 +272,7 @@ public:
         float a = planToGraspPosition(objectPoses[id][0],
                                       objectPoses[id][1],
                                       objectPoses[id][2] + objectSizes[id][2]/2.0,
-                                      -objectPoses[id][3]);
+                                      tf::getYaw(objectRotations[id]));
 
         preferredDropAngle = a;
         if (a == -1) return;
@@ -815,9 +812,10 @@ public:
           box_pose.position.x = i->second[0];
           box_pose.position.y = i->second[1];
           box_pose.position.z = i->second[2];
-          box_pose.orientation = tf::createQuaternionMsgFromRollPitchYaw(i->second[5],
-                                                                         i->second[4],
-                                                                         -i->second[3]);
+
+          geometry_msgs::Quaternion q;
+          tf::quaternionTFToMsg(objectRotations[objID], q);
+          box_pose.orientation = q;
 
           shape_msgs::SolidPrimitive primitive;
           primitive.type = primitive.BOX;
@@ -1102,6 +1100,7 @@ private:
     moveit::planning_interface::PlanningSceneInterface scene;
 
     std::map<int, std::vector<float> > objectPoses;
+    std::map<int, tf::Quaternion> objectRotations;
     std::map<int, std::vector<float> > objectSizes;
     std::vector<float> currentTable;
     boost::mutex objMutex;
