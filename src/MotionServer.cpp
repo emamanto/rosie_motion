@@ -528,9 +528,13 @@ public:
         float x = objectPoses[id][0];
         float y = objectPoses[id][1];
         float z = objectPoses[id][2] + objectSizes[id][2]/2.0 - 0.01;
-        if (z < 0.04) z = 0.04;
 
-        setGripperTo(0.03);
+        float tableH = ((currentTable[3] + currentTable[0]*x +
+                         currentTable[1]*y) / -currentTable[2]) + 0.02;
+
+        if (z < tableH + 0.03) z = tableH + 0.03;
+
+        setGripperTo(0.02);
         ros::Duration(0.5).sleep();
 
         bool found = false;
@@ -668,6 +672,8 @@ public:
             op.position.y -= pushOffset;
           }
         }
+
+        op.position.z += 0.02;
 
         waypoints.push_back(op);
 
