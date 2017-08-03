@@ -128,6 +128,7 @@ public:
 
         objectPoses.clear();
         objectSizes.clear();
+        objectRotations.clear();
 
         currentTable = msg->table;
 
