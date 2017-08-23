@@ -528,55 +528,49 @@ public:
         float y = objectPoses[id][1];
         float z = objectPoses[id][2] + objectSizes[id][2]/2.0 - 0.01;
 
+        float yaw = tf::getYaw(objectRotations[id]);
+
         float tableH = ((currentTable[3] + currentTable[0]*x +
                          currentTable[1]*y) / -currentTable[2]) + 0.02;
-
         if (z < tableH + 0.03) z = tableH + 0.03;
 
         setGripperTo(0.02);
         ros::Duration(0.5).sleep();
 
         bool found = false;
-        float handAngle = -1;
         // push in x direction
         if (pV[1] == 0) {
           if (pV[0] < 0) {
-            x += ((objectSizes[id][0]/2.0) + pushOffset);
-            handAngle = 2*M_PI/3.0;
+            x += sin(M_PI/2.0 - yaw)*((objectSizes[id][0]/2.0) + pushOffset);
+            y += cos(M_PI/2.0 - yaw)*((objectSizes[id][0]/2.0) + pushOffset);
           }
           else if (pV[0] > 0) {
-            x -= ((objectSizes[id][0]/2.0) + pushOffset);
-            handAngle = M_PI/3.0;
+            x -= sin(M_PI/2.0 - yaw)*((objectSizes[id][0]/2.0) + pushOffset);
+            y -= cos(M_PI/2.0 - yaw)*((objectSizes[id][0]/2.0) + pushOffset);
           }
 
           int tries = 0;
           while (!found && tries < numRetries) {
             found = planToXYZQuaternionTarget(x, y, z,
-                                              yawPitchToQuat(0, M_PI/2.0));
-            if (!found) found = planToXYZQuaternionTarget(x, y, z,
-                                                          yawPitchToQuat(0, handAngle));
-
+                                              yawPitchToQuat(yaw, M_PI/2.0));
             tries++;
           }
         }
         // push in y direction
         else if (pV[0] == 0) {
           if (pV[1] < 0) {
-            y += ((objectSizes[id][0]/2.0) + pushOffset);
-            handAngle  = 2*M_PI/3.0;
+            x += cos(M_PI/2.0 - yaw)*((objectSizes[id][0]/2.0) + pushOffset);
+            y += sin(M_PI/2.0 - yaw)*((objectSizes[id][0]/2.0) + pushOffset);
           }
           else if (pV[1] > 0) {
-            y -= ((objectSizes[id][0]/2.0) + pushOffset);
-            handAngle  = M_PI/3.0;
+            x -= cos(M_PI/2.0 - yaw)*((objectSizes[id][0]/2.0) + pushOffset);
+            y -= sin(M_PI/2.0 - yaw)*((objectSizes[id][0]/2.0) + pushOffset);
           }
 
           int tries = 0;
           while (!found && tries < numRetries) {
             found = planToXYZQuaternionTarget(x, y, z,
-                                              yawPitchToQuat(M_PI/2.0, M_PI/2.0));
-            if (!found) found = planToXYZQuaternionTarget(x, y, z,
-                                                          yawPitchToQuat(M_PI/2.0, handAngle));
-
+                                              yawPitchToQuat(yaw, M_PI/2.0));
             tries++;
           }
         }
@@ -590,19 +584,23 @@ public:
         geometry_msgs::Pose iP = setupWaypoints[0];
         if (pV[1] == 0) {
           if (pV[0] < 0) {
-            iP.position.x -= (pushOffset - 0.01);
+            iP.position.x -= sin(M_PI/2.0 - yaw)*(pushOffset - 0.01);
+            iP.position.y -= cos(M_PI/2.0 - yaw)*(pushOffset - 0.01);
           }
           else {
-            iP.position.x += (pushOffset - 0.01);
+            iP.position.x += sin(M_PI/2.0 - yaw)*(pushOffset - 0.01);
+            iP.position.y += cos(M_PI/2.0 - yaw)*(pushOffset - 0.01);
           }
         }
 
         if (pV[0] == 0) {
           if (pV[1] < 0) {
-            iP.position.y -= (pushOffset - 0.01);
+            iP.position.x -= sin(M_PI/2.0 - yaw)*(pushOffset - 0.01);
+            iP.position.y -= cos(M_PI/2.0 - yaw)*(pushOffset - 0.01);
           }
           else {
-            iP.position.y += (pushOffset - 0.01);
+            iP.position.x += sin(M_PI/2.0 - yaw)*(pushOffset - 0.01);
+            iP.position.y += cos(M_PI/2.0 - yaw)*(pushOffset - 0.01);
           }
         }
 
@@ -625,10 +623,12 @@ public:
         waypoints.push_back(group.getCurrentPose().pose);
         geometry_msgs::Pose pp = waypoints[0];
         if (pV[1] == 0) {
-          pp.position.x += pV[0];
+          pp.position.x += sin(M_PI/2.0 - yaw)*pV[0];
+          pp.position.y += cos(M_PI/2.0 - yaw)*pV[0];
         }
         else if (pV[0] == 0) {
-          pp.position.y += pV[1];
+          pp.position.x += sin(M_PI/2.0 - yaw)*pV[0];
+          pp.position.y += cos(M_PI/2.0 - yaw)*pV[0];
         }
 
         waypoints.push_back(pp);
@@ -656,19 +656,23 @@ public:
         geometry_msgs::Pose op = waypoints[0];
         if (pV[1] == 0) {
           if (pV[0] < 0) {
-            op.position.x += pushOffset;
+            op.position.x += sin(M_PI/2.0 - yaw)*pushOffset;
+            op.position.y += cos(M_PI/2.0 - yaw)*pushOffset;
           }
           else {
-            op.position.x -= pushOffset;
+            op.position.x -= sin(M_PI/2.0 - yaw)*pushOffset;
+            op.position.y -= cos(M_PI/2.0 - yaw)*pushOffset;
           }
         }
 
         if (pV[0] == 0) {
           if (pV[1] < 0) {
-            op.position.y += pushOffset;
+            op.position.x += sin(M_PI/2.0 - yaw)*pushOffset;
+            op.position.y += cos(M_PI/2.0 - yaw)*pushOffset;
           }
           else {
-            op.position.y -= pushOffset;
+            op.position.x -= sin(M_PI/2.0 - yaw)*pushOffset;
+            op.position.y -= cos(M_PI/2.0 - yaw)*pushOffset;
           }
         }
 
@@ -699,10 +703,13 @@ public:
         primitive.dimensions[2] = objectSizes[id][2] + 0.01;
 
         geometry_msgs::Pose pushP;
-        pushP.position.x = objectPoses[id][0] + pV[0];
-        pushP.position.y = objectPoses[id][1] + pV[1];
+        pushP.position.x = objectPoses[id][0] + sin(M_PI/2.0 - yaw) * pV[0];
+        pushP.position.y = objectPoses[id][1] + cos(M_PI/2.0 - yaw) * pV[1];
         pushP.position.z = objectPoses[id][2];
-        pushP.orientation.w = 1.0;
+        pushP.orientation.w = objectRotations[id].w();
+        pushP.orientation.x = objectRotations[id].x();
+        pushP.orientation.y = objectRotations[id].y();
+        pushP.orientation.z = objectRotations[id].z();
 
         pushedObj.primitives.push_back(primitive);
         pushedObj.primitive_poses.push_back(pushP);
