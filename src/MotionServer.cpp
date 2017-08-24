@@ -544,6 +544,7 @@ public:
         setGripperTo(0.02);
         ros::Duration(0.5).sleep();
 
+        // Find hand offset from center of block
         std::vector<float> offsetV;
         if (pV[1] == 0) {
           if (pV[0] < 0) {
@@ -571,21 +572,56 @@ public:
         x += rotatedOffset[0];
         y += rotatedOffset[1];
 
-        planToXYZAngleTarget(x, y, z, M_PI/2.0, yaw);
-        // find target and compute plan
+        float pushYaw = yaw;
+        if (pV[0] == 0) pushYaw += M_PI/2.0;
+        while (pushYaw > M_PI) pushYaw -= M_PI;
 
+        planToXYZAngleTarget(x, y, z, M_PI/2.0, pushYaw);
         if (!executeCurrentPlan()) return;
 
         ros::Duration(0.5).sleep();
 
-        // align hand with side of block
+        // Find vector to touch side of block
+        std::vector<float> setupV;
+        if (pV[1] == 0) {
+          if (pV[0] < 0) {
+            setupV.push_back(-(pushOffset - 0.01));
+          }
+          else if (pV[0] > 0) {
+            setupV.push_back(pushOffset - 0.01);
+          }
+          setupV.push_back(0);
+        }
+        else if (pV[0] == 0) {
+          setupV.push_back(0);
+          if (pV[1] < 0) {
+            setupV.push_back(-(pushOffset - 0.01));
+          }
+          else if (pV[1] > 0) {
+            setupV.push_back(pushOffset - 0.01);
+          }
+        }
+
+        std::vector<float> rSetup;
+        rSetup.push_back(cos(yaw)*setupV[0] - sin(yaw)*setupV[1]);
+        rSetup.push_back(sin(yaw)*setupV[0] + cos(yaw)*setupV[1]);
 
         group.setStartStateToCurrentState();
         moveit_msgs::RobotTrajectory setupTraj;
-        // double sFrac = group.computeCartesianPath(setupWaypoints,
-        //                                           0.01, 0.0,
-        //                                           setupTraj,
-        //                                           false);
+
+        std::vector<geometry_msgs::Pose> setupWaypoints;
+        setupWaypoints.push_back(group.getCurrentPose().pose);
+
+        geometry_msgs::Pose tp = setupWaypoints[0];
+        tp.position.x += rSetup[0];
+        tp.position.y += rSetup[1];
+        setupWaypoints.push_back(tp);
+        geometry_msgs::Pose returnto = setupWaypoints[0];
+
+        double sFrac = group.computeCartesianPath(setupWaypoints,
+                                                  0.01, 0.0,
+                                                  setupTraj,
+                                                  false);
 
         currentPlan = moveit::planning_interface::MoveGroup::Plan();
         currentPlan.trajectory_ = setupTraj;
@@ -593,19 +629,35 @@ public:
         if (!executeCurrentPlan()) return;
         ros::Duration(1.0).sleep();
 
-        // push vector motion
+        // Calculate push vector in world coords
+
+        std::vector<float> rPush;
+        rPush.push_back(cos(yaw)*pV[0] - sin(yaw)*pV[1]);
+        rPush.push_back(sin(yaw)*pV[0] + cos(yaw)*pV[1]);
 
         group.setStartStateToCurrentState();
         moveit_msgs::RobotTrajectory pushTraj;
-        // double frac = group.computeCartesianPath(waypoints,
-        //                                          0.01, 0.0,
-        //                                          pushTraj,
-        //                                          false);
+
+        std::vector<geometry_msgs::Pose> pushWaypoints;
+        pushWaypoints.push_back(group.getCurrentPose().pose);
+
+        geometry_msgs::Pose pp = pushWaypoints[0];
+        pp.position.x += rPush[0];
+        pp.position.y += rPush[1];
+        pushWaypoints.push_back(pp);
+
+        double pFrac = group.computeCartesianPath(pushWaypoints,
+                                                  0.01, 0.0,
+                                                  pushTraj,
+                                                  false);
 
         currentPlan = moveit::planning_interface::MoveGroup::Plan();
         currentPlan.trajectory_ = pushTraj;
 
         if (!executeCurrentPlan()) return;
+
+        // Remove block from collision map
+
         std::stringstream ss;
         ss << id;
         std::vector<std::string> pushed;
@@ -613,19 +665,27 @@ public:
         scene.removeCollisionObjects(pushed);
         ros::Duration(0.5).sleep();
 
-        // back out from block
+        // Back hand out from block
 
         group.setStartStateToCurrentState();
         moveit_msgs::RobotTrajectory outTraj;
-        // frac = group.computeCartesianPath(waypoints,
-        //                                   0.01, 0.0,
-        //                                   outTraj,
-        //                                   false);
+
+        std::vector<geometry_msgs::Pose> outWaypoints;
+        outWaypoints.push_back(group.getCurrentPose().pose);
+        returnto.position.z += 0.03;
+        outWaypoints.push_back(returnto);
+
+        double oFrac = group.computeCartesianPath(outWaypoints,
+                                                  0.01, 0.0,
+                                                  outTraj,
+                                                  false);
 
         currentPlan = moveit::planning_interface::MoveGroup::Plan();
         currentPlan.trajectory_ = outTraj;
 
         if (!executeCurrentPlan()) return;
+
+        // Re-add block to collision map
 
         moveit_msgs::CollisionObject pushedObj;
         pushedObj.header.frame_id = group.getPlanningFrame();
