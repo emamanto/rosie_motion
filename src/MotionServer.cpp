@@ -524,6 +524,13 @@ public:
           return;
         }
 
+        if (pV[0] != 0 && pV[1] != 0) {
+          ROS_INFO("Object can only be pushed along a single axis");
+          failureReason = "invalidpush";
+          state = FAILURE;
+          return;
+        }
+
         float x = objectPoses[id][0];
         float y = objectPoses[id][1];
         float z = objectPoses[id][2] + objectSizes[id][2]/2.0 - 0.01;
@@ -537,81 +544,48 @@ public:
         setGripperTo(0.02);
         ros::Duration(0.5).sleep();
 
-        bool found = false;
-        // push in x direction
+        std::vector<float> offsetV;
         if (pV[1] == 0) {
           if (pV[0] < 0) {
-            x += sin(M_PI/2.0 - yaw)*((objectSizes[id][0]/2.0) + pushOffset);
-            y += cos(M_PI/2.0 - yaw)*((objectSizes[id][0]/2.0) + pushOffset);
+            offsetV.push_back(objectSizes[id][0]/2.0 + pushOffset);
           }
           else if (pV[0] > 0) {
-            x -= sin(M_PI/2.0 - yaw)*((objectSizes[id][0]/2.0) + pushOffset);
-            y -= cos(M_PI/2.0 - yaw)*((objectSizes[id][0]/2.0) + pushOffset);
+            offsetV.push_back(-(objectSizes[id][0]/2.0 + pushOffset));
           }
-
-          int tries = 0;
-          while (!found && tries < numRetries) {
-            found = planToXYZQuaternionTarget(x, y, z,
-                                              yawPitchToQuat(yaw, M_PI/2.0));
-            tries++;
-          }
+          offsetV.push_back(0);
         }
-        // push in y direction
         else if (pV[0] == 0) {
+          offsetV.push_back(0);
           if (pV[1] < 0) {
-            x += cos(M_PI/2.0 - yaw)*((objectSizes[id][0]/2.0) + pushOffset);
-            y += sin(M_PI/2.0 - yaw)*((objectSizes[id][0]/2.0) + pushOffset);
+            offsetV.push_back(objectSizes[id][1]/2.0 + pushOffset);
           }
           else if (pV[1] > 0) {
-            x -= cos(M_PI/2.0 - yaw)*((objectSizes[id][0]/2.0) + pushOffset);
-            y -= sin(M_PI/2.0 - yaw)*((objectSizes[id][0]/2.0) + pushOffset);
-          }
-
-          int tries = 0;
-          while (!found && tries < numRetries) {
-            found = planToXYZQuaternionTarget(x, y, z,
-                                              yawPitchToQuat(yaw, M_PI/2.0));
-            tries++;
+            offsetV.push_back(-(objectSizes[id][1]/2.0 + pushOffset));
           }
         }
+
+        std::vector<float> rotatedOffset;
+        rotatedOffset.push_back(cos(yaw)*offsetV[0] - sin(yaw)*offsetV[1]);
+        rotatedOffset.push_back(sin(yaw)*offsetV[0] + cos(yaw)*offsetV[1]);
+
+        x += rotatedOffset[0];
+        y += rotatedOffset[1];
+
+        planToXYZAngleTarget(x, y, z, M_PI/2.0, yaw);
+        // find target and compute plan
 
         if (!executeCurrentPlan()) return;
 
         ros::Duration(0.5).sleep();
 
-        std::vector<geometry_msgs::Pose> setupWaypoints;
-        setupWaypoints.push_back(group.getCurrentPose().pose);
-        geometry_msgs::Pose iP = setupWaypoints[0];
-        if (pV[1] == 0) {
-          if (pV[0] < 0) {
-            iP.position.x -= sin(M_PI/2.0 - yaw)*(pushOffset - 0.01);
-            iP.position.y -= cos(M_PI/2.0 - yaw)*(pushOffset - 0.01);
-          }
-          else {
-            iP.position.x += sin(M_PI/2.0 - yaw)*(pushOffset - 0.01);
-            iP.position.y += cos(M_PI/2.0 - yaw)*(pushOffset - 0.01);
-          }
-        }
-
-        if (pV[0] == 0) {
-          if (pV[1] < 0) {
-            iP.position.x -= sin(M_PI/2.0 - yaw)*(pushOffset - 0.01);
-            iP.position.y -= cos(M_PI/2.0 - yaw)*(pushOffset - 0.01);
-          }
-          else {
-            iP.position.x += sin(M_PI/2.0 - yaw)*(pushOffset - 0.01);
-            iP.position.y += cos(M_PI/2.0 - yaw)*(pushOffset - 0.01);
-          }
-        }
-
-        setupWaypoints.push_back(iP);
+        // align hand with side of block
 
         group.setStartStateToCurrentState();
         moveit_msgs::RobotTrajectory setupTraj;
-        double sFrac = group.computeCartesianPath(setupWaypoints,
-                                                  0.01, 0.0,
-                                                  setupTraj,
-                                                  false);
+        // double sFrac = group.computeCartesianPath(setupWaypoints,
+        //                                           0.01, 0.0,
+        //                                           setupTraj,
+        //                                           false);
 
         currentPlan = moveit::planning_interface::MoveGroup::Plan();
         currentPlan.trajectory_ = setupTraj;
@@ -619,26 +593,14 @@ public:
         if (!executeCurrentPlan()) return;
         ros::Duration(1.0).sleep();
 
-        std::vector<geometry_msgs::Pose> waypoints;
-        waypoints.push_back(group.getCurrentPose().pose);
-        geometry_msgs::Pose pp = waypoints[0];
-        if (pV[1] == 0) {
-          pp.position.x += sin(M_PI/2.0 - yaw)*pV[0];
-          pp.position.y += cos(M_PI/2.0 - yaw)*pV[0];
-        }
-        else if (pV[0] == 0) {
-          pp.position.x += sin(M_PI/2.0 - yaw)*pV[0];
-          pp.position.y += cos(M_PI/2.0 - yaw)*pV[0];
-        }
-
-        waypoints.push_back(pp);
+        // push vector motion
 
         group.setStartStateToCurrentState();
         moveit_msgs::RobotTrajectory pushTraj;
-        double frac = group.computeCartesianPath(waypoints,
-                                                 0.01, 0.0,
-                                                 pushTraj,
-                                                 false);
+        // double frac = group.computeCartesianPath(waypoints,
+        //                                          0.01, 0.0,
+        //                                          pushTraj,
+        //                                          false);
 
         currentPlan = moveit::planning_interface::MoveGroup::Plan();
         currentPlan.trajectory_ = pushTraj;
@@ -651,41 +613,14 @@ public:
         scene.removeCollisionObjects(pushed);
         ros::Duration(0.5).sleep();
 
-        waypoints.clear();
-        waypoints.push_back(group.getCurrentPose().pose);
-        geometry_msgs::Pose op = waypoints[0];
-        if (pV[1] == 0) {
-          if (pV[0] < 0) {
-            op.position.x += sin(M_PI/2.0 - yaw)*pushOffset;
-            op.position.y += cos(M_PI/2.0 - yaw)*pushOffset;
-          }
-          else {
-            op.position.x -= sin(M_PI/2.0 - yaw)*pushOffset;
-            op.position.y -= cos(M_PI/2.0 - yaw)*pushOffset;
-          }
-        }
-
-        if (pV[0] == 0) {
-          if (pV[1] < 0) {
-            op.position.x += sin(M_PI/2.0 - yaw)*pushOffset;
-            op.position.y += cos(M_PI/2.0 - yaw)*pushOffset;
-          }
-          else {
-            op.position.x -= sin(M_PI/2.0 - yaw)*pushOffset;
-            op.position.y -= cos(M_PI/2.0 - yaw)*pushOffset;
-          }
-        }
-
-        op.position.z += 0.02;
-
-        waypoints.push_back(op);
+        // back out from block
 
         group.setStartStateToCurrentState();
         moveit_msgs::RobotTrajectory outTraj;
-        frac = group.computeCartesianPath(waypoints,
-                                          0.01, 0.0,
-                                          outTraj,
-                                          false);
+        // frac = group.computeCartesianPath(waypoints,
+        //                                   0.01, 0.0,
+        //                                   outTraj,
+        //                                   false);
 
         currentPlan = moveit::planning_interface::MoveGroup::Plan();
         currentPlan.trajectory_ = outTraj;
