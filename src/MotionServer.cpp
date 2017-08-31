@@ -270,14 +270,31 @@ public:
           return;
         }
 
+        // This only works for objects that can be picked up like squares!!!
+        float yaw = tf::getYaw(objectRotations[id]);
+        if (fabs(yaw + M_PI/2.0) < fabs(yaw)) yaw += M_PI/2.0;
+        if (fabs(yaw - M_PI/2.0) < fabs(yaw)) yaw -= M_PI/2.0;
+
         float a = planToGraspPosition(objectPoses[id][0],
                                       objectPoses[id][1],
                                       objectPoses[id][2] + objectSizes[id][2]/2.0,
-                                      tf::getYaw(objectRotations[id]));
+                                      yaw);
 
         preferredDropAngle = a;
-        if (a == -1) return;
-        if (!executeCurrentPlan()) return;
+        if (a == -1) {
+          ROS_INFO("Arm returning home because planning failed");
+          homeArm();
+          failureReason = "planning";
+          state = FAILURE;
+          return;
+        }
+        if (!executeCurrentPlan()) {
+          ROS_INFO("Arm returning home because execution failed");
+          homeArm();
+          failureReason = "execution";
+          state = FAILURE;
+          return;
+        }
 
         ros::Duration(0.5).sleep();
         openGripper();
@@ -314,7 +331,13 @@ public:
         currentPlan = moveit::planning_interface::MoveGroup::Plan();
         currentPlan.trajectory_ = inTraj;
 
-        if (!executeCurrentPlan()) return;
+        if (!executeCurrentPlan()) {
+          ROS_INFO("Arm returning home because execution failed");
+          homeArm();
+          failureReason = "execution";
+          state = FAILURE;
+          return;
+        }
 
         closeGripper();
 
@@ -327,6 +350,7 @@ public:
           scene.removeCollisionObjects(missed);
           ros::Duration(0.5).sleep();
 
+          ROS_INFO("Arm returning home because grabbing failed");
           homeArm();
           failureReason = "execution";
           state = FAILURE;
@@ -363,7 +387,13 @@ public:
         currentPlan = moveit::planning_interface::MoveGroup::Plan();
         currentPlan.trajectory_ = outTraj;
 
-        if (!executeCurrentPlan()) return;
+        if (!executeCurrentPlan()) {
+          ROS_INFO("Arm returning home because execution failed");
+          homeArm();
+          failureReason = "execution";
+          state = FAILURE;
+          return;
+        }
 
         homeArm();
 
@@ -382,6 +412,9 @@ public:
           state = FAILURE;
           return;
         }
+
+        if (state == GRAB) state = WAIT;
+        ROS_INFO("Arm status is now WAIT");
     }
 
     void handleDropCommand(std::vector<float> target)
@@ -415,8 +448,21 @@ public:
       }
       preferredDropAngle = -1;
 
-      if (a == -1) return;
-      if (!executeCurrentPlan()) return;
+      if (a == -1) {
+        ROS_INFO("Arm returning home because planning failed");
+        homeArm();
+        failureReason = "planning";
+        state = FAILURE;
+        return;
+      }
+
+      if (!executeCurrentPlan()) {
+        ROS_INFO("Arm returning home because execution failed");
+        homeArm();
+        failureReason = "execution";
+        state = FAILURE;
+        return;
+      }
 
       ros::Duration(0.5).sleep();
       std::vector<geometry_msgs::Pose> waypoints;
@@ -448,7 +494,13 @@ public:
       currentPlan = moveit::planning_interface::MoveGroup::Plan();
       currentPlan.trajectory_ = inTraj;
 
-      if (!executeCurrentPlan()) return;
+      if (!executeCurrentPlan()) {
+        ROS_INFO("Arm returning home because execution failed");
+        homeArm();
+        failureReason = "execution";
+        state = FAILURE;
+        return;
+      }
 
       ros::Duration(0.5).sleep();
       openGripper();
@@ -505,12 +557,21 @@ public:
       currentPlan = moveit::planning_interface::MoveGroup::Plan();
       currentPlan.trajectory_ = outTraj;
 
-      if (!executeCurrentPlan()) return;
+      if (!executeCurrentPlan()) {
+        ROS_INFO("Arm returning home because execution failed");
+        homeArm();
+        failureReason = "execution";
+        state = FAILURE;
+        return;
+      }
 
       ros::Duration(0.5).sleep();
 
       closeGripper();
       homeArm();
+
+      if (state == DROP) state = WAIT;
+      ROS_INFO("Arm status is now WAIT");
     }
 
     void handlePushCommand(int id, std::vector<float> pV)
@@ -577,7 +638,14 @@ public:
         while (pushYaw > M_PI) pushYaw -= M_PI;
 
         planToXYZAngleTarget(x, y, z, M_PI/2.0, pushYaw);
-        if (!executeCurrentPlan()) return;
+        if (!executeCurrentPlan()) {
+          ROS_INFO("Arm returning home because execution failed");
+          homeArm();
+          failureReason = "execution";
+          state = FAILURE;
+          return;
+        }
+
 
         ros::Duration(0.5).sleep();
 
@@ -626,7 +694,13 @@ public:
         currentPlan = moveit::planning_interface::MoveGroup::Plan();
         currentPlan.trajectory_ = setupTraj;
 
-        if (!executeCurrentPlan()) return;
+        if (!executeCurrentPlan()) {
+          ROS_INFO("Arm returning home because execution failed");
+          homeArm();
+          failureReason = "execution";
+          state = FAILURE;
+          return;
+        }
         ros::Duration(1.0).sleep();
 
         // Calculate push vector in world coords
@@ -654,7 +728,13 @@ public:
         currentPlan = moveit::planning_interface::MoveGroup::Plan();
         currentPlan.trajectory_ = pushTraj;
 
-        if (!executeCurrentPlan()) return;
+        if (!executeCurrentPlan()) {
+          ROS_INFO("Arm returning home because execution failed");
+          homeArm();
+          failureReason = "execution";
+          state = FAILURE;
+          return;
+        }
 
         // Remove block from collision map
 
@@ -683,7 +763,13 @@ public:
         currentPlan = moveit::planning_interface::MoveGroup::Plan();
         currentPlan.trajectory_ = outTraj;
 
-        if (!executeCurrentPlan()) return;
+        if (!executeCurrentPlan()) {
+          ROS_INFO("Arm returning home because execution failed");
+          homeArm();
+          failureReason = "execution";
+          state = FAILURE;
+          return;
+        }
 
         // Re-add block to collision map
 
@@ -716,6 +802,8 @@ public:
         ros::Duration(0.5).sleep();
 
         homeArm();
+        if (state == PUSH) state = WAIT;
+        ROS_INFO("Arm status is now WAIT");
     }
 
     tf::Quaternion yawPitchToQuat(float yaw, float pitch)
@@ -743,10 +831,25 @@ public:
                                       objectPoses[id][1],
                                       objectPoses[id][2] + objectSizes[id][2]/2.0);
 
-        if (a == -1) return;
-        if (!executeCurrentPlan()) return;
+        if (a == -1) {
+          ROS_INFO("Arm returning home because planning failed");
+          homeArm();
+          failureReason = "planning";
+          state = FAILURE;
+          return;
+        }
+        if (!executeCurrentPlan()) {
+          ROS_INFO("Arm returning home because execution failed");
+          homeArm();
+          failureReason = "execution";
+          state = FAILURE;
+          return;
+        }
+
         ros::Duration(1.0).sleep();
         homeArm();
+        if (state == POINT) state = WAIT;
+        ROS_INFO("Arm status is now WAIT");
     }
 
 
@@ -907,7 +1010,7 @@ public:
         }
 
         if (!success) {
-          ROS_INFO("Planning failed with error code %d", success.val);
+          ROS_INFO("Homing arm planning failed with error code %d", success.val);
           failureReason = "planning";
           state = FAILURE;
           return;
@@ -921,11 +1024,9 @@ public:
 
         moveit::planning_interface::MoveItErrorCode moveSuccess = group.execute(homePlan);
         if (!moveSuccess) {
-          ROS_INFO("Execution failed with error code %d", moveSuccess.val);
+          ROS_INFO("Homing arm execution failed with error code %d", moveSuccess.val);
           failureReason = "execution";
           state = FAILURE;
-        } else {
-          state = WAIT;
         }
     }
 
@@ -978,8 +1079,6 @@ public:
     moveit::planning_interface::MoveItErrorCode success = group.plan(xyzPlan);
     if (!success) {
       currentPlan = moveit::planning_interface::MoveGroup::Plan();
-      failureReason = "planning";
-      state = FAILURE;
       return false;
     }
     currentPlan = xyzPlan;
@@ -995,16 +1094,12 @@ public:
     bool executeCurrentPlan()
     {
         if (!safetyCheck()) {
-          failureReason = "safety";
-          state = FAILURE;
           return false;
         }
 
         moveit::planning_interface::MoveItErrorCode moveSuccess = group.execute(currentPlan);
         if (!moveSuccess) {
           ROS_INFO("Execution failed with error code %d", moveSuccess.val);
-          failureReason = "execution";
-          state = FAILURE;
           return false;
         }
 
