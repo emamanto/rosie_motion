@@ -1,0 +1,4 @@
+    <include>
+      <uri>model://COLOR_cubeSIZEcm</uri>
+      <pose>POSEX POSEY 0.75 0 0 YAW</pose>
+    </include>
