@@ -641,8 +641,8 @@ public:
         int tries = 0;
         while (!success && tries < numRetries) {
           success = planToXYZAngleTarget(x, y, z, M_PI/2.0, pushYaw);
-          if (!success) success = planToXYZAngleTarget(x, y, z, M_PI/2.0, pushYaw+M_PI/2.0);
-          if (!success) success = planToXYZAngleTarget(x, y, z, M_PI/2.0, pushYaw-M_PI/2.0);
+          if (!success) success = planToXYZAngleTarget(x, y, z, M_PI/2.0, pushYaw+M_PI);
+          if (!success) success = planToXYZAngleTarget(x, y, z, M_PI/2.0, pushYaw-M_PI);
           tries++;
         }
 
