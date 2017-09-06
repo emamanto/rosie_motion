@@ -637,7 +637,15 @@ public:
         if (pV[0] == 0) pushYaw += M_PI/2.0;
         while (pushYaw > M_PI) pushYaw -= M_PI;
 
-        planToXYZAngleTarget(x, y, z, M_PI/2.0, pushYaw);
+        bool success = false;
+        int tries = 0;
+        while (!success && tries < numRetries) {
+          success = planToXYZAngleTarget(x, y, z, M_PI/2.0, pushYaw);
+          if (!success) success = planToXYZAngleTarget(x, y, z, M_PI/2.0, pushYaw+M_PI/2.0);
+          if (!success) success = planToXYZAngleTarget(x, y, z, M_PI/2.0, pushYaw-M_PI/2.0);
+          tries++;
+        }
+
         if (!executeCurrentPlan()) {
           ROS_INFO("Arm returning home because execution failed");
           homeArm();
@@ -1077,10 +1085,17 @@ public:
     moveit::planning_interface::MoveGroup::Plan xyzPlan;
 
     moveit::planning_interface::MoveItErrorCode success = group.plan(xyzPlan);
+    // To stop it thinking it's successful if postprocessing is the problem
+    if (xyzPlan.trajectory_.joint_trajectory.points.empty() &&
+        xyzPlan.trajectory_.multi_dof_joint_trajectory.points.empty()) {
+      success = false;
+    }
+
     if (!success) {
       currentPlan = moveit::planning_interface::MoveGroup::Plan();
       return false;
     }
+
     currentPlan = xyzPlan;
     return true;
   }
