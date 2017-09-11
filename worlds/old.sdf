@@ -1,0 +1,46 @@
+<?xml version="1.0" ?>
+<sdf version="1.4">
+  <world name="simple">
+    <include>
+      <uri>model://ground_plane</uri>
+    </include>
+    <include>
+      <uri>model://sun</uri>
+    </include>
+    <include>
+      <uri>model://cafe_table</uri>
+      <name>table1</name>
+      <pose>0.8 0 -0.08 0 0 0</pose>
+    </include>
+    <include>
+      <uri>model://red_cube7cm</uri>
+      <name>block1</name>
+      <pose>0.736486897923 0.206211444701 0.75 0 0 -2.80726193085</pose>
+    </include>
+    <include>
+      <uri>model://blue_cube9cm</uri>
+      <name>block2</name>
+      <pose>0.620899716959 0.0330793847041 0.75 0 0 -0.0305266484936</pose>
+    </include>
+    <include>
+      <uri>model://red_cube3cm</uri>
+      <name>block3</name>
+      <pose>0.89381484697 -0.11519895319 0.75 0 0 -2.55314191792</pose>
+    </include>
+    <include>
+      <uri>model://blue_cube9cm</uri>
+      <name>block4</name>
+      <pose>0.601535809576 -0.197459713803 0.75 0 0 -1.22022417696</pose>
+    </include>
+    <include>
+      <uri>model://red_cube13cm</uri>
+      <name>block5</name>
+      <pose>0.830939600867 -0.274266584111 0.75 0 0 2.0309542172</pose>
+    </include>
+    <include>
+      <uri>model://blue_cube11cm</uri>
+      <name>block6</name>
+      <pose>0.888462334566 0.0362858523182 0.75 0 0 0.648897348062</pose>
+    </include>
+  </world>
+</sdf>

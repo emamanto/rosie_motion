@@ -63,7 +63,7 @@ public:
                                        gripperClosed(false),
                                        fingerToWrist(-0.16645, 0, 0),
                                        approachOffset(0.08, 0, 0),
-                                       grabMotion(0.09, 0, 0),
+                                       grabMotion(0.07, 0, 0),
                                        dropMotion(0.07, 0, 0),
                                        pushOffset(0.05),
                                        group("arm"),
@@ -316,7 +316,9 @@ public:
         gp.position.x = out.x();
         gp.position.y = out.y();
         gp.position.z = out.z();
-        if (gp.position.z < 0.03) gp.position.z = 0.03;
+        float tableH = ((currentTable[3] + currentTable[0]*objectPoses[id][0] +
+                         currentTable[1]*objectPoses[id][1]) / -currentTable[2]) +0.02;
+        if (gp.position.z < tableH + 0.02) gp.position.z = tableH + 0.02;
 
         waypoints.push_back(gp);
         geometry_msgs::Pose returnto = waypoints[0];
@@ -331,7 +333,7 @@ public:
         currentPlan = moveit::planning_interface::MoveGroup::Plan();
         currentPlan.trajectory_ = inTraj;
 
-        if (!executeCurrentPlan()) {
+        if (frac < 0.9 || !executeCurrentPlan()) {
           ROS_INFO("Arm returning home because execution failed");
           homeArm();
           failureReason = "execution";
@@ -387,7 +389,7 @@ public:
         currentPlan = moveit::planning_interface::MoveGroup::Plan();
         currentPlan.trajectory_ = outTraj;
 
-        if (!executeCurrentPlan()) {
+        if (frac2 < 0.8 || !executeCurrentPlan()) {
           ROS_INFO("Arm returning home because execution failed");
           homeArm();
           failureReason = "execution";
@@ -494,7 +496,7 @@ public:
       currentPlan = moveit::planning_interface::MoveGroup::Plan();
       currentPlan.trajectory_ = inTraj;
 
-      if (!executeCurrentPlan()) {
+      if (frac < 0.8 || !executeCurrentPlan()) {
         ROS_INFO("Arm returning home because execution failed");
         homeArm();
         failureReason = "execution";
@@ -557,7 +559,7 @@ public:
       currentPlan = moveit::planning_interface::MoveGroup::Plan();
       currentPlan.trajectory_ = outTraj;
 
-      if (!executeCurrentPlan()) {
+      if (frac2 < 0.8 || !executeCurrentPlan()) {
         ROS_INFO("Arm returning home because execution failed");
         homeArm();
         failureReason = "execution";
@@ -692,7 +694,6 @@ public:
         tp.position.x += rSetup[0];
         tp.position.y += rSetup[1];
         setupWaypoints.push_back(tp);
-        geometry_msgs::Pose returnto = setupWaypoints[0];
 
         double sFrac = group.computeCartesianPath(setupWaypoints,
                                                   0.01, 0.0,
@@ -702,7 +703,7 @@ public:
         currentPlan = moveit::planning_interface::MoveGroup::Plan();
         currentPlan.trajectory_ = setupTraj;
 
-        if (!executeCurrentPlan()) {
+        if (sFrac < 0.8 || !executeCurrentPlan()) {
           ROS_INFO("Arm returning home because execution failed");
           homeArm();
           failureReason = "execution";
@@ -724,6 +725,8 @@ public:
         pushWaypoints.push_back(group.getCurrentPose().pose);
 
         geometry_msgs::Pose pp = pushWaypoints[0];
+        geometry_msgs::Pose returnto = pushWaypoints[0];
+
         pp.position.x += rPush[0];
         pp.position.y += rPush[1];
         pushWaypoints.push_back(pp);
@@ -736,7 +739,7 @@ public:
         currentPlan = moveit::planning_interface::MoveGroup::Plan();
         currentPlan.trajectory_ = pushTraj;
 
-        if (!executeCurrentPlan()) {
+        if (pFrac < 0.9 || !executeCurrentPlan()) {
           ROS_INFO("Arm returning home because execution failed");
           homeArm();
           failureReason = "execution";
@@ -745,7 +748,6 @@ public:
         }
 
         // Remove block from collision map
-
         std::stringstream ss;
         ss << id;
         std::vector<std::string> pushed;
@@ -760,8 +762,25 @@ public:
 
         std::vector<geometry_msgs::Pose> outWaypoints;
         outWaypoints.push_back(group.getCurrentPose().pose);
-        returnto.position.z += 0.03;
-        outWaypoints.push_back(returnto);
+
+        outWaypoints.push_back(group.getCurrentPose().pose);
+        if (pV[0] != 0 and fabs(pV[0] < 0.03) ||
+            pV[1] != 0 and fabs(pV[1] < 0.03)) {
+          returnto.position.z += 0.03;
+          outWaypoints.push_back(returnto);
+        }
+        else {
+          geometry_msgs::Pose tp = outWaypoints[0];
+
+          std::vector<float> out = rPush;
+          float len = sqrt(pow(out[0], 2) + pow(out[1], 2));
+          out[0] = 0.03 * (out[0] / len);
+          out[1] = 0.03 * (out[1] / len);
+          tp.position.x -= out[0];
+          tp.position.y -= out[1];
+          tp.position.z += 0.03;
+          setupWaypoints.push_back(tp);
+        }
 
         double oFrac = group.computeCartesianPath(outWaypoints,
                                                   0.01, 0.0,
@@ -771,7 +790,7 @@ public:
         currentPlan = moveit::planning_interface::MoveGroup::Plan();
         currentPlan.trajectory_ = outTraj;
 
-        if (!executeCurrentPlan()) {
+        if (oFrac < 0.8 || !executeCurrentPlan()) {
           ROS_INFO("Arm returning home because execution failed");
           homeArm();
           failureReason = "execution";
@@ -934,9 +953,9 @@ public:
           shape_msgs::SolidPrimitive primitive;
           primitive.type = primitive.BOX;
           primitive.dimensions.resize(3);
-          primitive.dimensions[0] = objectSizes[objID][0]+0.01;
-          primitive.dimensions[1] = objectSizes[objID][1]+0.01;
-          primitive.dimensions[2] = objectSizes[objID][2]+0.01;
+          primitive.dimensions[0] = objectSizes[objID][0]+0.02;
+          primitive.dimensions[1] = objectSizes[objID][1]+0.02;
+          primitive.dimensions[2] = objectSizes[objID][2]+0.02;
 
           co.primitives.push_back(primitive);
           co.primitive_poses.push_back(box_pose);
