@@ -63,9 +63,9 @@ public:
                                        gripperClosed(false),
                                        fingerToWrist(-0.16645, 0, 0),
                                        approachOffset(0.08, 0, 0),
-                                       grabMotion(0.07, 0, 0),
-                                       dropMotion(0.07, 0, 0),
-                                       pushOffset(0.05),
+                                       grabMotion(0.08, 0, 0),
+                                       dropMotion(0.08, 0, 0),
+                                       pushOffset(0.06),
                                        group("arm"),
                                        gripper("gripper_controller/gripper_action", true)
     {
@@ -318,7 +318,7 @@ public:
         gp.position.z = out.z();
         float tableH = ((currentTable[3] + currentTable[0]*objectPoses[id][0] +
                          currentTable[1]*objectPoses[id][1]) / -currentTable[2]) +0.02;
-        if (gp.position.z < tableH + 0.02) gp.position.z = tableH + 0.02;
+        if (gp.position.z < tableH + 0.03) gp.position.z = tableH + 0.03;
 
         waypoints.push_back(gp);
         geometry_msgs::Pose returnto = waypoints[0];
@@ -611,20 +611,20 @@ public:
         std::vector<float> offsetV;
         if (pV[1] == 0) {
           if (pV[0] < 0) {
-            offsetV.push_back(objectSizes[id][0]/2.0 + pushOffset);
+            offsetV.push_back(objectSizes[id][0]/2.0 + pushOffset + 0.01);
           }
           else if (pV[0] > 0) {
-            offsetV.push_back(-(objectSizes[id][0]/2.0 + pushOffset));
+            offsetV.push_back(-(objectSizes[id][0]/2.0 + pushOffset + 0.01));
           }
           offsetV.push_back(0);
         }
         else if (pV[0] == 0) {
           offsetV.push_back(0);
           if (pV[1] < 0) {
-            offsetV.push_back(objectSizes[id][1]/2.0 + pushOffset);
+            offsetV.push_back(objectSizes[id][1]/2.0 + pushOffset + 0.01);
           }
           else if (pV[1] > 0) {
-            offsetV.push_back(-(objectSizes[id][1]/2.0 + pushOffset));
+            offsetV.push_back(-(objectSizes[id][1]/2.0 + pushOffset + 0.01));
           }
         }
 

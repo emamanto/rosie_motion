@@ -4,7 +4,7 @@
       <static>0</static>
       <link name='link'>
         <inertial>
-          <mass>0.4</mass>
+          <mass>0.05</mass>
           <inertia>
             <ixx>0.001</ixx>
             <ixy>0.000000</ixy>
@@ -23,8 +23,8 @@
           <surface>
             <friction>
               <ode>
-                <mu>30.0</mu>
-                <mu2>30.0</mu2>
+                <mu>15.0</mu>
+                <mu2>15.0</mu2>
               </ode>
             </friction>
             <contact>
