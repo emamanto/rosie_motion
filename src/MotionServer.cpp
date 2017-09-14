@@ -63,7 +63,7 @@ public:
                                        gripperClosed(false),
                                        fingerToWrist(-0.16645, 0, 0),
                                        approachOffset(0.08, 0, 0),
-                                       grabMotion(0.08, 0, 0),
+                                       grabMotion(0.09, 0, 0),
                                        dropMotion(0.08, 0, 0),
                                        pushOffset(0.06),
                                        group("arm"),
@@ -265,7 +265,7 @@ public:
         if (objectSizes.find(id) == objectSizes.end() ||
             objectPoses.find(id) == objectSizes.end()) {
           ROS_INFO("Object ID %d is not being perceived", id);
-          failureReason = "invalidpickup";
+
           state = FAILURE;
           return;
         }
@@ -316,9 +316,13 @@ public:
         gp.position.x = out.x();
         gp.position.y = out.y();
         gp.position.z = out.z();
+
+        std::vector<float> fPos = eeFrametoFingertip(gp);
         float tableH = ((currentTable[3] + currentTable[0]*objectPoses[id][0] +
-                         currentTable[1]*objectPoses[id][1]) / -currentTable[2]) +0.02;
-        if (gp.position.z < (tableH + 0.04)) gp.position.z = tableH + 0.04;
+                         currentTable[1]*objectPoses[id][1]) / -currentTable[2]) + 0.04;
+        if (fPos[2] < tableH) {
+          gp.position.z += (tableH - fPos[2]);
+        }
 
         waypoints.push_back(gp);
         geometry_msgs::Pose returnto = waypoints[0];
@@ -483,6 +487,12 @@ public:
       gp.position.y = out.y();
       gp.position.z = out.z();
 
+      std::vector<float> fPos = eeFrametoFingertip(gp);
+      tableH += 0.02;
+      if (fPos[2] < tableH) {
+        gp.position.z += (tableH - fPos[2]);
+      }
+
       waypoints.push_back(gp);
       geometry_msgs::Pose returnto = waypoints[0];
 
@@ -600,10 +610,6 @@ public:
 
         float yaw = tf::getYaw(objectRotations[id]);
 
-        float tableH = ((currentTable[3] + currentTable[0]*x +
-                         currentTable[1]*y) / -currentTable[2]) + 0.02;
-        if (z < tableH + 0.03) z = tableH + 0.03;
-
         setGripperTo(0.02);
         ros::Duration(0.5).sleep();
 
@@ -634,6 +640,7 @@ public:
 
         x += rotatedOffset[0];
         y += rotatedOffset[1];
+        z += 0.04;
 
         float pushYaw = yaw;
         if (pV[0] == 0) pushYaw += M_PI/2.0;
@@ -663,7 +670,6 @@ public:
           state = FAILURE;
           return;
         }
-
 
         ros::Duration(0.5).sleep();
 
@@ -701,6 +707,14 @@ public:
         geometry_msgs::Pose tp = setupWaypoints[0];
         tp.position.x += rSetup[0];
         tp.position.y += rSetup[1];
+        tp.position.z -= 0.04;
+
+        std::vector<float> fPos = eeFrametoFingertip(tp);
+        float tableH = ((currentTable[3] + currentTable[0]*objectPoses[id][0] +
+                         currentTable[1]*objectPoses[id][1]) / -currentTable[2]) + 0.04;
+        if (fPos[2] < tableH) {
+          tp.position.z += (tableH - fPos[2]);
+        }
         setupWaypoints.push_back(tp);
 
         double sFrac = group.computeCartesianPath(setupWaypoints,
@@ -774,12 +788,14 @@ public:
         outWaypoints.push_back(group.getCurrentPose().pose);
         if (pV[0] != 0 and fabs(pV[0] < 0.03) ||
             pV[1] != 0 and fabs(pV[1] < 0.03)) {
+          ROS_INFO("Short push--short return");
           returnto.position.z += 0.03;
           outWaypoints.push_back(returnto);
         }
         else {
           geometry_msgs::Pose tp = outWaypoints[0];
 
+          ROS_INFO("Long push--shortening return");
           std::vector<float> out = rPush;
           float len = sqrt(pow(out[0], 2) + pow(out[1], 2));
           out[0] = 0.03 * (out[0] / len);
@@ -894,7 +910,7 @@ public:
 
   float planToGraspPosition(float objx, float objy, float objz, float yaw)
   {
-    ROS_INFO("Planning to a grasp yaw of: %f", yaw);
+    //ROS_INFO("Planning to a grasp yaw of: %f", yaw);
     float foundAngle = -1;
     int tries = 0;
 
@@ -1152,6 +1168,24 @@ public:
 
         return true;
     }
+
+  std::vector<float> eeFrametoFingertip(geometry_msgs::Pose p)
+  {
+    tf::Pose t;
+    tf::poseMsgToTF(p, t);
+    tf::Transform rotationX(t.getRotation());
+
+    tf::Vector3 trans = rotationX*tf::Vector3(-fingerToWrist[0],
+                                              -fingerToWrist[1],
+                                              -fingerToWrist[2]);
+
+    std::vector<float> res;
+    res.push_back(p.position.x + trans.x());
+    res.push_back(p.position.y + trans.y());
+    res.push_back(p.position.z + trans.z());
+
+    return res;
+  }
 
   std::vector<float> fingertipToEEFrame(float fx, float fy, float fz,
                                         float hr, float hp, float hy)
