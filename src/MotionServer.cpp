@@ -318,7 +318,7 @@ public:
         gp.position.z = out.z();
         float tableH = ((currentTable[3] + currentTable[0]*objectPoses[id][0] +
                          currentTable[1]*objectPoses[id][1]) / -currentTable[2]) +0.02;
-        if (gp.position.z < tableH + 0.03) gp.position.z = tableH + 0.03;
+        if (gp.position.z < (tableH + 0.04)) gp.position.z = tableH + 0.04;
 
         waypoints.push_back(gp);
         geometry_msgs::Pose returnto = waypoints[0];
@@ -336,7 +336,7 @@ public:
         if (frac < 0.9 || !executeCurrentPlan()) {
           ROS_INFO("Arm returning home because execution failed");
           homeArm();
-          failureReason = "execution";
+          failureReason = "grasping";
           state = FAILURE;
           return;
         }
@@ -354,7 +354,7 @@ public:
 
           ROS_INFO("Arm returning home because grabbing failed");
           homeArm();
-          failureReason = "execution";
+          failureReason = "grasping";
           state = FAILURE;
           return;
         }
@@ -410,7 +410,7 @@ public:
           scene.removeCollisionObjects(missed);
           ros::Duration(0.5).sleep();
 
-          failureReason = "execution";
+          failureReason = "grasping";
           state = FAILURE;
           return;
         }
@@ -647,6 +647,14 @@ public:
           if (!success) success = planToXYZAngleTarget(x, y, z, M_PI/2.0, pushYaw-M_PI);
           tries++;
         }
+        if (!success) {
+          ROS_INFO("Arm returning home because planning failed");
+          homeArm();
+          failureReason = "planning";
+          state = FAILURE;
+          return;
+        }
+
 
         if (!executeCurrentPlan()) {
           ROS_INFO("Arm returning home because execution failed");
@@ -1015,7 +1023,8 @@ public:
 
     void homeArm()
     {
-        group.setStartStateToCurrentState();
+        ros::Duration(0.1).sleep();
+
         std::vector<double> joints = std::vector<double>();
         joints.push_back(1.32);
         joints.push_back(0.7);
@@ -1029,31 +1038,35 @@ public:
         moveit::planning_interface::MoveGroup::Plan homePlan;
 
         int tries = 0;
+        std::string failure = "";
         moveit::planning_interface::MoveItErrorCode success;
         while(tries < numRetries) {
           tries++;
+          group.setStartStateToCurrentState();
           success = group.plan(homePlan);
-          if (success) break;
+          if (!success) {
+            failure = "planning";
+            continue;
+          }
+
+          if (!safetyCheck()) {
+            failureReason = "safety";
+            state = FAILURE;
+            return;
+          }
+
+          moveit::planning_interface::MoveItErrorCode moveSuccess = group.execute(homePlan);
+          success = moveSuccess;
+          if (!moveSuccess) {
+            failure = "execution";
+          }
         }
 
         if (!success) {
-          ROS_INFO("Homing arm planning failed with error code %d", success.val);
-          failureReason = "planning";
+          ROS_INFO("Homing arm failed.");
+          failureReason = failure;
           state = FAILURE;
           return;
-        }
-
-        if (!safetyCheck()) {
-          failureReason = "safety";
-          state = FAILURE;
-          return;
-        }
-
-        moveit::planning_interface::MoveItErrorCode moveSuccess = group.execute(homePlan);
-        if (!moveSuccess) {
-          ROS_INFO("Homing arm execution failed with error code %d", moveSuccess.val);
-          failureReason = "execution";
-          state = FAILURE;
         }
     }
 

@@ -13,24 +13,34 @@
       <pose>0.8 0 -0.08 0 0 0</pose>
     </include>
     <include>
-      <uri>model://red_cube5cm</uri>
+      <uri>model://red_cube7cm</uri>
       <name>block1</name>
-      <pose>0.869595070745 0.260601345735 0.75 0 0 -0.969687691558</pose>
+      <pose>0.804802508603 0.287208211468 0.75 0 0 -1.11874843123</pose>
     </include>
     <include>
-      <uri>model://blue_cube5cm</uri>
+      <uri>model://blue_cube7cm</uri>
       <name>block2</name>
-      <pose>0.69244640249 -0.118500517311 0.75 0 0 0.59624995715</pose>
+      <pose>0.886632035749 0.16667164924 0.75 0 0 1.22725131087</pose>
     </include>
     <include>
-      <uri>model://red_cube13cm</uri>
+      <uri>model://red_cube11cm</uri>
       <name>block3</name>
-      <pose>0.670664387396 0.101840800458 0.75 0 0 0.86920843667</pose>
+      <pose>0.611234216065 0.0226102152859 0.75 0 0 1.72743149361</pose>
+    </include>
+    <include>
+      <uri>model://blue_cube11cm</uri>
+      <name>block4</name>
+      <pose>0.823867588807 -0.25312295358 0.75 0 0 -0.966951935709</pose>
+    </include>
+    <include>
+      <uri>model://red_cube3cm</uri>
+      <name>block5</name>
+      <pose>0.629205031633 0.276195856504 0.75 0 0 0.898150773096</pose>
     </include>
     <include>
       <uri>model://blue_cube3cm</uri>
-      <name>block4</name>
-      <pose>0.873229845162 -0.0438833595288 0.75 0 0 0.663689508745</pose>
+      <name>block6</name>
+      <pose>0.790319413918 -0.0389138995935 0.75 0 0 2.31019326958</pose>
     </include>
   </world>
 </sdf>
