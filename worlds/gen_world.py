@@ -11,7 +11,7 @@ fileshort = "env" + time.strftime("%H%M%S", time.gmtime())
 filename = fileshort + ".sdf"
 world_file = open(filename, 'w')
 
-x_min = 0.6
+x_min = 0.5
 x_max = 0.9
 y_min = -0.3
 y_max = 0.3
@@ -57,6 +57,13 @@ for n in range(0, num_blocks):
     elif size_check > 5.0/6.0:
         size = "13"
         size_m = 0.13
+
+    if color == "blue":
+        y_min = -0.15
+        y_max = 0.2
+    elif color == "red":
+        y_min = -0.2
+        y_max = 0.15
 
     valid = False
     block_x = 0

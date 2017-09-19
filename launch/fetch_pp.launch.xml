@@ -1,7 +1,7 @@
 <!-- Edited version of this file as provided by fetch_gazebo ROS package -->
 <launch>
 
-  <arg name="x" default="0.0" />
+  <arg name="x" default="-3.0" />
   <arg name="y" default="0.0" />
 
   <!-- Setup controllers -->
