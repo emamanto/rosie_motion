@@ -62,7 +62,7 @@ public:
 
   MotionServer(bool humanCheck=true) : state(WAIT),
                                        failureReason("none"),
-                                       numRetries(3),
+                                       numRetries(1),
                                        lastCommandTime(0),
                                        grabbedObject(-1),
                                        checkPlans(humanCheck),
@@ -661,26 +661,17 @@ public:
 
         // Total failure
         if (steps.empty()) {
-          ROS_INFO("Could not find a plan to push");
+          ROS_INFO("Could not find ANY plan to push, arm state is now FAILURE");
           failureReason = "planning";
           state = FAILURE;
           return;
         }
 
         // Otherwise, execute the steps we found
-
         setGripperTo(0.02);
         for (plan_vector::iterator i = steps.begin(); i != steps.end(); i++) {
           ros::Duration(1.0).sleep();
           currentPlan = *i;
-          std::vector<double> j = group.getCurrentJointValues();
-          ROS_INFO("Starting next exec at: %f, %f, %f, %f, %f, %f, %f", j[0],
-                   j[1],
-                   j[2],
-                   j[3],
-                   j[4],
-                   j[5],
-                   j[6]);
 
           if (!executeCurrentPlan()) {
             ROS_INFO("Arm returning home because execution failed");
@@ -811,10 +802,6 @@ public:
     setupWaypoints.push_back(xyzypTargetToPoseMsg(x, y, z, pushYaw, M_PI/2.0));
 
     geometry_msgs::Pose tp = setupWaypoints[0];
-    graspGoal.pose = tp;
-    graspGoal.header.frame_id = group.getPlanningFrame();
-    ros::Duration(3).sleep();
-
     tp.position.x += rotatedSetup[0];
     tp.position.y += rotatedSetup[1];
     tp.position.z -= 0.04;
@@ -826,9 +813,6 @@ public:
       tp.position.z += (tableH - fPos[2]);
     }
     setupWaypoints.push_back(tp);
-    graspGoal.pose = tp;
-    graspGoal.header.frame_id = group.getPlanningFrame();
-    ros::Duration(3).sleep();
 
     double sFrac = group.computeCartesianPath(setupWaypoints,
                                               0.01, 0.0,
@@ -840,15 +824,6 @@ public:
       currentPlan = moveit::planning_interface::MoveGroup::Plan();
       currentPlan.trajectory_ = setupTraj;
       plans.push_back(currentPlan);
-
-      std::vector<double> tmp = currentPlan.trajectory_.joint_trajectory.points.back().positions;
-      ROS_INFO("FINAL JOINTS OF SETUP: %f, %f, %f, %f, %f, %f, %f", tmp[0],
-             tmp[1],
-             tmp[2],
-             tmp[3],
-             tmp[4],
-             tmp[5],
-             tmp[6]);
     }
     else {
       ROS_INFO("Could not find a plan for setup motion");
@@ -872,42 +847,21 @@ public:
     pushWaypoints.push_back(setupWaypoints.back());
 
     geometry_msgs::Pose pp = pushWaypoints[0];
-    graspGoal.pose = pp;
-    graspGoal.header.frame_id = group.getPlanningFrame();
-    ros::Duration(3).sleep();
-
     geometry_msgs::Pose returnto = pushWaypoints[0];
 
     pp.position.x += rotatedPush[0];
     pp.position.y += rotatedPush[1];
     pushWaypoints.push_back(pp);
 
-    graspGoal.pose = pp;
-    graspGoal.header.frame_id = group.getPlanningFrame();
-    ros::Duration(3).sleep();
-
     double pFrac = group.computeCartesianPath(pushWaypoints,
                                               0.01, 0.0,
                                               pushTraj,
                                               false);
-
-    currentPlan = moveit::planning_interface::MoveGroup::Plan();
-    currentPlan.trajectory_ = pushTraj;
-
     if (pFrac > 0.9) {
       ROS_INFO("Plan for push motion found");
       currentPlan = moveit::planning_interface::MoveGroup::Plan();
       currentPlan.trajectory_ = pushTraj;
       plans.push_back(currentPlan);
-
-      std::vector<double> tmp = currentPlan.trajectory_.joint_trajectory.points[0].positions;
-      ROS_INFO("STARTING JOINTS OF PUSH: %f, %f, %f, %f, %f, %f, %f", tmp[0],
-             tmp[1],
-             tmp[2],
-             tmp[3],
-             tmp[4],
-             tmp[5],
-             tmp[6]);
     }
     else {
       ROS_INFO("Could not find a plan for push motion");
@@ -922,26 +876,20 @@ public:
     moveit_msgs::RobotTrajectory outTraj;
     std::vector<geometry_msgs::Pose> outWaypoints;
     outWaypoints.push_back(pushWaypoints.back());
-    graspGoal.pose = outWaypoints[0];
-    graspGoal.header.frame_id = group.getPlanningFrame();
-    ros::Duration(3).sleep();
 
-    if (fabs(dist) < 0.03) {
-      ROS_INFO("Short push, returning to start point");
-      returnto.position.z += 0.03;
+    if (fabs(dist) < 0.05) {
+      returnto.position.z += 0.04;
       outWaypoints.push_back(returnto);
     }
     else {
-      ROS_INFO("Long push, calculating a shorter return vector");
       geometry_msgs::Pose tp = outWaypoints[0];
       std::vector<float> out = rotatedPush;
-      float len = sqrt(pow(out[0], 2) + pow(out[1], 2));
-      out[0] = 0.03 * (out[0] / len);
-      out[1] = 0.03 * (out[1] / len);
+      out[0] = 0.05 * (out[0] / dist);
+      out[1] = 0.05 * (out[1] / dist);
       tp.position.x -= out[0];
       tp.position.y -= out[1];
-      tp.position.z += 0.03;
-      setupWaypoints.push_back(tp);
+      tp.position.z += 0.04;
+      outWaypoints.push_back(tp);
     }
 
     double oFrac = group.computeCartesianPath(outWaypoints,
@@ -949,9 +897,6 @@ public:
                                               outTraj,
                                               false);
 
-    currentPlan = moveit::planning_interface::MoveGroup::Plan();
-
-    currentPlan.trajectory_ = outTraj;
     if (pFrac > 0.9) {
       ROS_INFO("Plan for outward motion found");
       currentPlan = moveit::planning_interface::MoveGroup::Plan();
