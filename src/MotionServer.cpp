@@ -61,6 +61,7 @@ public:
     }
 
   MotionServer(bool humanCheck=true) : state(WAIT),
+                                       armHomeState(true),
                                        failureReason("none"),
                                        numRetries(1),
                                        lastCommandTime(0),
@@ -289,12 +290,14 @@ public:
 
         preferredDropAngle = a;
         if (a == -1) {
-          ROS_INFO("Arm returning home because planning failed");
+          ROS_INFO("Arm not reaching because planning failed");
           homeArm();
           failureReason = "planning";
           state = FAILURE;
           return;
         }
+
+        armHomeState = false;
         if (!executeCurrentPlan()) {
           ROS_INFO("Arm returning home because execution failed");
           homeArm();
@@ -462,13 +465,14 @@ public:
       preferredDropAngle = -1;
 
       if (a == -1) {
-        ROS_INFO("Arm returning home because planning failed");
+        ROS_INFO("Arm not reaching because planning failed");
         homeArm();
         failureReason = "planning";
         state = FAILURE;
         return;
       }
 
+      armHomeState = false;
       if (!executeCurrentPlan()) {
         ROS_INFO("Arm returning home because execution failed");
         homeArm();
@@ -625,7 +629,7 @@ public:
         // Plans the reach and in/out motions at once
         // Prefer X push
         plan_vector steps;
-        if (pV[2] == X_AXIS || (pV[2] == -1 && fabs(pV[0]) <= fabs(pV[1]))) {
+        if (pV[2] == X_AXIS || (pV[2] == 2 && fabs(pV[0]) <= fabs(pV[1]))) {
           // Try X axis push
           steps = planPush(id, pV[0], X_AXIS);
           if (!steps.empty()) {
@@ -642,7 +646,7 @@ public:
           }
         }
         // Prefer Y push
-        if (pV[2] == Y_AXIS || (pV[2] == -1 && fabs(pV[1]) < fabs(pV[0]))) {
+        if (pV[2] == Y_AXIS || (pV[2] == 2 && fabs(pV[1]) < fabs(pV[0]))) {
           // Try Y axis push
           steps = planPush(id, pV[1], Y_AXIS);
           if (!steps.empty()) {
@@ -669,6 +673,7 @@ public:
 
         // Otherwise, execute the steps we found
         setGripperTo(0.02);
+        armHomeState = false;
         for (plan_vector::iterator i = steps.begin(); i != steps.end(); i++) {
           ros::Duration(1.0).sleep();
           currentPlan = *i;
@@ -734,6 +739,12 @@ public:
     float yaw = tf::getYaw(objectRotations[id]);
 
     plan_vector plans;
+
+    if (tooFar(x, y, true)) {
+      ROS_INFO("Not planning because robot probably cannot reach (%f, %f)", x, y);
+      plans.clear();
+      return plans;
+    }
 
     // Plan to the offset point
     std::vector<float> offsetV;
@@ -938,12 +949,14 @@ public:
                                       objectPoses[id][2] + objectSizes[id][2]/2.0);
 
         if (a == -1) {
-          ROS_INFO("Arm returning home because planning failed");
+          ROS_INFO("Arm not pointing because planning failed");
           homeArm();
           failureReason = "planning";
           state = FAILURE;
           return;
         }
+
+        armHomeState = false;
         if (!executeCurrentPlan()) {
           ROS_INFO("Arm returning home because execution failed");
           homeArm();
@@ -994,6 +1007,7 @@ public:
         rosie_msgs::RobotAction msg = rosie_msgs::RobotAction();
         msg.utime = ros::Time::now().toNSec();
         msg.action = asToString(state).c_str();
+        msg.armHome = armHomeState;
         msg.failure_reason = failureReason;
         msg.obj_id = grabbedObject;
         statusPublisher.publish(msg);
@@ -1135,10 +1149,11 @@ public:
 
         if (!success) {
           ROS_INFO("Homing arm failed.");
-          //failureReason = failure;
-          //state = FAILURE;
           return;
         }
+
+        // This should ONLY get set back to true HERE after success
+        armHomeState = true;
     }
 
   void closeGripper()
@@ -1159,6 +1174,20 @@ public:
 
     gripper.sendGoal(gripperGoal);
     gripper.waitForResult(ros::Duration(2.0));
+  }
+
+  // Estimate whether the gripper can reach a position on the tabletop
+  bool tooFar(float x, float y, bool gripperDown)
+  {
+    if (gripperDown)
+      return (sqrt(pow(x, 2) + pow(y, 2)) > 0.82);
+    else
+      return (sqrt(pow(x, 2) + pow(y, 2)) > 0.95);
+  }
+
+  bool tooFar(std::vector<float> loc, bool gripperDown)
+  {
+    return tooFar(loc[0], loc[1], gripperDown);
   }
 
   geometry_msgs::Pose xyzypTargetToPoseMsg(float x, float y, float z,
@@ -1330,6 +1359,7 @@ private:
     ros::Timer pubTimer;
 
     ActionState state;
+    bool armHomeState;
     moveit::planning_interface::MoveGroup::Plan currentPlan;
     std::string failureReason;
     int numRetries;
