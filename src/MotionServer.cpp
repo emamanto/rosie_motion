@@ -245,13 +245,13 @@ public:
         else if (msg->action.find("HOME")!=std::string::npos){
             ROS_INFO("Handling home command");
             state = HOME;
-            homeArm();
+            homeArm(false);
             state = WAIT;
         }
         else if (msg->action.find("RESET")!=std::string::npos){
             ROS_INFO("Handling reset command");
             state = HOME;
-            homeArm();
+            homeArm(true);
             state = WAIT;
         }
         else if (msg->action.find("SCENE")!=std::string::npos){
@@ -291,7 +291,6 @@ public:
         preferredDropAngle = a;
         if (a == -1) {
           ROS_INFO("Arm not reaching because planning failed");
-          homeArm();
           failureReason = "planning";
           state = FAILURE;
           return;
@@ -300,7 +299,7 @@ public:
         armHomeState = false;
         if (!executeCurrentPlan()) {
           ROS_INFO("Arm returning home because execution failed");
-          homeArm();
+          homeArm(true);
           failureReason = "execution";
           state = FAILURE;
           return;
@@ -349,7 +348,7 @@ public:
 
         if (frac < 0.9 || !executeCurrentPlan()) {
           ROS_INFO("Arm returning home because execution failed");
-          homeArm();
+          homeArm(true);
           failureReason = "grasping";
           state = FAILURE;
           return;
@@ -367,7 +366,7 @@ public:
           ros::Duration(0.5).sleep();
 
           ROS_INFO("Arm returning home because grabbing failed");
-          homeArm();
+          homeArm(true);
           failureReason = "grasping";
           state = FAILURE;
           return;
@@ -405,13 +404,13 @@ public:
 
         if (frac2 < 0.8 || !executeCurrentPlan()) {
           ROS_INFO("Arm returning home because execution failed");
-          homeArm();
+          homeArm(true);
           failureReason = "execution";
           state = FAILURE;
           return;
         }
 
-        homeArm();
+        homeArm(true);
 
         if (gripperClosed) {
           ROS_INFO("Robot seems to have dropped block %d", id);
@@ -466,7 +465,6 @@ public:
 
       if (a == -1) {
         ROS_INFO("Arm not reaching because planning failed");
-        homeArm();
         failureReason = "planning";
         state = FAILURE;
         return;
@@ -475,7 +473,7 @@ public:
       armHomeState = false;
       if (!executeCurrentPlan()) {
         ROS_INFO("Arm returning home because execution failed");
-        homeArm();
+        homeArm(true);
         failureReason = "execution";
         state = FAILURE;
         return;
@@ -519,7 +517,7 @@ public:
 
       if (frac < 0.8 || !executeCurrentPlan()) {
         ROS_INFO("Arm returning home because execution failed");
-        homeArm();
+        homeArm(true);
         failureReason = "execution";
         state = FAILURE;
         return;
@@ -582,7 +580,7 @@ public:
 
       if (frac2 < 0.8 || !executeCurrentPlan()) {
         ROS_INFO("Arm returning home because execution failed");
-        homeArm();
+        homeArm(true);
         failureReason = "execution";
         state = FAILURE;
         return;
@@ -591,7 +589,7 @@ public:
       ros::Duration(0.5).sleep();
 
       closeGripper();
-      homeArm();
+      homeArm(true);
 
       if (state == DROP) state = WAIT;
       ROS_INFO("Arm status is now WAIT");
@@ -680,7 +678,7 @@ public:
 
           if (!executeCurrentPlan()) {
             ROS_INFO("Arm returning home because execution failed");
-            homeArm();
+            homeArm(true);
             failureReason = "execution";
             state = FAILURE;
             ROS_INFO("Arm state is now FAILURE");
@@ -726,7 +724,7 @@ public:
         scene.addCollisionObjects(toAdd);
         ros::Duration(0.5).sleep();
 
-        homeArm();
+        homeArm(true);
         if (state == PUSH) state = WAIT;
         ROS_INFO("Arm status is now WAIT");
     }
@@ -950,7 +948,6 @@ public:
 
         if (a == -1) {
           ROS_INFO("Arm not pointing because planning failed");
-          homeArm();
           failureReason = "planning";
           state = FAILURE;
           return;
@@ -959,14 +956,14 @@ public:
         armHomeState = false;
         if (!executeCurrentPlan()) {
           ROS_INFO("Arm returning home because execution failed");
-          homeArm();
+          homeArm(true);
           failureReason = "execution";
           state = FAILURE;
           return;
         }
 
         ros::Duration(1.0).sleep();
-        homeArm();
+        homeArm(true);
         if (state == POINT) state = WAIT;
         ROS_INFO("Arm status is now WAIT");
     }
@@ -1083,6 +1080,44 @@ public:
 
     }
 
+    // Ignores all objects for a last-ditch effort to get home even
+    // if arm hits something
+    void setUpEmptyScene() {
+      std::vector<std::string> known = scene.getKnownObjectNames();
+      scene.removeCollisionObjects(known);
+      //ROS_INFO("Removing known collision objects");
+      ros::Duration(1).sleep();
+
+      std::vector<moveit_msgs::CollisionObject> coList;
+
+      // JUST add the table
+      moveit_msgs::CollisionObject planeobj;
+      planeobj.header.frame_id = group.getPlanningFrame();
+      planeobj.id = "table";
+
+      geometry_msgs::Pose planep;
+      planep.position.x = 0.8;
+      planep.position.y = 0.0;
+      planep.position.z = ((currentTable[3] + currentTable[0]*0.8 +
+                            currentTable[1]*0.0) / -currentTable[2]);
+      planep.orientation.w = 1.0;
+
+      shape_msgs::SolidPrimitive primitive;
+      primitive.type = primitive.BOX;
+      primitive.dimensions.resize(3);
+      primitive.dimensions[0] = 1;
+      primitive.dimensions[1] = 1;
+      primitive.dimensions[2] = 0.02;
+
+      planeobj.primitives.push_back(primitive);
+      planeobj.primitive_poses.push_back(planep);
+      planeobj.operation = planeobj.ADD;
+      coList.push_back(planeobj);
+
+      scene.addCollisionObjects(coList);
+      ros::Duration(1).sleep();
+    }
+
   bool safetyCheck()
   {
     if (!checkPlans) return true;
@@ -1106,7 +1141,7 @@ public:
     return false;
   }
 
-    void homeArm()
+    void homeArm(bool forceHome = false)
     {
         ros::Duration(0.1).sleep();
 
@@ -1144,6 +1179,33 @@ public:
           success = moveSuccess;
           if (!moveSuccess) {
             failure = "execution";
+          }
+        }
+
+        if (!success && forceHome) {
+          ROS_INFO("Homing arm failed with blocks in the way, attempting to force home");
+          setUpEmptyScene();
+
+          int forceCount = 0;
+          while (!success && forceCount < 10) {
+            group.setStartStateToCurrentState();
+            success = group.plan(homePlan);
+            if (!success) {
+              failure = "planning";
+            }
+
+            if (!safetyCheck()) {
+              failureReason = "safety";
+              state = FAILURE;
+              return;
+            }
+
+            moveit::planning_interface::MoveItErrorCode fhSuccess = group.execute(homePlan);
+            success = fhSuccess;
+            if (!fhSuccess) {
+              failure = "execution";
+            }
+            forceCount++;
           }
         }
 
