@@ -613,6 +613,12 @@ public:
           return;
         }
 
+        if (pV[2] == -1) {
+          ROS_INFO("No push was found; not planning motion");
+          failureReason = "nopush";
+          state = FAILURE;
+          return;
+        }
 
         if (pV[0] == 0 && pV[1] == 0) {
           ROS_INFO("No need to push; not planning motion");
