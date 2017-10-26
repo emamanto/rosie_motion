@@ -22,7 +22,7 @@ filename = fileshort + ".sdf"
 world_file = open(filename, 'w')
 
 x_min = 0.5
-x_max = 0.9
+x_max = 0.8
 y_min = -0.3
 y_max = 0.3
 
@@ -38,9 +38,6 @@ for line in empty_table:
 block_template = list(open('obj_template.txt'))
 table_template = list(open('table_template.txt'))
 
-block_poses = []
-
-color = "blue"
 for t in range(0, num_tables):
     for line in table_template:
         if line.find("NUM") != -1:
@@ -54,6 +51,8 @@ for t in range(0, num_tables):
         else:
             world_file.write(line)
 
+    block_poses = []
+    color = "blue"
     for n in range(0, num_blocks):
         if color == "blue":
             color = "red"
