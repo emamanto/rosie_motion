@@ -63,7 +63,7 @@ public:
   MotionServer(bool humanCheck=true) : state(WAIT),
                                        armHomeState(true),
                                        failureReason("none"),
-                                       numRetries(1),
+                                       numRetries(3),
                                        lastCommandTime(0),
                                        grabbedObject(-1),
                                        checkPlans(humanCheck),
@@ -773,18 +773,16 @@ public:
     // Retry the original reach several times
     bool success = false;
     int tries = 0;
+    float handAngleDenom = 2.0;
     while (!success && tries < numRetries) {
-      success = planToXYZAngleTarget(x, y, z, M_PI/2.0, pushYaw);
-      if (!success) {
-        success = planToXYZAngleTarget(x, y, z, M_PI/2.0, pushYaw+M_PI);
-        if (success) pushYaw += M_PI;
-      }
-      if (!success) {
-        success = planToXYZAngleTarget(x, y, z, M_PI/2.0, pushYaw-M_PI);
-        if (success) pushYaw -= M_PI;
-      }
+      success = planToXYZAngleTarget(x, y, z, M_PI/handAngleDenom, pushYaw);
       tries++;
+      if (!success) {
+        if (dist > 0) handAngleDenom += 0.2;
+        else handAngleDenom -= 0.2;
+      }
     }
+    float handPitch = M_PI/handAngleDenom;
 
     if (success) {
       ROS_INFO("Plan for initial reach found");
@@ -814,7 +812,7 @@ public:
     std::vector<float> rotatedSetup = rotate2D(setupV, yaw);
     moveit_msgs::RobotTrajectory setupTraj;
     std::vector<geometry_msgs::Pose> setupWaypoints;
-    setupWaypoints.push_back(xyzypTargetToPoseMsg(x, y, z, pushYaw, M_PI/2.0));
+    setupWaypoints.push_back(xyzypTargetToPoseMsg(x, y, z, pushYaw, handPitch));
 
     geometry_msgs::Pose tp = setupWaypoints[0];
     tp.position.x += rotatedSetup[0];
