@@ -99,7 +99,7 @@ for t in range(0, num_tables):
             for pos in block_poses:
                 v = [block_x - pos[0], block_y - pos[1]]
                 dist = math.sqrt(math.pow(v[0], 2) + math.pow(v[1], 2))
-                if dist < size_m + pos[2]:
+                if dist < size_m/2.0 + pos[2]/2.0:
                     valid = False
                     break
 

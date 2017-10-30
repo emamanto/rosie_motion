@@ -13,52 +13,50 @@
       <pose>0.8 0 -0.08 0 0 0</pose>
     </include>
     <include>
-      <uri>model://red_cube11cm</uri>
-      <name>block1</name>
-      <pose>0.602858722582 -0.0678591048643 0.75 0 0 -2.5063688768</pose>
-    </include>
-    <include>
-      <uri>model://blue_cube13cm</uri>
-      <name>block2</name>
-      <pose>0.880983108751 -0.126020054957 0.75 0 0 1.85109343271</pose>
-    </include>
-    <include>
       <uri>model://red_cube5cm</uri>
-      <name>block3</name>
-      <pose>0.526875793112 0.0497009517321 0.75 0 0 -2.44144936994</pose>
+      <name>block11</name>
+      <pose>0.798185589338 -0.179617632351 0.75 0 0 2.8082510207</pose>
+    </include>
+    <include>
+      <uri>model://blue_cube5cm</uri>
+      <name>block12</name>
+      <pose>0.713072616887 -0.0292858014987 0.75 0 0 0.500124438116</pose>
+    </include>
+    <include>
+      <uri>model://red_cube7cm</uri>
+      <name>block13</name>
+      <pose>0.720669430168 -0.117696304614 0.75 0 0 1.97361138206</pose>
     </include>
     <include>
       <uri>model://blue_cube3cm</uri>
-      <name>block4</name>
-      <pose>0.856564673355 0.0539852008706 0.75 0 0 -0.510095647716</pose>
+      <name>block14</name>
+      <pose>0.632069324777 0.0563054480278 0.75 0 0 -2.43646721579</pose>
     </include>
-
     <include>
       <uri>model://cafe_table</uri>
       <name>table2</name>
       <pose>5.8 0 -0.08 0 0 0</pose>
     </include>
     <include>
-      <uri>model://red_cube7cm</uri>
-      <name>block21</name>
-      <pose>5.644951144079 -0.0115479169983 0.75 0 0 0.963556217707</pose>
-    </include>
-    <include>
-      <uri>model://blue_cube13cm</uri>
-      <name>block22</name>
-      <pose>5.775122606028 0.00917768376894 0.75 0 0 -0.462422397712</pose>
-    </include>
-    <include>
       <uri>model://red_cube11cm</uri>
+      <name>block21</name>
+      <pose>5.56282453672 0.105365024321 0.75 0 0 1.49714258318</pose>
+    </include>
+    <include>
+      <uri>model://blue_cube5cm</uri>
+      <name>block22</name>
+      <pose>5.7582329603 0.0679344644461 0.75 0 0 0.219547503053</pose>
+    </include>
+    <include>
+      <uri>model://red_cube7cm</uri>
       <name>block23</name>
-      <pose>5.552118859762 -0.169786217913 0.75 0 0 -1.09881522158</pose>
+      <pose>5.77033700936 -0.138820332574 0.75 0 0 3.07639929889</pose>
     </include>
     <include>
       <uri>model://blue_cube9cm</uri>
       <name>block24</name>
-      <pose>5.512461167611 0.171150570285 0.75 0 0 -1.51239862201</pose>
+      <pose>5.5683994976 -0.0602882517664 0.75 0 0 -0.819139747382</pose>
     </include>
-
     <include>
       <uri>model://cafe_table</uri>
       <name>table3</name>
@@ -67,23 +65,22 @@
     <include>
       <uri>model://red_cube3cm</uri>
       <name>block31</name>
-      <pose>10.555904609891 0.0669390566935 0.75 0 0 2.25384315786</pose>
+      <pose>10.5404029591 0.0294773129372 0.75 0 0 0.293638098711</pose>
     </include>
     <include>
-      <uri>model://blue_cube13cm</uri>
+      <uri>model://blue_cube11cm</uri>
       <name>block32</name>
-      <pose>10.82835834191 -0.0436869555082 0.75 0 0 2.00043534768</pose>
+      <pose>10.7141359348 -0.140709874662 0.75 0 0 0.886966666714</pose>
     </include>
     <include>
       <uri>model://red_cube11cm</uri>
       <name>block33</name>
-      <pose>10.590232219462 -0.0823556166928 0.75 0 0 0.720586245288</pose>
+      <pose>10.5189536412 0.141040934812 0.75 0 0 -3.119036409</pose>
     </include>
     <include>
-      <uri>model://blue_cube5cm</uri>
+      <uri>model://blue_cube3cm</uri>
       <name>block34</name>
-      <pose>10.583656921256 0.166089543942 0.75 0 0 0.850874702647</pose>
+      <pose>10.6104906675 -0.118560510849 0.75 0 0 0.488498586114</pose>
     </include>
-
   </world>
 </sdf>
