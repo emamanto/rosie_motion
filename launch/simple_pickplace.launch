@@ -15,7 +15,7 @@
     <arg name="paused" value="false"/>
     <arg name="use_sim_time" value="true"/>
     <arg name="headless" value="$(arg headless)"/>
-    <arg name="world_name" value="$(find rosie_motion)/worlds/env200621.sdf"/>
+    <arg name="world_name" value="$(find rosie_motion)/worlds/test_worlds/t_env1.sdf"/>
   </include>
 
   <!-- Oh, you wanted a robot? -->

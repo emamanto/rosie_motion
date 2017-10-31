@@ -788,6 +788,8 @@ public:
         ROS_INFO("Could not find a plan to reach push position at pitch %f",
                  handPitch);
         plans.clear();
+        if (dist > 0) handAngleDenom += 0.2;
+        else handAngleDenom -= 0.2;
         continue;
       }
 
@@ -841,6 +843,8 @@ public:
                  handPitch);
         success = false;
         plans.clear();
+        if (dist > 0) handAngleDenom += 0.2;
+        else handAngleDenom -= 0.2;
         continue;
       }
 
@@ -882,6 +886,8 @@ public:
                  handPitch);
         success = false;
         plans.clear();
+        if (dist > 0) handAngleDenom += 0.2;
+        else handAngleDenom -= 0.2;
         continue;
       }
 
@@ -924,13 +930,11 @@ public:
                  handPitch);
         success = false;
         plans.clear();
+        if (dist > 0) handAngleDenom += 0.2;
+        else handAngleDenom -= 0.2;
         continue;
       }
-
-      if (dist > 0) handAngleDenom += 0.2;
-      else handAngleDenom -= 0.2;
     }
-
     return plans;
   }
 
@@ -1310,11 +1314,24 @@ public:
     group.setPoseTarget(target);
     moveit::planning_interface::MoveGroup::Plan xyzPlan;
 
+    // First try what we've been using
+    group.setPlannerId("LBKPIECEkConfigDefault");
     moveit::planning_interface::MoveItErrorCode success = group.plan(xyzPlan);
     // To stop it thinking it's successful if postprocessing is the problem
     if (xyzPlan.trajectory_.joint_trajectory.points.empty() &&
         xyzPlan.trajectory_.multi_dof_joint_trajectory.points.empty()) {
       success = false;
+    }
+
+    // Then try RRT-Connect just in case it does any better if prev failed
+    if (!success) {
+      group.setPlannerId("RRTConnectkConfigDefault");
+      success = group.plan(xyzPlan);
+      // To stop it thinking it's successful if postprocessing is the problem
+      if (xyzPlan.trajectory_.joint_trajectory.points.empty() &&
+          xyzPlan.trajectory_.multi_dof_joint_trajectory.points.empty()) {
+        success = false;
+      }
     }
 
     if (!success) {
