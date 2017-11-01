@@ -1093,8 +1093,7 @@ public:
       coList.push_back(planeobj);
 
       scene.addCollisionObjects(coList);
-      ros::Duration(1).sleep();
-
+      ros::Duration(2).sleep();
     }
 
     // Ignores all objects for a last-ditch effort to get home even
@@ -1160,7 +1159,7 @@ public:
 
     void homeArm(bool forceHome = false)
     {
-        ros::Duration(0.1).sleep();
+        ros::Duration(0.5).sleep();
 
         std::vector<double> joints = std::vector<double>();
         joints.push_back(1.32);
@@ -1177,10 +1176,18 @@ public:
         int tries = 0;
         std::string failure = "";
         moveit::planning_interface::MoveItErrorCode success;
-        while(tries < numRetries) {
+        while(!success && tries < numRetries) {
           tries++;
           group.setStartStateToCurrentState();
+
+          group.setPlannerId("LBKPIECEkConfigDefault");
           success = group.plan(homePlan);
+
+          if (!success) {
+            group.setPlannerId("RRTConnectkConfigDefault");
+            success = group.plan(homePlan);
+          }
+
           if (!success) {
             failure = "planning";
             continue;
