@@ -908,8 +908,13 @@ public:
         std::vector<float> out = rotatedPush;
         out[0] = 0.05 * (out[0] / dist);
         out[1] = 0.05 * (out[1] / dist);
-        tp.position.x -= out[0];
-        tp.position.y -= out[1];
+        if (dist > 0) {
+          tp.position.x -= out[0];
+          tp.position.y -= out[1];
+        } else {
+          tp.position.x += out[0];
+          tp.position.y += out[1];
+        }
         tp.position.z += 0.04;
         outWaypoints.push_back(tp);
       }
