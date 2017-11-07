@@ -21,7 +21,7 @@ fileshort = "env" + time.strftime("%H%M%S", time.gmtime())
 filename = fileshort + ".sdf"
 world_file = open(filename, 'w')
 
-x_min = 0.5
+x_min = 0.45
 x_max = 0.8
 y_min = -0.3
 y_max = 0.3
@@ -99,7 +99,9 @@ for t in range(0, num_tables):
             for pos in block_poses:
                 v = [block_x - pos[0], block_y - pos[1]]
                 dist = math.sqrt(math.pow(v[0], 2) + math.pow(v[1], 2))
-                if dist < size_m/2.0 + pos[2]/2.0:
+                diag1 = (math.sqrt(math.pow(size_m, 2) + math.pow(size_m, 2)))/2.0
+                diag2 = (math.sqrt(math.pow(pos[2], 2) + math.pow(pos[2], 2)))/2.0
+                if dist < diag1 + diag2 + 0.02:
                     valid = False
                     break
 
@@ -125,6 +127,7 @@ for t in range(0, num_tables):
                                  fifth + str(block_yaw) + last)
             else:
                 world_file.write(line)
+    world_file.write("\n")
 
 do_write = False
 for line in empty_table:
