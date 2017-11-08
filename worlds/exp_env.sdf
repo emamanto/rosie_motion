@@ -93,22 +93,22 @@
     <include>
       <uri>model://red_cube3cm</uri>
       <name>block41</name>
-      <pose>15.4700075692 -0.024505630102 0.75 0 0 -0.719879344048</pose>
+      <pose>15.5400075692 0.054505630102 0.75 0 0 -0.719879344048</pose>
     </include>
     <include>
       <uri>model://blue_cube13cm</uri>
       <name>block42</name>
-      <pose>15.6598009909 0.018137623071 0.75 0 0 0.913469586904</pose>
+      <pose>15.7298009909 -0.068137623071 0.75 0 0 0.213469586904</pose>
     </include>
     <include>
       <uri>model://red_cube5cm</uri>
       <name>block43</name>
-      <pose>15.5510078931 0.134757891548 0.75 0 0 -1.27091326992</pose>
+      <pose>15.6310078931 0.134757891548 0.75 0 0 -1.27091326992</pose>
     </include>
     <include>
       <uri>model://blue_cube7cm</uri>
       <name>block44</name>
-      <pose>15.6037974465 -0.00342699170567 0.75 0 0 1.93833777526</pose>
+      <pose>15.5037974465 -0.09342699170567 0.75 0 0 1.93833777526</pose>
     </include>
 
     <include>
