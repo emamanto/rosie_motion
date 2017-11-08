@@ -41,7 +41,7 @@
     <include>
       <uri>model://blue_cube11cm</uri>
       <name>block21</name>
-      <pose>5.54713919253 -0.174690092367 0.75 0 0 -2.97586372528</pose>
+      <pose>5.51713919253 -0.074690092367 0.75 0 0 -2.97586372528</pose>
     </include>
     <include>
       <uri>model://red_cube13cm</uri>
@@ -51,7 +51,7 @@
     <include>
       <uri>model://red_cube7cm</uri>
       <name>block23</name>
-      <pose>5.65744111763 -0.0320535050666 0.75 0 0 -2.46710408098</pose>
+      <pose>5.71744111763 -0.0920535050666 0.75 0 0 -2.46710408098</pose>
     </include>
     <include>
       <uri>model://blue_cube5cm</uri>
@@ -93,7 +93,7 @@
     <include>
       <uri>model://red_cube3cm</uri>
       <name>block41</name>
-      <pose>15.4700075692 -0.144505630102 0.75 0 0 -0.719879344048</pose>
+      <pose>15.4700075692 -0.024505630102 0.75 0 0 -0.719879344048</pose>
     </include>
     <include>
       <uri>model://blue_cube13cm</uri>
@@ -108,7 +108,7 @@
     <include>
       <uri>model://blue_cube7cm</uri>
       <name>block44</name>
-      <pose>15.5037974465 -0.00342699170567 0.75 0 0 1.93833777526</pose>
+      <pose>15.6037974465 -0.00342699170567 0.75 0 0 1.93833777526</pose>
     </include>
 
     <include>
