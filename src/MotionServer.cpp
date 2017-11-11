@@ -347,14 +347,14 @@ public:
         currentPlan.trajectory_ = inTraj;
 
         if (frac < 0.9 || !executeCurrentPlan()) {
-          ROS_INFO("Arm returning home because execution failed");
-          homeArm(true);
+          ROS_INFO("Arm will return home because execution failed");
           failureReason = "grasping";
           state = FAILURE;
-          return;
         }
 
-        closeGripper();
+        if (state != FAILURE) {
+          closeGripper();
+        }
 
         if (gripperClosed) {
           ROS_INFO("Robot seems to have missed block %d", id);
@@ -365,28 +365,28 @@ public:
           scene.removeCollisionObjects(missed);
           ros::Duration(0.5).sleep();
 
-          ROS_INFO("Arm returning home because grabbing failed");
-          homeArm(true);
+          ROS_INFO("Arm will return home because grabbing failed");
           failureReason = "grasping";
           state = FAILURE;
-          return;
         }
 
-        std::stringstream ss;
-        ss << id;
-        std::vector<std::string> allowed;
-        allowed.push_back("r_gripper_finger_link");
-        allowed.push_back("l_gripper_finger_link");
-        allowed.push_back("gripper_link");
-        group.attachObject(ss.str(), group.getEndEffectorLink(), allowed);
-        grabbedObject = id;
-        grabbedObjSize = objectSizes[id];
+        if (state != FAILURE) {
+          std::stringstream ss;
+          ss << id;
+          std::vector<std::string> allowed;
+          allowed.push_back("r_gripper_finger_link");
+          allowed.push_back("l_gripper_finger_link");
+          allowed.push_back("gripper_link");
+          group.attachObject(ss.str(), group.getEndEffectorLink(), allowed);
+          grabbedObject = id;
+          grabbedObjSize = objectSizes[id];
 
-        std::vector<std::string> attached;
-        attached.push_back(ss.str());
+          std::vector<std::string> attached;
+          attached.push_back(ss.str());
 
-        scene.removeCollisionObjects(attached);
-        ros::Duration(0.5).sleep();
+          scene.removeCollisionObjects(attached);
+          ros::Duration(0.5).sleep();
+        }
 
         std::vector<geometry_msgs::Pose> waypoints2;
         waypoints2.push_back(group.getCurrentPose().pose);
@@ -402,10 +402,10 @@ public:
         currentPlan = moveit::planning_interface::MoveGroup::Plan();
         currentPlan.trajectory_ = outTraj;
 
-        if (frac2 < 0.8 || !executeCurrentPlan()) {
+        if (frac2 < 0.5 || !executeCurrentPlan() || state == FAILURE) {
           ROS_INFO("Arm returning home because execution failed");
           homeArm(true);
-          failureReason = "execution";
+          if (state != FAILURE) failureReason = "execution";
           state = FAILURE;
           return;
         }
