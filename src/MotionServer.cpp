@@ -275,6 +275,7 @@ public:
           ROS_INFO("Object ID %d is not being perceived", id);
 
           state = FAILURE;
+          failureReason = "planning";
           return;
         }
 
@@ -608,7 +609,7 @@ public:
         if (objectSizes.find(id) == objectSizes.end() ||
             objectPoses.find(id) == objectSizes.end()) {
           ROS_INFO("Object ID %d is not being perceived", id);
-          failureReason = "invalidpush";
+          failureReason = "planning";
           state = FAILURE;
           return;
         }
@@ -678,11 +679,14 @@ public:
         // Otherwise, execute the steps we found
         setGripperTo(0.02);
         armHomeState = false;
+        int count = 0;
         for (plan_vector::iterator i = steps.begin(); i != steps.end(); i++) {
           ros::Duration(1.0).sleep();
           currentPlan = *i;
+          if (count == 2) group.setMaxVelocityScalingFactor(0.05);
 
           if (!executeCurrentPlan()) {
+            group.setMaxVelocityScalingFactor(0.4);
             ROS_INFO("Arm returning home because execution failed");
             homeArm(true);
             failureReason = "execution";
@@ -690,6 +694,9 @@ public:
             ROS_INFO("Arm state is now FAILURE");
             return;
           }
+
+          group.setMaxVelocityScalingFactor(0.4);
+          count++;
         }
 
         // Remove block from collision map
