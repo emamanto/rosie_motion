@@ -15,6 +15,7 @@
 #include <ros/ros.h>
 #include <moveit/planning_scene_interface/planning_scene_interface.h>
 #include <moveit/move_group_interface/move_group.h>
+#include <tf2_ros/transform_listener.h>
 #include <tf/transform_datatypes.h>
 #include <actionlib/client/simple_action_client.h>
 
@@ -60,7 +61,9 @@ public:
         }
     }
 
-  MotionServer(bool humanCheck=true) : state(WAIT),
+  MotionServer(bool humanCheck=true) : tfBuf(),
+                                       tfListener(tfBuf),
+                                       state(WAIT),
                                        armHomeState(true),
                                        failureReason("none"),
                                        numRetries(3),
@@ -108,6 +111,7 @@ public:
 
         statusPublisher = n.advertise<rosie_msgs::RobotAction>("rosie_arm_status", 10);
         goalPublisher = n.advertise<geometry_msgs::PoseStamped>("rosie_grasp_target", 10);
+        camXPublisher = n.advertise<geometry_msgs::TransformStamped>("rosie_camera", 10);
 
         gripper.waitForServer();
 
@@ -1038,6 +1042,14 @@ public:
         msg.obj_id = grabbedObject;
         statusPublisher.publish(msg);
         goalPublisher.publish(graspGoal);
+
+        try {
+          camXform = tfBuf.lookupTransform("base_link", "head_camera_rgb_optical_frame",
+                                              ros::Time(0));
+        } catch (tf2::TransformException &ex) {
+          ROS_WARN("%s",ex.what());
+        }
+        camXPublisher.publish(camXform);
      }
 
     void setUpScene()
@@ -1463,9 +1475,15 @@ private:
     ros::Subscriber obsSubscriber;
     ros::Subscriber commSubscriber;
     ros::Subscriber jointsSubscriber;
+
+    tf2_ros::Buffer tfBuf;
+    tf2_ros::TransformListener tfListener;
+
     ros::Publisher statusPublisher;
     ros::Publisher goalPublisher;
+    ros::Publisher camXPublisher;
     geometry_msgs::PoseStamped graspGoal;
+    geometry_msgs::TransformStamped camXform;
     actionlib::SimpleActionClient<control_msgs::GripperCommandAction> gripper;
     ros::Timer pubTimer;
 

@@ -19,6 +19,7 @@ find_package(catkin REQUIRED COMPONENTS
   geometry_msgs
   actionlib_msgs
   actionlib
+  tf2_ros
 )
 
 generate_messages (DEPENDENCIES actionlib_msgs rosie_msgs)
@@ -76,7 +77,7 @@ generate_messages (DEPENDENCIES actionlib_msgs rosie_msgs)
 catkin_package(
 #  INCLUDE_DIRS include
 #  LIBRARIES rosie_motion
-CATKIN_DEPENDS moveit_core moveit_ros_planning_interface moveit_ros_move_group
+CATKIN_DEPENDS moveit_core moveit_ros_planning_interface moveit_ros_move_group tf2_ros
 #  DEPENDS system_lib
 )
 
