@@ -16,7 +16,8 @@
 #include <moveit/planning_scene_interface/planning_scene_interface.h>
 #include <moveit/move_group_interface/move_group.h>
 #include <tf2_ros/transform_listener.h>
-#include <tf/transform_datatypes.h>
+#include <tf2_geometry_msgs/tf2_geometry_msgs.h>
+#include <tf2/utils.h>
 #include <actionlib/client/simple_action_client.h>
 
 #include "moveit_msgs/CollisionObject.h"
@@ -151,9 +152,9 @@ public:
             pos.push_back(i->bbox_xyzrpy.translation.z);
             objectPoses.insert(std::pair<int, std::vector<float> >(i->obj_id, pos));
 
-            tf::Quaternion quat;
-            tf::quaternionMsgToTF(i->bbox_xyzrpy.rotation, quat);
-            objectRotations.insert(std::pair<int, tf::Quaternion>(i->obj_id, quat));
+            tf2::Quaternion quat;
+            tf2::fromMsg(i->bbox_xyzrpy.rotation, quat);
+            objectRotations.insert(std::pair<int, tf2::Quaternion>(i->obj_id, quat));
 
             std::vector<float> dim = std::vector<float>();
             dim.push_back(i->bbox_dim.x);
@@ -284,7 +285,7 @@ public:
         }
 
         // This only works for objects that can be picked up like squares!!!
-        float yaw = tf::getYaw(objectRotations[id]);
+        float yaw = tf2::getYaw(objectRotations[id]);
         if (fabs(yaw + M_PI/2.0) < fabs(yaw)) yaw += M_PI/2.0;
         if (fabs(yaw - M_PI/2.0) < fabs(yaw)) yaw -= M_PI/2.0;
 
@@ -318,14 +319,14 @@ public:
 
         geometry_msgs::Pose gp = waypoints[0];
 
-        tf::Transform rot = tf::Transform(tf::createQuaternionFromRPY(0.0,
-                                                                      a,
-                                                                      0.0));
-        tf::Vector3 ob = tf::Vector3(gp.position.x,
+        tf2::Quaternion qtemp;
+        qtemp.setRPY(0.0, a, 0.0);
+        tf2::Transform rot = tf2::Transform(qtemp);
+        tf2::Vector3 ob = tf2::Vector3(gp.position.x,
                                      gp.position.y,
                                      gp.position.z);
-        tf::Vector3 trans = rot*grabMotion;
-        tf::Vector3 out = ob+trans;
+        tf2::Vector3 trans = rot*grabMotion;
+        tf2::Vector3 out = ob+trans;
 
         gp.position.x = out.x();
         gp.position.y = out.y();
@@ -453,13 +454,13 @@ public:
       target[2] += grabbedObjSize[2] + 0.01;
 
       // Try the angle you picked it up at first
-      tf::Transform pRot = tf::Transform(tf::createQuaternionFromRPY(0.0,
-                                                                    preferredDropAngle,
-                                                                    0.0));
-      tf::Vector3 tV = tf::Vector3(target[0], target[1], target[2]);
-      tf::Vector3 transIn = pRot*approachOffset;
+      tf2::Quaternion qtemp;
+      qtemp.setRPY(0.0, preferredDropAngle, 0.0);
+      tf2::Transform pRot = tf2::Transform(qtemp);
+      tf2::Vector3 tV = tf2::Vector3(target[0], target[1], target[2]);
+      tf2::Vector3 transIn = pRot*approachOffset;
 
-      tf::Vector3 in = tV-transIn;
+      tf2::Vector3 in = tV-transIn;
       float a = -1;
       if (planToXYZAngleTarget(in.x(), in.y(), in.z(), preferredDropAngle, 0)) {
         a = preferredDropAngle;
@@ -488,14 +489,15 @@ public:
       std::vector<geometry_msgs::Pose> waypoints;
       waypoints.push_back(group.getCurrentPose().pose);
       geometry_msgs::Pose gp = waypoints[0];
-      tf::Transform rot = tf::Transform(tf::createQuaternionFromRPY(0.0,
-                                                                    a,
-                                                                    0.0));
-      tf::Vector3 ob = tf::Vector3(gp.position.x,
+
+      tf2::Quaternion qtemp2;
+      qtemp2.setRPY(0.0, a, 0.0);
+      tf2::Transform rot = tf2::Transform(qtemp2);
+      tf2::Vector3 ob = tf2::Vector3(gp.position.x,
                                    gp.position.y,
                                    gp.position.z);
-      tf::Vector3 trans = rot*dropMotion;
-      tf::Vector3 out = ob+trans;
+      tf2::Vector3 trans = rot*dropMotion;
+      tf2::Vector3 out = ob+trans;
 
       gp.position.x = out.x();
       gp.position.y = out.y();
@@ -632,7 +634,7 @@ public:
           return;
         }
 
-        float objYaw = tf::getYaw(objectRotations[id]);
+        float objYaw = tf2::getYaw(objectRotations[id]);
         std::vector<float> chosenPush;
 
         // Plans the reach and in/out motions at once
@@ -751,7 +753,7 @@ public:
     float x = objectPoses[id][0];
     float y = objectPoses[id][1];
     float z = objectPoses[id][2] + objectSizes[id][2]/2.0 - 0.01;
-    float yaw = tf::getYaw(objectRotations[id]);
+    float yaw = tf2::getYaw(objectRotations[id]);
 
     plan_vector plans;
 
@@ -954,14 +956,19 @@ public:
     return plans;
   }
 
-    tf::Quaternion yawPitchToQuat(float yaw, float pitch)
+    tf2::Quaternion yawPitchToQuat(float yaw, float pitch)
     {
       std::vector<float> res;
 
-      tf::Transform first = tf::Transform(tf::createQuaternionFromRPY(0, 0, yaw));
-      tf::Transform second = tf::Transform(tf::createQuaternionFromRPY(0, pitch, 0));
+      tf2::Quaternion qtemp1;
+      qtemp1.setRPY(0.0, 0.0, yaw);
+      tf2::Quaternion qtemp2;
+      qtemp2.setRPY(0.0, pitch, 0.0);
 
-      tf::Transform t = first*second;
+      tf2::Transform first = tf2::Transform(qtemp1);
+      tf2::Transform second = tf2::Transform(qtemp2);
+
+      tf2::Transform t = first*second;
 
       return t.getRotation();
     }
@@ -1015,11 +1022,11 @@ public:
     while (tries < numRetries) {
       for (std::vector<float>::iterator i = approachAngles.begin();
            i != approachAngles.end(); i++) {
-        tf::Transform rot = tf::Transform(yawPitchToQuat(yaw, *i));
-        tf::Vector3 ob = tf::Vector3(objx, objy, objz);
-        tf::Vector3 trans = rot*approachOffset;
+        tf2::Transform rot = tf2::Transform(yawPitchToQuat(yaw, *i));
+        tf2::Vector3 ob = tf2::Vector3(objx, objy, objz);
+        tf2::Vector3 trans = rot*approachOffset;
 
-        tf::Vector3 out = ob-trans;
+        tf2::Vector3 out = ob-trans;
         if (planToXYZAngleTarget(out.x(), out.y(), out.z(), *i, yaw)) {
           foundAngle = *i;
           break;
@@ -1077,8 +1084,7 @@ public:
           box_pose.position.y = i->second[1];
           box_pose.position.z = i->second[2];
 
-          geometry_msgs::Quaternion q;
-          tf::quaternionTFToMsg(objectRotations[objID], q);
+          geometry_msgs::Quaternion q = tf2::toMsg(objectRotations[objID]);
           box_pose.orientation = q;
 
           shape_msgs::SolidPrimitive primitive;
@@ -1303,11 +1309,9 @@ public:
   geometry_msgs::Pose xyzypTargetToPoseMsg(float x, float y, float z,
                                            float yaw, float pitch)
   {
-    tf::Quaternion q = yawPitchToQuat(yaw, pitch);
+    tf2::Quaternion q = yawPitchToQuat(yaw, pitch);
     geometry_msgs::Pose p = geometry_msgs::Pose();
-    geometry_msgs::Quaternion tq;
-    tf::quaternionTFToMsg(q, tq);
-    p.orientation = tq;
+    p.orientation = tf2::toMsg(q);
 
     std::vector<float> eeTarg = fingertipToEEFrame(x, y, z, q);
 
@@ -1319,13 +1323,11 @@ public:
   }
 
 
-  bool planToXYZQuaternionTarget(float x, float y, float z, tf::Quaternion q)
+  bool planToXYZQuaternionTarget(float x, float y, float z, tf2::Quaternion q)
   {
     group.setStartStateToCurrentState();
     geometry_msgs::Pose target = geometry_msgs::Pose();
-    geometry_msgs::Quaternion tq;
-    tf::quaternionTFToMsg(q, tq);
-    target.orientation = tq;
+    target.orientation = tf2::toMsg(q);
 
     std::vector<float> targ = fingertipToEEFrame(x, y, z, q);
     target.position.x = targ[0];
@@ -1333,7 +1335,7 @@ public:
     target.position.z = targ[2];
 
     geometry_msgs::Pose fingerTarget = geometry_msgs::Pose();
-    fingerTarget.orientation = tq;
+    fingerTarget.orientation = tf2::toMsg(q);
     fingerTarget.position.x = x;
     fingerTarget.position.y = y;
     fingerTarget.position.z = z;
@@ -1376,7 +1378,7 @@ public:
 
     bool planToXYZAngleTarget(float x, float y, float z, float pitch, float yaw)
     {
-      tf::Quaternion q = yawPitchToQuat(yaw, pitch);
+      tf2::Quaternion q = yawPitchToQuat(yaw, pitch);
       return planToXYZQuaternionTarget(x, y, z, q);
     }
 
@@ -1397,11 +1399,11 @@ public:
 
   std::vector<float> eeFrametoFingertip(geometry_msgs::Pose p)
   {
-    tf::Pose t;
-    tf::poseMsgToTF(p, t);
-    tf::Transform rotationX(t.getRotation());
+    tf2::Transform rotationX;
+    tf2::fromMsg(p, rotationX);
+    rotationX.setOrigin(tf2::Vector3(0, 0, 0));
 
-    tf::Vector3 trans = rotationX*tf::Vector3(-fingerToWrist[0],
+    tf2::Vector3 trans = rotationX*tf2::Vector3(-fingerToWrist[0],
                                               -fingerToWrist[1],
                                               -fingerToWrist[2]);
 
@@ -1430,7 +1432,7 @@ public:
   }
 
   std::vector<float> fingertipToEEFrame(float fx, float fy, float fz,
-                                        tf::Quaternion q)
+                                        tf2::Quaternion q)
   {
     std::vector<float> finger;
     finger.push_back(fx);
@@ -1441,17 +1443,17 @@ public:
   }
 
   std::vector<float> fingertipToEEFrame(std::vector<float> fingertip,
-                                        tf::Quaternion q)
+                                        tf2::Quaternion q)
   {
-    tf::Transform rot = tf::Transform(q);
-    tf::Vector3 ft = tf::Vector3(fingertip[0],
+    tf2::Transform rot = tf2::Transform(q);
+    tf2::Vector3 ft = tf2::Vector3(fingertip[0],
                                  fingertip[1],
                                  fingertip[2]);
-    tf::Vector3 trans = rot*tf::Vector3(fingerToWrist[0],
+    tf2::Vector3 trans = rot*tf2::Vector3(fingerToWrist[0],
                                         fingerToWrist[1],
                                         fingerToWrist[2]);
 
-    tf::Vector3 out = ft+trans;
+    tf2::Vector3 out = ft+trans;
 
     std::vector<float> res;
     res.push_back(out.x());
@@ -1464,9 +1466,8 @@ public:
   std::vector<float> fingertipToEEFrame(std::vector<float> fingertip,
                                         std::vector<float> handRPY)
   {
-    tf::Quaternion q = tf::createQuaternionFromRPY(handRPY[0],
-                                                   handRPY[1],
-                                                   handRPY[2]);
+    tf2::Quaternion q;
+    q.setRPY(handRPY[0], handRPY[1], handRPY[2]);
     return fingertipToEEFrame(fingertip, q);
   }
 
@@ -1498,21 +1499,21 @@ private:
     bool gripperClosed;
     bool checkPlans;
     bool isSimRobot;
-    tf::Vector3 fingerToWrist;
+    tf2::Vector3 fingerToWrist;
 
     // Grasp position variations
     std::vector<float> approachAngles;
     float preferredDropAngle;
-    tf::Vector3 approachOffset;
-    tf::Vector3 grabMotion;
-    tf::Vector3 dropMotion;
+    tf2::Vector3 approachOffset;
+    tf2::Vector3 grabMotion;
+    tf2::Vector3 dropMotion;
     float pushOffset;
 
     moveit::planning_interface::MoveGroup group;
     moveit::planning_interface::PlanningSceneInterface scene;
 
     std::map<int, std::vector<float> > objectPoses;
-    std::map<int, tf::Quaternion> objectRotations;
+    std::map<int, tf2::Quaternion> objectRotations;
     std::map<int, std::vector<float> > objectSizes;
     std::vector<float> currentTable;
     boost::mutex objMutex;
