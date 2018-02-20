@@ -13,11 +13,11 @@
 #include <boost/thread.hpp>
 
 #include <ros/ros.h>
-#include <moveit/planning_scene_interface/planning_scene_interface.h>
-#include <moveit/move_group_interface/move_group.h>
 #include <tf2_ros/transform_listener.h>
 #include <tf2_geometry_msgs/tf2_geometry_msgs.h>
 #include <tf2/utils.h>
+#include <moveit/move_group_interface/move_group_interface.h>
+#include <moveit/planning_scene_interface/planning_scene_interface.h>
 #include <actionlib/client/simple_action_client.h>
 
 #include "moveit_msgs/CollisionObject.h"
@@ -36,7 +36,7 @@ public:
     static const axis Y_AXIS = 1;
     static const axis Z_AXIS = 2;
 
-    typedef std::vector<moveit::planning_interface::MoveGroup::Plan> plan_vector;
+  //typedef std::vector<moveit::planning_interface::MoveGroup::Plan> plan_vector;
     enum ActionState {WAIT,
                       HOME,
                       GRAB,
@@ -79,7 +79,7 @@ public:
                                        pushOffset(0.06),
                                        group("arm"),
                                        gripper("gripper_controller/gripper_action", true)
-    {
+  {
         if (!n.getParam("/rosie_motion_server/rosie_is_sim", isSimRobot)) {
           ROS_INFO("RosieMotionServer is missing rosie_is_sim, assuming real robot.");
         }
@@ -132,37 +132,37 @@ public:
 
         closeGripper();
         ROS_INFO("RosieMotionServer READY!");
-    };
+  };
 
-    void obsCallback(const rosie_msgs::Observations::ConstPtr& msg)
-    {
-        boost::lock_guard<boost::mutex> guard(objMutex);
+  void obsCallback(const rosie_msgs::Observations::ConstPtr& msg)
+  {
+    boost::lock_guard<boost::mutex> guard(objMutex);
 
-        objectPoses.clear();
-        objectSizes.clear();
-        objectRotations.clear();
+    objectPoses.clear();
+    objectSizes.clear();
+    objectRotations.clear();
 
-        currentTable = msg->table;
+    currentTable = msg->table;
 
-        for (std::vector<rosie_msgs::ObjectData>::const_iterator i = msg->observations.begin();
-             i != msg->observations.end(); i++) {
-            std::vector<float> pos = std::vector<float>();
-            pos.push_back(i->bbox_xyzrpy.translation.x);
-            pos.push_back(i->bbox_xyzrpy.translation.y);
-            pos.push_back(i->bbox_xyzrpy.translation.z);
-            objectPoses.insert(std::pair<int, std::vector<float> >(i->obj_id, pos));
+    for (std::vector<rosie_msgs::ObjectData>::const_iterator i = msg->observations.begin();
+         i != msg->observations.end(); i++) {
+      std::vector<float> pos = std::vector<float>();
+      pos.push_back(i->bbox_xyzrpy.translation.x);
+      pos.push_back(i->bbox_xyzrpy.translation.y);
+      pos.push_back(i->bbox_xyzrpy.translation.z);
+      objectPoses.insert(std::pair<int, std::vector<float> >(i->obj_id, pos));
 
-            tf2::Quaternion quat;
-            tf2::fromMsg(i->bbox_xyzrpy.rotation, quat);
-            objectRotations.insert(std::pair<int, tf2::Quaternion>(i->obj_id, quat));
+      tf2::Quaternion quat;
+      tf2::fromMsg(i->bbox_xyzrpy.rotation, quat);
+      objectRotations.insert(std::pair<int, tf2::Quaternion>(i->obj_id, quat));
 
-            std::vector<float> dim = std::vector<float>();
-            dim.push_back(i->bbox_dim.x);
-            dim.push_back(i->bbox_dim.y);
-            dim.push_back(i->bbox_dim.z);
-            objectSizes.insert(std::pair<int, std::vector<float> >(i->obj_id, dim));
-        }
+      std::vector<float> dim = std::vector<float>();
+      dim.push_back(i->bbox_dim.x);
+      dim.push_back(i->bbox_dim.y);
+      dim.push_back(i->bbox_dim.z);
+      objectSizes.insert(std::pair<int, std::vector<float> >(i->obj_id, dim));
     }
+  }
 
   void jointCallback(const sensor_msgs::JointState::ConstPtr& msg)
   {
@@ -180,1097 +180,1099 @@ public:
       gripperClosed = false;
     }
   }
-    void commandCallback(const rosie_msgs::RobotCommand::ConstPtr& msg)
-    {
-      if (asToString(state) == msg->action || msg->utime == lastCommandTime)
-        return;
 
-        failureReason = "none";
-        lastCommandTime = msg->utime;
-        if (msg->action.find("GRAB")!=std::string::npos)
-        {
-            state = GRAB;
-            std::string num = msg->action.substr(msg->action.find("=")+1);
-            ROS_INFO("Handling pickup command for object %s", num.c_str());
-
-            int idNum;
-            std::stringstream ss(num);
-            if (!(ss >> idNum)) {
-                ROS_INFO("Invalid object ID number %s", num.c_str());
-                return;
-            }
-
-            setUpScene();
-            handleGrabCommand(idNum);
-        }
-        else if (msg->action.find("DROP")!=std::string::npos){
-            ROS_INFO("Handling putdown command");
-            state = DROP;
-            std::vector<float> t = std::vector<float>();
-            t.push_back(msg->dest.translation.x);
-            t.push_back(msg->dest.translation.y);
-            t.push_back(msg->dest.translation.z);
-            setUpScene();
-            handleDropCommand(t);
-        }
-        else if (msg->action.find("PUSH")!=std::string::npos){
-            state = PUSH;
-            std::string num = msg->action.substr(msg->action.find("=")+1);
-            ROS_INFO("Handling push command for object %s", num.c_str());
-
-            int idNum;
-            std::stringstream ss(num);
-            if (!(ss >> idNum)) {
-                ROS_INFO("Invalid object ID number %s", num.c_str());
-                return;
-            }
-
-            std::vector<float> t = std::vector<float>();
-            t.push_back(msg->dest.translation.x);
-            t.push_back(msg->dest.translation.y);
-            t.push_back(msg->dest.translation.z);
-
-            setUpScene();
-            handlePushCommand(idNum, t);
-        }
-        else if (msg->action.find("POINT")!=std::string::npos){
-            state = POINT;
-            std::string num = msg->action.substr(msg->action.find("=")+1);
-            ROS_INFO("Handling point command for object %s", num.c_str());
-
-            int idNum;
-            std::stringstream ss(num);
-            if (!(ss >> idNum)) {
-                ROS_INFO("Invalid object ID number %s", num.c_str());
-                return;
-            }
-            setUpScene();
-            handlePointCommand(idNum);
-        }
-        else if (msg->action.find("HOME")!=std::string::npos){
-            ROS_INFO("Handling home command");
-            state = HOME;
-            homeArm(false);
-            state = WAIT;
-        }
-        else if (msg->action.find("RESET")!=std::string::npos){
-            ROS_INFO("Handling reset command");
-            state = HOME;
-            homeArm(true);
-            state = WAIT;
-        }
-        else if (msg->action.find("SCENE")!=std::string::npos){
-            ROS_INFO("Handling build scene command");
-            state = SCENE;
-            setUpScene();
-            state = WAIT;
-        }
-        else {
-          ROS_INFO("Unknown command %s received", msg->action.c_str());
-          failureReason = "unknowncommand";
-          state = FAILURE;
-        }
-    }
-
-    void handleGrabCommand(int id)
-    {
-        boost::lock_guard<boost::mutex> guard(objMutex);
-        if (objectSizes.find(id) == objectSizes.end() ||
-            objectPoses.find(id) == objectSizes.end()) {
-          ROS_INFO("Object ID %d is not being perceived", id);
-
-          state = FAILURE;
-          failureReason = "planning";
-          return;
-        }
-
-        // This only works for objects that can be picked up like squares!!!
-        float yaw = tf2::getYaw(objectRotations[id]);
-        if (fabs(yaw + M_PI/2.0) < fabs(yaw)) yaw += M_PI/2.0;
-        if (fabs(yaw - M_PI/2.0) < fabs(yaw)) yaw -= M_PI/2.0;
-
-        float a = planToGraspPosition(objectPoses[id][0],
-                                      objectPoses[id][1],
-                                      objectPoses[id][2] + objectSizes[id][2]/2.0,
-                                      yaw);
-
-        preferredDropAngle = a;
-        if (a == -1) {
-          ROS_INFO("Arm not reaching because planning failed");
-          failureReason = "planning";
-          state = FAILURE;
-          return;
-        }
-
-        armHomeState = false;
-        if (!executeCurrentPlan()) {
-          ROS_INFO("Arm returning home because execution failed");
-          homeArm(true);
-          failureReason = "execution";
-          state = FAILURE;
-          return;
-        }
-
-        ros::Duration(0.5).sleep();
-        openGripper();
-
-        std::vector<geometry_msgs::Pose> waypoints;
-        waypoints.push_back(group.getCurrentPose().pose);
-
-        geometry_msgs::Pose gp = waypoints[0];
-
-        tf2::Quaternion qtemp;
-        qtemp.setRPY(0.0, a, 0.0);
-        tf2::Transform rot = tf2::Transform(qtemp);
-        tf2::Vector3 ob = tf2::Vector3(gp.position.x,
-                                     gp.position.y,
-                                     gp.position.z);
-        tf2::Vector3 trans = rot*grabMotion;
-        tf2::Vector3 out = ob+trans;
-
-        gp.position.x = out.x();
-        gp.position.y = out.y();
-        gp.position.z = out.z();
-
-        std::vector<float> fPos = eeFrametoFingertip(gp);
-        float tableH = ((currentTable[3] + currentTable[0]*objectPoses[id][0] +
-                         currentTable[1]*objectPoses[id][1]) / -currentTable[2]) + 0.04;
-        if (fPos[2] < tableH) {
-          gp.position.z += (tableH - fPos[2]);
-        }
-
-        waypoints.push_back(gp);
-        geometry_msgs::Pose returnto = waypoints[0];
-
-        group.setStartStateToCurrentState();
-        moveit_msgs::RobotTrajectory inTraj;
-        double frac = group.computeCartesianPath(waypoints,
-                                                 0.01, 0.0,
-                                                 inTraj,
-                                                 false);
-
-        currentPlan = moveit::planning_interface::MoveGroup::Plan();
-        currentPlan.trajectory_ = inTraj;
-
-        if (frac < 0.9 || !executeCurrentPlan()) {
-          ROS_INFO("Arm will return home because execution failed");
-          failureReason = "grasping";
-          state = FAILURE;
-        }
-
-        if (state != FAILURE) {
-          closeGripper();
-        }
-
-        if (gripperClosed) {
-          ROS_INFO("Robot seems to have missed block %d", id);
-          std::stringstream ss;
-          ss << id;
-          std::vector<std::string> missed;
-          missed.push_back(ss.str());
-          scene.removeCollisionObjects(missed);
-          ros::Duration(0.5).sleep();
-
-          ROS_INFO("Arm will return home because grabbing failed");
-          failureReason = "grasping";
-          state = FAILURE;
-        }
-
-        if (state != FAILURE) {
-          std::stringstream ss;
-          ss << id;
-          std::vector<std::string> allowed;
-          allowed.push_back("r_gripper_finger_link");
-          allowed.push_back("l_gripper_finger_link");
-          allowed.push_back("gripper_link");
-          group.attachObject(ss.str(), group.getEndEffectorLink(), allowed);
-          grabbedObject = id;
-          grabbedObjSize = objectSizes[id];
-
-          std::vector<std::string> attached;
-          attached.push_back(ss.str());
-
-          scene.removeCollisionObjects(attached);
-          ros::Duration(0.5).sleep();
-        }
-
-        std::vector<geometry_msgs::Pose> waypoints2;
-        waypoints2.push_back(group.getCurrentPose().pose);
-        waypoints2.push_back(returnto);
-
-        group.setStartStateToCurrentState();
-        moveit_msgs::RobotTrajectory outTraj;
-        double frac2 = group.computeCartesianPath(waypoints2,
-                                                 0.01, 0.0,
-                                                 outTraj,
-                                                 false);
-
-        currentPlan = moveit::planning_interface::MoveGroup::Plan();
-        currentPlan.trajectory_ = outTraj;
-
-        if (frac2 < 0.5 || !executeCurrentPlan() || state == FAILURE) {
-          ROS_INFO("Arm returning home because execution failed");
-          homeArm(true);
-          if (state != FAILURE) failureReason = "execution";
-          state = FAILURE;
-          return;
-        }
-
-        homeArm(true);
-
-        if (gripperClosed) {
-          ROS_INFO("Robot seems to have dropped block %d", id);
-          grabbedObject = -1;
-
-          std::stringstream ss;
-          ss << id;
-          std::vector<std::string> missed;
-          missed.push_back(ss.str());
-          scene.removeCollisionObjects(missed);
-          ros::Duration(0.5).sleep();
-
-          failureReason = "grasping";
-          state = FAILURE;
-          return;
-        }
-
-        if (state == GRAB) state = WAIT;
-        ROS_INFO("Arm status is now WAIT");
-    }
-
-    void handleDropCommand(std::vector<float> target)
-    {
-      if (grabbedObject == -1) {
-        ROS_INFO("Cannot drop because robot is not holding an object.");
-        failureReason = "invaliddrop";
-        state = FAILURE;
-        return;
-      }
-
-      float tableH = ((currentTable[3] + currentTable[0]*target[0] +
-                       currentTable[1]*target[1]) / -currentTable[2]) + 0.02;
-
-      if (target[2] == -1) target[2] = tableH;
-      target[2] += grabbedObjSize[2] + 0.01;
-
-      // Try the angle you picked it up at first
-      tf2::Quaternion qtemp;
-      qtemp.setRPY(0.0, preferredDropAngle, 0.0);
-      tf2::Transform pRot = tf2::Transform(qtemp);
-      tf2::Vector3 tV = tf2::Vector3(target[0], target[1], target[2]);
-      tf2::Vector3 transIn = pRot*approachOffset;
-
-      tf2::Vector3 in = tV-transIn;
-      float a = -1;
-      if (planToXYZAngleTarget(in.x(), in.y(), in.z(), preferredDropAngle, 0)) {
-        a = preferredDropAngle;
-      } else {
-        a = planToGraspPosition(target[0], target[1], target[2]);
-      }
-      preferredDropAngle = -1;
-
-      if (a == -1) {
-        ROS_INFO("Arm not reaching because planning failed");
-        failureReason = "planning";
-        state = FAILURE;
-        return;
-      }
-
-      armHomeState = false;
-      if (!executeCurrentPlan()) {
-        ROS_INFO("Arm returning home because execution failed");
-        homeArm(true);
-        failureReason = "execution";
-        state = FAILURE;
-        return;
-      }
-
-      ros::Duration(0.5).sleep();
-      std::vector<geometry_msgs::Pose> waypoints;
-      waypoints.push_back(group.getCurrentPose().pose);
-      geometry_msgs::Pose gp = waypoints[0];
-
-      tf2::Quaternion qtemp2;
-      qtemp2.setRPY(0.0, a, 0.0);
-      tf2::Transform rot = tf2::Transform(qtemp2);
-      tf2::Vector3 ob = tf2::Vector3(gp.position.x,
-                                   gp.position.y,
-                                   gp.position.z);
-      tf2::Vector3 trans = rot*dropMotion;
-      tf2::Vector3 out = ob+trans;
-
-      gp.position.x = out.x();
-      gp.position.y = out.y();
-      gp.position.z = out.z();
-
-      std::vector<float> fPos = eeFrametoFingertip(gp);
-      tableH += 0.02;
-      if (fPos[2] < tableH) {
-        gp.position.z += (tableH - fPos[2]);
-      }
-
-      waypoints.push_back(gp);
-      geometry_msgs::Pose returnto = waypoints[0];
-
-      group.setStartStateToCurrentState();
-      moveit_msgs::RobotTrajectory inTraj;
-      double frac = group.computeCartesianPath(waypoints,
-                                               0.01, 0.0,
-                                               inTraj,
-                                               false);
-
-      currentPlan = moveit::planning_interface::MoveGroup::Plan();
-      currentPlan.trajectory_ = inTraj;
-
-      if (frac < 0.8 || !executeCurrentPlan()) {
-        ROS_INFO("Arm returning home because execution failed");
-        homeArm(true);
-        failureReason = "execution";
-        state = FAILURE;
-        return;
-      }
-
-      ros::Duration(0.5).sleep();
-      openGripper();
-
-      group.detachObject();
-
-      moveit_msgs::CollisionObject droppedObj;
-      droppedObj.header.frame_id = group.getPlanningFrame();
-
-      std::stringstream ss;
-      ss << grabbedObject;
-      droppedObj.id = ss.str();
-
-      std::vector<std::string> toRem;
-      toRem.push_back(ss.str());
-      scene.removeCollisionObjects(toRem);
-      ros::Duration(1.0).sleep();
-
-      geometry_msgs::Pose dropP;
-      dropP.position.x = target[0];
-      dropP.position.y = target[1];
-      dropP.position.z = target[2] - 0.01 - grabbedObjSize[2]/2.0;
-      dropP.orientation.w = 1.0;
-
-      shape_msgs::SolidPrimitive primitive;
-      primitive.type = primitive.BOX;
-      primitive.dimensions.resize(3);
-      primitive.dimensions[0] = grabbedObjSize[0]+0.01;
-      primitive.dimensions[1] = grabbedObjSize[1]+0.01;
-      primitive.dimensions[2] = grabbedObjSize[2]+0.01;
-
-      droppedObj.primitives.push_back(primitive);
-      droppedObj.primitive_poses.push_back(dropP);
-      droppedObj.operation = droppedObj.ADD;
-
-      std::vector<moveit_msgs::CollisionObject> toAdd;
-      toAdd.push_back(droppedObj);
-      scene.addCollisionObjects(toAdd);
-
-      grabbedObject = -1;
-      ros::Duration(0.5).sleep();
-
-      std::vector<geometry_msgs::Pose> waypoints2;
-      waypoints2.push_back(group.getCurrentPose().pose);
-      waypoints2.push_back(returnto);
-
-      group.setStartStateToCurrentState();
-      moveit_msgs::RobotTrajectory outTraj;
-      double frac2 = group.computeCartesianPath(waypoints2,
-                                                0.01, 0.0,
-                                                outTraj,
-                                                false);
-
-      currentPlan = moveit::planning_interface::MoveGroup::Plan();
-      currentPlan.trajectory_ = outTraj;
-
-      if (frac2 < 0.8 || !executeCurrentPlan()) {
-        ROS_INFO("Arm returning home because execution failed");
-        homeArm(true);
-        failureReason = "execution";
-        state = FAILURE;
-        return;
-      }
-
-      ros::Duration(0.5).sleep();
-
-      closeGripper();
-      homeArm(true);
-
-      if (state == DROP) state = WAIT;
-      ROS_INFO("Arm status is now WAIT");
-    }
-
-    std::vector<float> rotate2D(std::vector<float>& v, float angle) {
-        std::vector<float> rotated;
-        rotated.push_back(cos(angle)*v[0] - sin(angle)*v[1]);
-        rotated.push_back(sin(angle)*v[0] + cos(angle)*v[1]);
-        return rotated;
-    }
-
-    void handlePushCommand(int id, std::vector<float> pV)
-    {
-        boost::lock_guard<boost::mutex> guard(objMutex);
-        if (objectSizes.find(id) == objectSizes.end() ||
-            objectPoses.find(id) == objectSizes.end()) {
-          ROS_INFO("Object ID %d is not being perceived", id);
-          failureReason = "planning";
-          state = FAILURE;
-          return;
-        }
-
-        if (pV[2] == -1) {
-          ROS_INFO("No push was found; not planning motion");
-          failureReason = "nopush";
-          state = FAILURE;
-          return;
-        }
-
-        if (pV[0] == 0 && pV[1] == 0) {
-          ROS_INFO("No need to push; not planning motion");
-          failureReason = "";
-          state = WAIT;
-          return;
-        }
-
-        float objYaw = tf2::getYaw(objectRotations[id]);
-        std::vector<float> chosenPush;
-
-        // Plans the reach and in/out motions at once
-        // Prefer X push
-        plan_vector steps;
-        if (pV[2] == X_AXIS || (pV[2] == 2 && fabs(pV[0]) <= fabs(pV[1]))) {
-          // Try X axis push
-          steps = planPush(id, pV[0], X_AXIS);
-          if (!steps.empty()) {
-            chosenPush.push_back(pV[0]);
-            chosenPush.push_back(0.0);
-          }
-          // Try Y axis push if X failed and it's available
-          else if (steps.empty() && pV[1] != 0) {
-            steps = planPush(id, pV[1], Y_AXIS);
-            if (!steps.empty()) {
-              chosenPush.push_back(0.0);
-              chosenPush.push_back(pV[1]);
-            }
-          }
-        }
-        // Prefer Y push
-        if (pV[2] == Y_AXIS || (pV[2] == 2 && fabs(pV[1]) < fabs(pV[0]))) {
-          // Try Y axis push
-          steps = planPush(id, pV[1], Y_AXIS);
-          if (!steps.empty()) {
-            chosenPush.push_back(0.0);
-            chosenPush.push_back(pV[1]);
-          }
-          // Try X axis push if Y failed and it's available
-          else if (steps.empty() && pV[0] != 0) {
-            steps = planPush(id, pV[0], X_AXIS);
-            if (!steps.empty()) {
-              chosenPush.push_back(pV[0]);
-              chosenPush.push_back(0.0);
-            }
-          }
-        }
-
-        // Total failure
-        if (steps.empty()) {
-          ROS_INFO("Could not find ANY plan to push, arm state is now FAILURE");
-          failureReason = "planning";
-          state = FAILURE;
-          return;
-        }
-
-        // Otherwise, execute the steps we found
-        setGripperTo(0.02);
-        armHomeState = false;
-        int count = 0;
-        for (plan_vector::iterator i = steps.begin(); i != steps.end(); i++) {
-          ros::Duration(1.0).sleep();
-          currentPlan = *i;
-          if (count == 2) group.setMaxVelocityScalingFactor(0.05);
-
-          if (!executeCurrentPlan()) {
-            group.setMaxVelocityScalingFactor(0.4);
-            ROS_INFO("Arm returning home because execution failed");
-            homeArm(true);
-            failureReason = "execution";
-            state = FAILURE;
-            ROS_INFO("Arm state is now FAILURE");
-            return;
-          }
-
-          group.setMaxVelocityScalingFactor(0.4);
-          count++;
-        }
-
-        // Remove block from collision map
-        std::stringstream ss;
-        ss << id;
-        std::vector<std::string> pushed;
-        pushed.push_back(ss.str());
-        scene.removeCollisionObjects(pushed);
-        ros::Duration(0.5).sleep();
-
-        // Re-add block to collision map
-        moveit_msgs::CollisionObject pushedObj;
-        pushedObj.header.frame_id = group.getPlanningFrame();
-
-        shape_msgs::SolidPrimitive primitive;
-        primitive.type = primitive.BOX;
-        primitive.dimensions.resize(3);
-        primitive.dimensions[0] = objectSizes[id][0] + 0.01;
-        primitive.dimensions[1] = objectSizes[id][1] + 0.01;
-        primitive.dimensions[2] = objectSizes[id][2] + 0.01;
-
-        std::vector<float> trans = rotate2D(chosenPush, objYaw);
-        geometry_msgs::Pose pushP;
-        pushP.position.x = objectPoses[id][0] + trans[0];
-        pushP.position.y = objectPoses[id][1] + trans[1];
-        pushP.position.z = objectPoses[id][2];
-        pushP.orientation.w = objectRotations[id].w();
-        pushP.orientation.x = objectRotations[id].x();
-        pushP.orientation.y = objectRotations[id].y();
-        pushP.orientation.z = objectRotations[id].z();
-
-        pushedObj.primitives.push_back(primitive);
-        pushedObj.primitive_poses.push_back(pushP);
-        pushedObj.operation = pushedObj.ADD;
-
-        std::vector<moveit_msgs::CollisionObject> toAdd;
-        toAdd.push_back(pushedObj);
-        scene.addCollisionObjects(toAdd);
-        ros::Duration(0.5).sleep();
-
-        homeArm(true);
-        if (state == PUSH) state = WAIT;
-        ROS_INFO("Arm status is now WAIT");
-    }
-
-  plan_vector planPush(int id, float dist, axis a)
+  void commandCallback(const rosie_msgs::RobotCommand::ConstPtr& msg)
   {
-    float x = objectPoses[id][0];
-    float y = objectPoses[id][1];
-    float z = objectPoses[id][2] + objectSizes[id][2]/2.0 - 0.01;
-    float yaw = tf2::getYaw(objectRotations[id]);
-
-    plan_vector plans;
-
-    if (tooFar(x, y, true)) {
-      ROS_INFO("Not planning because robot probably cannot reach (%f, %f)", x, y);
-      plans.clear();
-      return plans;
-    }
-
-    // Plan to the offset point
-    std::vector<float> offsetV;
-    if (a == Y_AXIS) offsetV.push_back(0);
-    if (dist < 0) {
-      offsetV.push_back(objectSizes[id][1]/2.0 + pushOffset + 0.01);
-    }
-    else if (dist > 0) {
-      offsetV.push_back(-(objectSizes[id][1]/2.0 + pushOffset + 0.01));
-    }
-    if (a == X_AXIS) offsetV.push_back(0);
-
-    std::vector<float> rotatedOffset = rotate2D(offsetV, yaw);
-    x += rotatedOffset[0];
-    y += rotatedOffset[1];
-    z += 0.04;
-
-    float pushYaw = yaw;
-    if (a == Y_AXIS) pushYaw += M_PI/2.0;
-    while (pushYaw > M_PI) pushYaw -= M_PI;
-
-    // Retry the planning process several times
-    bool success = false;
-    int tries = 0;
-    float handAngleDenom = 2.0;
-
-    while (!success && tries < numRetries) {
-      tries++;
-      float handPitch = M_PI/handAngleDenom;
-
-      success = planToXYZAngleTarget(x, y, z, handPitch, pushYaw);
-      if (success) {
-        ROS_INFO("Plan for initial reach found");
-        plans.push_back(currentPlan);
-      }
-      else {
-        ROS_INFO("Could not find a plan to reach push position at pitch %f",
-                 handPitch);
-        plans.clear();
-        if (dist > 0) handAngleDenom += 0.2;
-        else handAngleDenom -= 0.2;
-        continue;
-      }
-
-      // Setup motion to touch the side of the block
-      std::vector<float> setupV;
-      if (a == Y_AXIS) setupV.push_back(0);
-      if (dist < 0) {
-        setupV.push_back(-(pushOffset - 0.01));
-      }
-      else {
-        setupV.push_back(pushOffset - 0.01);
-      }
-      if (a == X_AXIS) setupV.push_back(0);
-
-      robot_state::RobotState setupStartState(*group.getCurrentState());
-      setupStartState.setJointGroupPositions(group.getName(),
-                                             currentPlan.trajectory_.joint_trajectory.points.back().positions);
-      group.setStartState(setupStartState);
-
-      std::vector<float> rotatedSetup = rotate2D(setupV, yaw);
-      moveit_msgs::RobotTrajectory setupTraj;
-      std::vector<geometry_msgs::Pose> setupWaypoints;
-      setupWaypoints.push_back(xyzypTargetToPoseMsg(x, y, z, pushYaw, handPitch));
-
-      geometry_msgs::Pose tp = setupWaypoints[0];
-      tp.position.x += rotatedSetup[0];
-      tp.position.y += rotatedSetup[1];
-      tp.position.z -= 0.04;
-
-      std::vector<float> fPos = eeFrametoFingertip(tp);
-      float tableH = ((currentTable[3] + currentTable[0]*objectPoses[id][0] +
-                       currentTable[1]*objectPoses[id][1]) / -currentTable[2]) + 0.04;
-      if (fPos[2] < tableH) {
-        tp.position.z += (tableH - fPos[2]);
-      }
-      setupWaypoints.push_back(tp);
-
-      double sFrac = group.computeCartesianPath(setupWaypoints,
-                                                0.01, 0.0,
-                                                setupTraj,
-                                                false);
-
-      if (sFrac > 0.9) {
-        ROS_INFO("Plan for setup motion found");
-        currentPlan = moveit::planning_interface::MoveGroup::Plan();
-        currentPlan.trajectory_ = setupTraj;
-        plans.push_back(currentPlan);
-      }
-      else {
-        ROS_INFO("Could not find a plan for setup motion at pitch %f",
-                 handPitch);
-        success = false;
-        plans.clear();
-        if (dist > 0) handAngleDenom += 0.2;
-        else handAngleDenom -= 0.2;
-        continue;
-      }
-
-      // Actual pushing motion
-      std::vector<float> pushV;
-      if (a == Y_AXIS) pushV.push_back(0);
-      pushV.push_back(dist);
-      if (a == X_AXIS) pushV.push_back(0);
-
-      robot_state::RobotState pushStartState(*group.getCurrentState());
-      pushStartState.setJointGroupPositions(group.getName(),
-                                            currentPlan.trajectory_.joint_trajectory.points.back().positions);
-      group.setStartState(pushStartState);
-
-      std::vector<float> rotatedPush = rotate2D(pushV, yaw);
-      moveit_msgs::RobotTrajectory pushTraj;
-      std::vector<geometry_msgs::Pose> pushWaypoints;
-      pushWaypoints.push_back(setupWaypoints.back());
-
-      geometry_msgs::Pose pp = pushWaypoints[0];
-      geometry_msgs::Pose returnto = pushWaypoints[0];
-
-      pp.position.x += rotatedPush[0];
-      pp.position.y += rotatedPush[1];
-      pushWaypoints.push_back(pp);
-
-      double pFrac = group.computeCartesianPath(pushWaypoints,
-                                                0.01, 0.0,
-                                                pushTraj,
-                                                false);
-      if (pFrac > 0.9) {
-        ROS_INFO("Plan for push motion found");
-        currentPlan = moveit::planning_interface::MoveGroup::Plan();
-        currentPlan.trajectory_ = pushTraj;
-        plans.push_back(currentPlan);
-      }
-      else {
-        ROS_INFO("Could not find a plan for push motion at pitch %f",
-                 handPitch);
-        success = false;
-        plans.clear();
-        if (dist > 0) handAngleDenom += 0.2;
-        else handAngleDenom -= 0.2;
-        continue;
-      }
-
-      robot_state::RobotState outStartState(*group.getCurrentState());
-      outStartState.setJointGroupPositions(group.getName(), currentPlan.trajectory_.joint_trajectory.points.back().positions);
-      group.setStartState(outStartState);
-
-      moveit_msgs::RobotTrajectory outTraj;
-      std::vector<geometry_msgs::Pose> outWaypoints;
-      outWaypoints.push_back(pushWaypoints.back());
-
-      if (fabs(dist) < 0.05) {
-        returnto.position.z += 0.04;
-        outWaypoints.push_back(returnto);
-      }
-      else {
-        geometry_msgs::Pose tp = outWaypoints[0];
-        std::vector<float> out = rotatedPush;
-        out[0] = 0.05 * (out[0] / dist);
-        out[1] = 0.05 * (out[1] / dist);
-        if (dist > 0) {
-          tp.position.x -= out[0];
-          tp.position.y -= out[1];
-        } else {
-          tp.position.x += out[0];
-          tp.position.y += out[1];
-        }
-        tp.position.z += 0.04;
-        outWaypoints.push_back(tp);
-      }
-
-      double oFrac = group.computeCartesianPath(outWaypoints,
-                                                0.01, 0.0,
-                                                outTraj,
-                                                false);
-
-      if (pFrac > 0.9) {
-        ROS_INFO("Plan for outward motion found");
-        currentPlan = moveit::planning_interface::MoveGroup::Plan();
-        currentPlan.trajectory_ = outTraj;
-        plans.push_back(currentPlan);
-      }
-      else {
-        ROS_INFO("Could not find a plan for outward motion at pitch %f",
-                 handPitch);
-        success = false;
-        plans.clear();
-        if (dist > 0) handAngleDenom += 0.2;
-        else handAngleDenom -= 0.2;
-        continue;
-      }
-    }
-    return plans;
-  }
-
-    tf2::Quaternion yawPitchToQuat(float yaw, float pitch)
-    {
-      std::vector<float> res;
-
-      tf2::Quaternion qtemp1;
-      qtemp1.setRPY(0.0, 0.0, yaw);
-      tf2::Quaternion qtemp2;
-      qtemp2.setRPY(0.0, pitch, 0.0);
-
-      tf2::Transform first = tf2::Transform(qtemp1);
-      tf2::Transform second = tf2::Transform(qtemp2);
-
-      tf2::Transform t = first*second;
-
-      return t.getRotation();
-    }
-
-    void handlePointCommand(int id)
-    {
-        boost::lock_guard<boost::mutex> guard(objMutex);
-        if (objectSizes.find(id) == objectSizes.end()||
-            objectPoses.find(id) == objectSizes.end()) {
-          ROS_INFO("Object ID %d is not being perceived", id);
-          return;
-        }
-
-        float a = planToGraspPosition(objectPoses[id][0],
-                                      objectPoses[id][1],
-                                      objectPoses[id][2] + objectSizes[id][2]/2.0);
-
-        if (a == -1) {
-          ROS_INFO("Arm not pointing because planning failed");
-          failureReason = "planning";
-          state = FAILURE;
-          return;
-        }
-
-        armHomeState = false;
-        if (!executeCurrentPlan()) {
-          ROS_INFO("Arm returning home because execution failed");
-          homeArm(true);
-          failureReason = "execution";
-          state = FAILURE;
-          return;
-        }
-
-        ros::Duration(1.0).sleep();
-        homeArm(true);
-        if (state == POINT) state = WAIT;
-        ROS_INFO("Arm status is now WAIT");
-    }
-
-
-  float planToGraspPosition(float objx, float objy, float objz) {
-    return planToGraspPosition(objx, objy, objz, 0.0);
-  }
-
-  float planToGraspPosition(float objx, float objy, float objz, float yaw)
-  {
-    //ROS_INFO("Planning to a grasp yaw of: %f", yaw);
-    float foundAngle = -1;
-    int tries = 0;
-
-    while (tries < numRetries) {
-      for (std::vector<float>::iterator i = approachAngles.begin();
-           i != approachAngles.end(); i++) {
-        tf2::Transform rot = tf2::Transform(yawPitchToQuat(yaw, *i));
-        tf2::Vector3 ob = tf2::Vector3(objx, objy, objz);
-        tf2::Vector3 trans = rot*approachOffset;
-
-        tf2::Vector3 out = ob-trans;
-        if (planToXYZAngleTarget(out.x(), out.y(), out.z(), *i, yaw)) {
-          foundAngle = *i;
-          break;
-        }
-      }
-
-      if (foundAngle != -1) break;
-      tries++;
-    }
-
-    return foundAngle;
-  }
-    void publishStatus(const ros::TimerEvent& e)
-    {
-        rosie_msgs::RobotAction msg = rosie_msgs::RobotAction();
-        msg.utime = ros::Time::now().toNSec();
-        msg.action = asToString(state).c_str();
-        msg.armHome = armHomeState;
-        msg.failure_reason = failureReason;
-        msg.obj_id = grabbedObject;
-        statusPublisher.publish(msg);
-        goalPublisher.publish(graspGoal);
-
-        try {
-          camXform = tfBuf.lookupTransform("base_link", "head_camera_rgb_optical_frame",
-                                              ros::Time(0));
-        } catch (tf2::TransformException &ex) {
-          ROS_WARN("%s",ex.what());
-        }
-        camXPublisher.publish(camXform);
-     }
-
-    void setUpScene()
-    {
-      std::vector<std::string> known = scene.getKnownObjectNames();
-      scene.removeCollisionObjects(known);
-      //ROS_INFO("Removing known collision objects");
-      ros::Duration(1).sleep();
-
-      boost::lock_guard<boost::mutex> guard(objMutex);
-      std::vector<moveit_msgs::CollisionObject> coList;
-      for (std::map<int, std::vector<float> >::iterator i = objectPoses.begin();
-           i != objectPoses.end(); i++) {
-          moveit_msgs::CollisionObject co;
-          co.header.frame_id = group.getPlanningFrame();
-
-          int objID = i->first;
-          std::stringstream ss;
-          ss << objID;
-          co.id = ss.str();
-          //ROS_INFO("Adding object %s", co.id.c_str());
-
-          geometry_msgs::Pose box_pose;
-          box_pose.position.x = i->second[0];
-          box_pose.position.y = i->second[1];
-          box_pose.position.z = i->second[2];
-
-          geometry_msgs::Quaternion q = tf2::toMsg(objectRotations[objID]);
-          box_pose.orientation = q;
-
-          shape_msgs::SolidPrimitive primitive;
-          primitive.type = primitive.BOX;
-          primitive.dimensions.resize(3);
-          primitive.dimensions[0] = objectSizes[objID][0]+0.02;
-          primitive.dimensions[1] = objectSizes[objID][1]+0.02;
-          primitive.dimensions[2] = objectSizes[objID][2]+0.02;
-
-          co.primitives.push_back(primitive);
-          co.primitive_poses.push_back(box_pose);
-          co.operation = co.ADD;
-          coList.push_back(co);
-      }
-      moveit_msgs::CollisionObject planeobj;
-      planeobj.header.frame_id = group.getPlanningFrame();
-      planeobj.id = "table";
-
-      geometry_msgs::Pose planep;
-      planep.position.x = 0.8;
-      planep.position.y = 0.0;
-      planep.position.z = ((currentTable[3] + currentTable[0]*0.8 +
-                            currentTable[1]*0.0) / -currentTable[2]);
-      planep.orientation.w = 1.0;
-
-      shape_msgs::SolidPrimitive primitive;
-      primitive.type = primitive.BOX;
-      primitive.dimensions.resize(3);
-      primitive.dimensions[0] = 1;
-      primitive.dimensions[1] = 1;
-      primitive.dimensions[2] = 0.02;
-
-      planeobj.primitives.push_back(primitive);
-      planeobj.primitive_poses.push_back(planep);
-      planeobj.operation = planeobj.ADD;
-      coList.push_back(planeobj);
-
-      scene.addCollisionObjects(coList);
-      ros::Duration(2).sleep();
-    }
-
-    // Ignores all objects for a last-ditch effort to get home even
-    // if arm hits something
-    void setUpEmptyScene() {
-      std::vector<std::string> known = scene.getKnownObjectNames();
-      scene.removeCollisionObjects(known);
-      //ROS_INFO("Removing known collision objects");
-      ros::Duration(1).sleep();
-
-      std::vector<moveit_msgs::CollisionObject> coList;
-
-      // JUST add the table
-      moveit_msgs::CollisionObject planeobj;
-      planeobj.header.frame_id = group.getPlanningFrame();
-      planeobj.id = "table";
-
-      geometry_msgs::Pose planep;
-      planep.position.x = 0.8;
-      planep.position.y = 0.0;
-      planep.position.z = ((currentTable[3] + currentTable[0]*0.8 +
-                            currentTable[1]*0.0) / -currentTable[2]);
-      planep.orientation.w = 1.0;
-
-      shape_msgs::SolidPrimitive primitive;
-      primitive.type = primitive.BOX;
-      primitive.dimensions.resize(3);
-      primitive.dimensions[0] = 1;
-      primitive.dimensions[1] = 1;
-      primitive.dimensions[2] = 0.02;
-
-      planeobj.primitives.push_back(primitive);
-      planeobj.primitive_poses.push_back(planep);
-      planeobj.operation = planeobj.ADD;
-      coList.push_back(planeobj);
-
-      scene.addCollisionObjects(coList);
-      ros::Duration(1).sleep();
-    }
-
-  bool safetyCheck()
-  {
-    if (!checkPlans) return true;
-    std::string input;
-    std::cout << "Is this motion plan okay? ";
-    std::cin >> input;
-
-    if (input.find("y")!=std::string::npos)
+    if (asToString(state) == msg->action || msg->utime == lastCommandTime)
+      return;
+
+    failureReason = "none";
+    lastCommandTime = msg->utime;
+    if (msg->action.find("GRAB")!=std::string::npos)
       {
-        ROS_INFO("Plan accepted; starting execution");
-        return true;
-      }
+        state = GRAB;
+        std::string num = msg->action.substr(msg->action.find("=")+1);
+        ROS_INFO("Handling pickup command for object %s", num.c_str());
 
-    if (input.find("n")!=std::string::npos)
-      {
-        ROS_INFO("Plan rejected; cancelling execution");
-        return false;
-      }
-
-    ROS_INFO("Confusing input to safety check; cancelling execution");
-    return false;
-  }
-
-    void homeArm(bool forceHome = false)
-    {
-        ros::Duration(0.5).sleep();
-
-        std::vector<double> joints = std::vector<double>();
-        joints.push_back(1.32);
-        joints.push_back(0.7);
-        joints.push_back(0.0);
-        joints.push_back(-2.0);
-        joints.push_back(0.0);
-        joints.push_back(-0.57);
-        joints.push_back(0.0);
-        group.setJointValueTarget(joints);
-
-        moveit::planning_interface::MoveGroup::Plan homePlan;
-
-        int tries = 0;
-        std::string failure = "";
-        moveit::planning_interface::MoveItErrorCode success;
-        while(!success && tries < numRetries) {
-          tries++;
-          group.setStartStateToCurrentState();
-
-          group.setPlannerId("LBKPIECEkConfigDefault");
-          success = group.plan(homePlan);
-
-          if (!success) {
-            group.setPlannerId("RRTConnectkConfigDefault");
-            success = group.plan(homePlan);
-          }
-
-          if (!success) {
-            failure = "planning";
-            continue;
-          }
-
-          if (!safetyCheck()) {
-            failureReason = "safety";
-            state = FAILURE;
-            return;
-          }
-
-          moveit::planning_interface::MoveItErrorCode moveSuccess = group.execute(homePlan);
-          success = moveSuccess;
-          if (!moveSuccess) {
-            failure = "execution";
-          }
-        }
-
-        if (!success && forceHome) {
-          ROS_INFO("Homing arm failed with blocks in the way, attempting to force home");
-          setUpEmptyScene();
-
-          int forceCount = 0;
-          while (!success && forceCount < 10) {
-            group.setStartStateToCurrentState();
-            success = group.plan(homePlan);
-            if (!success) {
-              failure = "planning";
-            }
-
-            if (!safetyCheck()) {
-              failureReason = "safety";
-              state = FAILURE;
-              return;
-            }
-
-            moveit::planning_interface::MoveItErrorCode fhSuccess = group.execute(homePlan);
-            success = fhSuccess;
-            if (!fhSuccess) {
-              failure = "execution";
-            }
-            forceCount++;
-          }
-        }
-
-        if (!success) {
-          ROS_INFO("Homing arm failed.");
+        int idNum;
+        std::stringstream ss(num);
+        if (!(ss >> idNum)) {
+          ROS_INFO("Invalid object ID number %s", num.c_str());
           return;
         }
 
-        // This should ONLY get set back to true HERE after success
-        armHomeState = true;
+        //setUpScene();
+        //handleGrabCommand(idNum);
+      }
+    else if (msg->action.find("DROP")!=std::string::npos){
+      ROS_INFO("Handling putdown command");
+      state = DROP;
+      std::vector<float> t = std::vector<float>();
+      t.push_back(msg->dest.translation.x);
+      t.push_back(msg->dest.translation.y);
+      t.push_back(msg->dest.translation.z);
+      //setUpScene();
+      //handleDropCommand(t);
     }
+    else if (msg->action.find("PUSH")!=std::string::npos){
+      state = PUSH;
+      std::string num = msg->action.substr(msg->action.find("=")+1);
+      ROS_INFO("Handling push command for object %s", num.c_str());
+
+      int idNum;
+      std::stringstream ss(num);
+      if (!(ss >> idNum)) {
+        ROS_INFO("Invalid object ID number %s", num.c_str());
+        return;
+      }
+
+      std::vector<float> t = std::vector<float>();
+      t.push_back(msg->dest.translation.x);
+      t.push_back(msg->dest.translation.y);
+      t.push_back(msg->dest.translation.z);
+
+      //setUpScene();
+      //handlePushCommand(idNum, t);
+    }
+    else if (msg->action.find("POINT")!=std::string::npos){
+      state = POINT;
+      std::string num = msg->action.substr(msg->action.find("=")+1);
+      ROS_INFO("Handling point command for object %s", num.c_str());
+
+      int idNum;
+      std::stringstream ss(num);
+      if (!(ss >> idNum)) {
+        ROS_INFO("Invalid object ID number %s", num.c_str());
+        return;
+      }
+      //setUpScene();
+      //handlePointCommand(idNum);
+    }
+    else if (msg->action.find("HOME")!=std::string::npos){
+      ROS_INFO("Handling home command");
+      state = HOME;
+      //homeArm(false);
+      state = WAIT;
+    }
+    else if (msg->action.find("RESET")!=std::string::npos){
+      ROS_INFO("Handling reset command");
+      state = HOME;
+      //homeArm(true);
+      state = WAIT;
+    }
+    else if (msg->action.find("SCENE")!=std::string::npos){
+      ROS_INFO("Handling build scene command");
+      state = SCENE;
+      //setUpScene();
+      state = WAIT;
+    }
+    else {
+      ROS_INFO("Unknown command %s received", msg->action.c_str());
+      failureReason = "unknowncommand";
+      state = FAILURE;
+    }
+  }
+
+//     void handleGrabCommand(int id)
+//     {
+//         boost::lock_guard<boost::mutex> guard(objMutex);
+//         if (objectSizes.find(id) == objectSizes.end() ||
+//             objectPoses.find(id) == objectSizes.end()) {
+//           ROS_INFO("Object ID %d is not being perceived", id);
+
+//           state = FAILURE;
+//           failureReason = "planning";
+//           return;
+//         }
+
+//         // This only works for objects that can be picked up like squares!!!
+//         float yaw = tf2::getYaw(objectRotations[id]);
+//         if (fabs(yaw + M_PI/2.0) < fabs(yaw)) yaw += M_PI/2.0;
+//         if (fabs(yaw - M_PI/2.0) < fabs(yaw)) yaw -= M_PI/2.0;
+
+//         float a = planToGraspPosition(objectPoses[id][0],
+//                                       objectPoses[id][1],
+//                                       objectPoses[id][2] + objectSizes[id][2]/2.0,
+//                                       yaw);
+
+//         preferredDropAngle = a;
+//         if (a == -1) {
+//           ROS_INFO("Arm not reaching because planning failed");
+//           failureReason = "planning";
+//           state = FAILURE;
+//           return;
+//         }
+
+//         armHomeState = false;
+//         if (!executeCurrentPlan()) {
+//           ROS_INFO("Arm returning home because execution failed");
+//           homeArm(true);
+//           failureReason = "execution";
+//           state = FAILURE;
+//           return;
+//         }
+
+//         ros::Duration(0.5).sleep();
+//         openGripper();
+
+//         std::vector<geometry_msgs::Pose> waypoints;
+//         waypoints.push_back(group.getCurrentPose().pose);
+
+//         geometry_msgs::Pose gp = waypoints[0];
+
+//         tf2::Quaternion qtemp;
+//         qtemp.setRPY(0.0, a, 0.0);
+//         tf2::Transform rot = tf2::Transform(qtemp);
+//         tf2::Vector3 ob = tf2::Vector3(gp.position.x,
+//                                      gp.position.y,
+//                                      gp.position.z);
+//         tf2::Vector3 trans = rot*grabMotion;
+//         tf2::Vector3 out = ob+trans;
+
+//         gp.position.x = out.x();
+//         gp.position.y = out.y();
+//         gp.position.z = out.z();
+
+//         std::vector<float> fPos = eeFrametoFingertip(gp);
+//         float tableH = ((currentTable[3] + currentTable[0]*objectPoses[id][0] +
+//                          currentTable[1]*objectPoses[id][1]) / -currentTable[2]) + 0.04;
+//         if (fPos[2] < tableH) {
+//           gp.position.z += (tableH - fPos[2]);
+//         }
+
+//         waypoints.push_back(gp);
+//         geometry_msgs::Pose returnto = waypoints[0];
+
+//         group.setStartStateToCurrentState();
+//         moveit_msgs::RobotTrajectory inTraj;
+//         double frac = group.computeCartesianPath(waypoints,
+//                                                  0.01, 0.0,
+//                                                  inTraj,
+//                                                  false);
+
+//         currentPlan = moveit::planning_interface::MoveGroup::Plan();
+//         currentPlan.trajectory_ = inTraj;
+
+//         if (frac < 0.9 || !executeCurrentPlan()) {
+//           ROS_INFO("Arm will return home because execution failed");
+//           failureReason = "grasping";
+//           state = FAILURE;
+//         }
+
+//         if (state != FAILURE) {
+//           closeGripper();
+//         }
+
+//         if (gripperClosed) {
+//           ROS_INFO("Robot seems to have missed block %d", id);
+//           std::stringstream ss;
+//           ss << id;
+//           std::vector<std::string> missed;
+//           missed.push_back(ss.str());
+//           scene.removeCollisionObjects(missed);
+//           ros::Duration(0.5).sleep();
+
+//           ROS_INFO("Arm will return home because grabbing failed");
+//           failureReason = "grasping";
+//           state = FAILURE;
+//         }
+
+//         if (state != FAILURE) {
+//           std::stringstream ss;
+//           ss << id;
+//           std::vector<std::string> allowed;
+//           allowed.push_back("r_gripper_finger_link");
+//           allowed.push_back("l_gripper_finger_link");
+//           allowed.push_back("gripper_link");
+//           group.attachObject(ss.str(), group.getEndEffectorLink(), allowed);
+//           grabbedObject = id;
+//           grabbedObjSize = objectSizes[id];
+
+//           std::vector<std::string> attached;
+//           attached.push_back(ss.str());
+
+//           scene.removeCollisionObjects(attached);
+//           ros::Duration(0.5).sleep();
+//         }
+
+//         std::vector<geometry_msgs::Pose> waypoints2;
+//         waypoints2.push_back(group.getCurrentPose().pose);
+//         waypoints2.push_back(returnto);
+
+//         group.setStartStateToCurrentState();
+//         moveit_msgs::RobotTrajectory outTraj;
+//         double frac2 = group.computeCartesianPath(waypoints2,
+//                                                  0.01, 0.0,
+//                                                  outTraj,
+//                                                  false);
+
+//         currentPlan = moveit::planning_interface::MoveGroup::Plan();
+//         currentPlan.trajectory_ = outTraj;
+
+//         if (frac2 < 0.5 || !executeCurrentPlan() || state == FAILURE) {
+//           ROS_INFO("Arm returning home because execution failed");
+//           homeArm(true);
+//           if (state != FAILURE) failureReason = "execution";
+//           state = FAILURE;
+//           return;
+//         }
+
+//         homeArm(true);
+
+//         if (gripperClosed) {
+//           ROS_INFO("Robot seems to have dropped block %d", id);
+//           grabbedObject = -1;
+
+//           std::stringstream ss;
+//           ss << id;
+//           std::vector<std::string> missed;
+//           missed.push_back(ss.str());
+//           scene.removeCollisionObjects(missed);
+//           ros::Duration(0.5).sleep();
+
+//           failureReason = "grasping";
+//           state = FAILURE;
+//           return;
+//         }
+
+//         if (state == GRAB) state = WAIT;
+//         ROS_INFO("Arm status is now WAIT");
+//     }
+
+//     void handleDropCommand(std::vector<float> target)
+//     {
+//       if (grabbedObject == -1) {
+//         ROS_INFO("Cannot drop because robot is not holding an object.");
+//         failureReason = "invaliddrop";
+//         state = FAILURE;
+//         return;
+//       }
+
+//       float tableH = ((currentTable[3] + currentTable[0]*target[0] +
+//                        currentTable[1]*target[1]) / -currentTable[2]) + 0.02;
+
+//       if (target[2] == -1) target[2] = tableH;
+//       target[2] += grabbedObjSize[2] + 0.01;
+
+//       // Try the angle you picked it up at first
+//       tf2::Quaternion qtemp;
+//       qtemp.setRPY(0.0, preferredDropAngle, 0.0);
+//       tf2::Transform pRot = tf2::Transform(qtemp);
+//       tf2::Vector3 tV = tf2::Vector3(target[0], target[1], target[2]);
+//       tf2::Vector3 transIn = pRot*approachOffset;
+
+//       tf2::Vector3 in = tV-transIn;
+//       float a = -1;
+//       if (planToXYZAngleTarget(in.x(), in.y(), in.z(), preferredDropAngle, 0)) {
+//         a = preferredDropAngle;
+//       } else {
+//         a = planToGraspPosition(target[0], target[1], target[2]);
+//       }
+//       preferredDropAngle = -1;
+
+//       if (a == -1) {
+//         ROS_INFO("Arm not reaching because planning failed");
+//         failureReason = "planning";
+//         state = FAILURE;
+//         return;
+//       }
+
+//       armHomeState = false;
+//       if (!executeCurrentPlan()) {
+//         ROS_INFO("Arm returning home because execution failed");
+//         homeArm(true);
+//         failureReason = "execution";
+//         state = FAILURE;
+//         return;
+//       }
+
+//       ros::Duration(0.5).sleep();
+//       std::vector<geometry_msgs::Pose> waypoints;
+//       waypoints.push_back(group.getCurrentPose().pose);
+//       geometry_msgs::Pose gp = waypoints[0];
+
+//       tf2::Quaternion qtemp2;
+//       qtemp2.setRPY(0.0, a, 0.0);
+//       tf2::Transform rot = tf2::Transform(qtemp2);
+//       tf2::Vector3 ob = tf2::Vector3(gp.position.x,
+//                                    gp.position.y,
+//                                    gp.position.z);
+//       tf2::Vector3 trans = rot*dropMotion;
+//       tf2::Vector3 out = ob+trans;
+
+//       gp.position.x = out.x();
+//       gp.position.y = out.y();
+//       gp.position.z = out.z();
+
+//       std::vector<float> fPos = eeFrametoFingertip(gp);
+//       tableH += 0.02;
+//       if (fPos[2] < tableH) {
+//         gp.position.z += (tableH - fPos[2]);
+//       }
+
+//       waypoints.push_back(gp);
+//       geometry_msgs::Pose returnto = waypoints[0];
+
+//       group.setStartStateToCurrentState();
+//       moveit_msgs::RobotTrajectory inTraj;
+//       double frac = group.computeCartesianPath(waypoints,
+//                                                0.01, 0.0,
+//                                                inTraj,
+//                                                false);
+
+//       currentPlan = moveit::planning_interface::MoveGroup::Plan();
+//       currentPlan.trajectory_ = inTraj;
+
+//       if (frac < 0.8 || !executeCurrentPlan()) {
+//         ROS_INFO("Arm returning home because execution failed");
+//         homeArm(true);
+//         failureReason = "execution";
+//         state = FAILURE;
+//         return;
+//       }
+
+//       ros::Duration(0.5).sleep();
+//       openGripper();
+
+//       group.detachObject();
+
+//       moveit_msgs::CollisionObject droppedObj;
+//       droppedObj.header.frame_id = group.getPlanningFrame();
+
+//       std::stringstream ss;
+//       ss << grabbedObject;
+//       droppedObj.id = ss.str();
+
+//       std::vector<std::string> toRem;
+//       toRem.push_back(ss.str());
+//       scene.removeCollisionObjects(toRem);
+//       ros::Duration(1.0).sleep();
+
+//       geometry_msgs::Pose dropP;
+//       dropP.position.x = target[0];
+//       dropP.position.y = target[1];
+//       dropP.position.z = target[2] - 0.01 - grabbedObjSize[2]/2.0;
+//       dropP.orientation.w = 1.0;
+
+//       shape_msgs::SolidPrimitive primitive;
+//       primitive.type = primitive.BOX;
+//       primitive.dimensions.resize(3);
+//       primitive.dimensions[0] = grabbedObjSize[0]+0.01;
+//       primitive.dimensions[1] = grabbedObjSize[1]+0.01;
+//       primitive.dimensions[2] = grabbedObjSize[2]+0.01;
+
+//       droppedObj.primitives.push_back(primitive);
+//       droppedObj.primitive_poses.push_back(dropP);
+//       droppedObj.operation = droppedObj.ADD;
+
+//       std::vector<moveit_msgs::CollisionObject> toAdd;
+//       toAdd.push_back(droppedObj);
+//       scene.addCollisionObjects(toAdd);
+
+//       grabbedObject = -1;
+//       ros::Duration(0.5).sleep();
+
+//       std::vector<geometry_msgs::Pose> waypoints2;
+//       waypoints2.push_back(group.getCurrentPose().pose);
+//       waypoints2.push_back(returnto);
+
+//       group.setStartStateToCurrentState();
+//       moveit_msgs::RobotTrajectory outTraj;
+//       double frac2 = group.computeCartesianPath(waypoints2,
+//                                                 0.01, 0.0,
+//                                                 outTraj,
+//                                                 false);
+
+//       currentPlan = moveit::planning_interface::MoveGroup::Plan();
+//       currentPlan.trajectory_ = outTraj;
+
+//       if (frac2 < 0.8 || !executeCurrentPlan()) {
+//         ROS_INFO("Arm returning home because execution failed");
+//         homeArm(true);
+//         failureReason = "execution";
+//         state = FAILURE;
+//         return;
+//       }
+
+//       ros::Duration(0.5).sleep();
+
+//       closeGripper();
+//       homeArm(true);
+
+//       if (state == DROP) state = WAIT;
+//       ROS_INFO("Arm status is now WAIT");
+//     }
+
+//     std::vector<float> rotate2D(std::vector<float>& v, float angle) {
+//         std::vector<float> rotated;
+//         rotated.push_back(cos(angle)*v[0] - sin(angle)*v[1]);
+//         rotated.push_back(sin(angle)*v[0] + cos(angle)*v[1]);
+//         return rotated;
+//     }
+
+//     void handlePushCommand(int id, std::vector<float> pV)
+//     {
+//         boost::lock_guard<boost::mutex> guard(objMutex);
+//         if (objectSizes.find(id) == objectSizes.end() ||
+//             objectPoses.find(id) == objectSizes.end()) {
+//           ROS_INFO("Object ID %d is not being perceived", id);
+//           failureReason = "planning";
+//           state = FAILURE;
+//           return;
+//         }
+
+//         if (pV[2] == -1) {
+//           ROS_INFO("No push was found; not planning motion");
+//           failureReason = "nopush";
+//           state = FAILURE;
+//           return;
+//         }
+
+//         if (pV[0] == 0 && pV[1] == 0) {
+//           ROS_INFO("No need to push; not planning motion");
+//           failureReason = "";
+//           state = WAIT;
+//           return;
+//         }
+
+//         float objYaw = tf2::getYaw(objectRotations[id]);
+//         std::vector<float> chosenPush;
+
+//         // Plans the reach and in/out motions at once
+//         // Prefer X push
+//         plan_vector steps;
+//         if (pV[2] == X_AXIS || (pV[2] == 2 && fabs(pV[0]) <= fabs(pV[1]))) {
+//           // Try X axis push
+//           steps = planPush(id, pV[0], X_AXIS);
+//           if (!steps.empty()) {
+//             chosenPush.push_back(pV[0]);
+//             chosenPush.push_back(0.0);
+//           }
+//           // Try Y axis push if X failed and it's available
+//           else if (steps.empty() && pV[1] != 0) {
+//             steps = planPush(id, pV[1], Y_AXIS);
+//             if (!steps.empty()) {
+//               chosenPush.push_back(0.0);
+//               chosenPush.push_back(pV[1]);
+//             }
+//           }
+//         }
+//         // Prefer Y push
+//         if (pV[2] == Y_AXIS || (pV[2] == 2 && fabs(pV[1]) < fabs(pV[0]))) {
+//           // Try Y axis push
+//           steps = planPush(id, pV[1], Y_AXIS);
+//           if (!steps.empty()) {
+//             chosenPush.push_back(0.0);
+//             chosenPush.push_back(pV[1]);
+//           }
+//           // Try X axis push if Y failed and it's available
+//           else if (steps.empty() && pV[0] != 0) {
+//             steps = planPush(id, pV[0], X_AXIS);
+//             if (!steps.empty()) {
+//               chosenPush.push_back(pV[0]);
+//               chosenPush.push_back(0.0);
+//             }
+//           }
+//         }
+
+//         // Total failure
+//         if (steps.empty()) {
+//           ROS_INFO("Could not find ANY plan to push, arm state is now FAILURE");
+//           failureReason = "planning";
+//           state = FAILURE;
+//           return;
+//         }
+
+//         // Otherwise, execute the steps we found
+//         setGripperTo(0.02);
+//         armHomeState = false;
+//         int count = 0;
+//         for (plan_vector::iterator i = steps.begin(); i != steps.end(); i++) {
+//           ros::Duration(1.0).sleep();
+//           currentPlan = *i;
+//           if (count == 2) group.setMaxVelocityScalingFactor(0.05);
+
+//           if (!executeCurrentPlan()) {
+//             group.setMaxVelocityScalingFactor(0.4);
+//             ROS_INFO("Arm returning home because execution failed");
+//             homeArm(true);
+//             failureReason = "execution";
+//             state = FAILURE;
+//             ROS_INFO("Arm state is now FAILURE");
+//             return;
+//           }
+
+//           group.setMaxVelocityScalingFactor(0.4);
+//           count++;
+//         }
+
+//         // Remove block from collision map
+//         std::stringstream ss;
+//         ss << id;
+//         std::vector<std::string> pushed;
+//         pushed.push_back(ss.str());
+//         scene.removeCollisionObjects(pushed);
+//         ros::Duration(0.5).sleep();
+
+//         // Re-add block to collision map
+//         moveit_msgs::CollisionObject pushedObj;
+//         pushedObj.header.frame_id = group.getPlanningFrame();
+
+//         shape_msgs::SolidPrimitive primitive;
+//         primitive.type = primitive.BOX;
+//         primitive.dimensions.resize(3);
+//         primitive.dimensions[0] = objectSizes[id][0] + 0.01;
+//         primitive.dimensions[1] = objectSizes[id][1] + 0.01;
+//         primitive.dimensions[2] = objectSizes[id][2] + 0.01;
+
+//         std::vector<float> trans = rotate2D(chosenPush, objYaw);
+//         geometry_msgs::Pose pushP;
+//         pushP.position.x = objectPoses[id][0] + trans[0];
+//         pushP.position.y = objectPoses[id][1] + trans[1];
+//         pushP.position.z = objectPoses[id][2];
+//         pushP.orientation.w = objectRotations[id].w();
+//         pushP.orientation.x = objectRotations[id].x();
+//         pushP.orientation.y = objectRotations[id].y();
+//         pushP.orientation.z = objectRotations[id].z();
+
+//         pushedObj.primitives.push_back(primitive);
+//         pushedObj.primitive_poses.push_back(pushP);
+//         pushedObj.operation = pushedObj.ADD;
+
+//         std::vector<moveit_msgs::CollisionObject> toAdd;
+//         toAdd.push_back(pushedObj);
+//         scene.addCollisionObjects(toAdd);
+//         ros::Duration(0.5).sleep();
+
+//         homeArm(true);
+//         if (state == PUSH) state = WAIT;
+//         ROS_INFO("Arm status is now WAIT");
+//     }
+
+//   plan_vector planPush(int id, float dist, axis a)
+//   {
+//     float x = objectPoses[id][0];
+//     float y = objectPoses[id][1];
+//     float z = objectPoses[id][2] + objectSizes[id][2]/2.0 - 0.01;
+//     float yaw = tf2::getYaw(objectRotations[id]);
+
+//     plan_vector plans;
+
+//     if (tooFar(x, y, true)) {
+//       ROS_INFO("Not planning because robot probably cannot reach (%f, %f)", x, y);
+//       plans.clear();
+//       return plans;
+//     }
+
+//     // Plan to the offset point
+//     std::vector<float> offsetV;
+//     if (a == Y_AXIS) offsetV.push_back(0);
+//     if (dist < 0) {
+//       offsetV.push_back(objectSizes[id][1]/2.0 + pushOffset + 0.01);
+//     }
+//     else if (dist > 0) {
+//       offsetV.push_back(-(objectSizes[id][1]/2.0 + pushOffset + 0.01));
+//     }
+//     if (a == X_AXIS) offsetV.push_back(0);
+
+//     std::vector<float> rotatedOffset = rotate2D(offsetV, yaw);
+//     x += rotatedOffset[0];
+//     y += rotatedOffset[1];
+//     z += 0.04;
+
+//     float pushYaw = yaw;
+//     if (a == Y_AXIS) pushYaw += M_PI/2.0;
+//     while (pushYaw > M_PI) pushYaw -= M_PI;
+
+//     // Retry the planning process several times
+//     bool success = false;
+//     int tries = 0;
+//     float handAngleDenom = 2.0;
+
+//     while (!success && tries < numRetries) {
+//       tries++;
+//       float handPitch = M_PI/handAngleDenom;
+
+//       success = planToXYZAngleTarget(x, y, z, handPitch, pushYaw);
+//       if (success) {
+//         ROS_INFO("Plan for initial reach found");
+//         plans.push_back(currentPlan);
+//       }
+//       else {
+//         ROS_INFO("Could not find a plan to reach push position at pitch %f",
+//                  handPitch);
+//         plans.clear();
+//         if (dist > 0) handAngleDenom += 0.2;
+//         else handAngleDenom -= 0.2;
+//         continue;
+//       }
+
+//       // Setup motion to touch the side of the block
+//       std::vector<float> setupV;
+//       if (a == Y_AXIS) setupV.push_back(0);
+//       if (dist < 0) {
+//         setupV.push_back(-(pushOffset - 0.01));
+//       }
+//       else {
+//         setupV.push_back(pushOffset - 0.01);
+//       }
+//       if (a == X_AXIS) setupV.push_back(0);
+
+//       robot_state::RobotState setupStartState(*group.getCurrentState());
+//       setupStartState.setJointGroupPositions(group.getName(),
+//                                              currentPlan.trajectory_.joint_trajectory.points.back().positions);
+//       group.setStartState(setupStartState);
+
+//       std::vector<float> rotatedSetup = rotate2D(setupV, yaw);
+//       moveit_msgs::RobotTrajectory setupTraj;
+//       std::vector<geometry_msgs::Pose> setupWaypoints;
+//       setupWaypoints.push_back(xyzypTargetToPoseMsg(x, y, z, pushYaw, handPitch));
+
+//       geometry_msgs::Pose tp = setupWaypoints[0];
+//       tp.position.x += rotatedSetup[0];
+//       tp.position.y += rotatedSetup[1];
+//       tp.position.z -= 0.04;
+
+//       std::vector<float> fPos = eeFrametoFingertip(tp);
+//       float tableH = ((currentTable[3] + currentTable[0]*objectPoses[id][0] +
+//                        currentTable[1]*objectPoses[id][1]) / -currentTable[2]) + 0.04;
+//       if (fPos[2] < tableH) {
+//         tp.position.z += (tableH - fPos[2]);
+//       }
+//       setupWaypoints.push_back(tp);
+
+//       double sFrac = group.computeCartesianPath(setupWaypoints,
+//                                                 0.01, 0.0,
+//                                                 setupTraj,
+//                                                 false);
+
+//       if (sFrac > 0.9) {
+//         ROS_INFO("Plan for setup motion found");
+//         currentPlan = moveit::planning_interface::MoveGroup::Plan();
+//         currentPlan.trajectory_ = setupTraj;
+//         plans.push_back(currentPlan);
+//       }
+//       else {
+//         ROS_INFO("Could not find a plan for setup motion at pitch %f",
+//                  handPitch);
+//         success = false;
+//         plans.clear();
+//         if (dist > 0) handAngleDenom += 0.2;
+//         else handAngleDenom -= 0.2;
+//         continue;
+//       }
+
+//       // Actual pushing motion
+//       std::vector<float> pushV;
+//       if (a == Y_AXIS) pushV.push_back(0);
+//       pushV.push_back(dist);
+//       if (a == X_AXIS) pushV.push_back(0);
+
+//       robot_state::RobotState pushStartState(*group.getCurrentState());
+//       pushStartState.setJointGroupPositions(group.getName(),
+//                                             currentPlan.trajectory_.joint_trajectory.points.back().positions);
+//       group.setStartState(pushStartState);
+
+//       std::vector<float> rotatedPush = rotate2D(pushV, yaw);
+//       moveit_msgs::RobotTrajectory pushTraj;
+//       std::vector<geometry_msgs::Pose> pushWaypoints;
+//       pushWaypoints.push_back(setupWaypoints.back());
+
+//       geometry_msgs::Pose pp = pushWaypoints[0];
+//       geometry_msgs::Pose returnto = pushWaypoints[0];
+
+//       pp.position.x += rotatedPush[0];
+//       pp.position.y += rotatedPush[1];
+//       pushWaypoints.push_back(pp);
+
+//       double pFrac = group.computeCartesianPath(pushWaypoints,
+//                                                 0.01, 0.0,
+//                                                 pushTraj,
+//                                                 false);
+//       if (pFrac > 0.9) {
+//         ROS_INFO("Plan for push motion found");
+//         currentPlan = moveit::planning_interface::MoveGroup::Plan();
+//         currentPlan.trajectory_ = pushTraj;
+//         plans.push_back(currentPlan);
+//       }
+//       else {
+//         ROS_INFO("Could not find a plan for push motion at pitch %f",
+//                  handPitch);
+//         success = false;
+//         plans.clear();
+//         if (dist > 0) handAngleDenom += 0.2;
+//         else handAngleDenom -= 0.2;
+//         continue;
+//       }
+
+//       robot_state::RobotState outStartState(*group.getCurrentState());
+//       outStartState.setJointGroupPositions(group.getName(), currentPlan.trajectory_.joint_trajectory.points.back().positions);
+//       group.setStartState(outStartState);
+
+//       moveit_msgs::RobotTrajectory outTraj;
+//       std::vector<geometry_msgs::Pose> outWaypoints;
+//       outWaypoints.push_back(pushWaypoints.back());
+
+//       if (fabs(dist) < 0.05) {
+//         returnto.position.z += 0.04;
+//         outWaypoints.push_back(returnto);
+//       }
+//       else {
+//         geometry_msgs::Pose tp = outWaypoints[0];
+//         std::vector<float> out = rotatedPush;
+//         out[0] = 0.05 * (out[0] / dist);
+//         out[1] = 0.05 * (out[1] / dist);
+//         if (dist > 0) {
+//           tp.position.x -= out[0];
+//           tp.position.y -= out[1];
+//         } else {
+//           tp.position.x += out[0];
+//           tp.position.y += out[1];
+//         }
+//         tp.position.z += 0.04;
+//         outWaypoints.push_back(tp);
+//       }
+
+//       double oFrac = group.computeCartesianPath(outWaypoints,
+//                                                 0.01, 0.0,
+//                                                 outTraj,
+//                                                 false);
+
+//       if (pFrac > 0.9) {
+//         ROS_INFO("Plan for outward motion found");
+//         currentPlan = moveit::planning_interface::MoveGroup::Plan();
+//         currentPlan.trajectory_ = outTraj;
+//         plans.push_back(currentPlan);
+//       }
+//       else {
+//         ROS_INFO("Could not find a plan for outward motion at pitch %f",
+//                  handPitch);
+//         success = false;
+//         plans.clear();
+//         if (dist > 0) handAngleDenom += 0.2;
+//         else handAngleDenom -= 0.2;
+//         continue;
+//       }
+//     }
+//     return plans;
+//   }
+
+//     tf2::Quaternion yawPitchToQuat(float yaw, float pitch)
+//     {
+//       std::vector<float> res;
+
+//       tf2::Quaternion qtemp1;
+//       qtemp1.setRPY(0.0, 0.0, yaw);
+//       tf2::Quaternion qtemp2;
+//       qtemp2.setRPY(0.0, pitch, 0.0);
+
+//       tf2::Transform first = tf2::Transform(qtemp1);
+//       tf2::Transform second = tf2::Transform(qtemp2);
+
+//       tf2::Transform t = first*second;
+
+//       return t.getRotation();
+//     }
+
+//     void handlePointCommand(int id)
+//     {
+//         boost::lock_guard<boost::mutex> guard(objMutex);
+//         if (objectSizes.find(id) == objectSizes.end()||
+//             objectPoses.find(id) == objectSizes.end()) {
+//           ROS_INFO("Object ID %d is not being perceived", id);
+//           return;
+//         }
+
+//         float a = planToGraspPosition(objectPoses[id][0],
+//                                       objectPoses[id][1],
+//                                       objectPoses[id][2] + objectSizes[id][2]/2.0);
+
+//         if (a == -1) {
+//           ROS_INFO("Arm not pointing because planning failed");
+//           failureReason = "planning";
+//           state = FAILURE;
+//           return;
+//         }
+
+//         armHomeState = false;
+//         if (!executeCurrentPlan()) {
+//           ROS_INFO("Arm returning home because execution failed");
+//           homeArm(true);
+//           failureReason = "execution";
+//           state = FAILURE;
+//           return;
+//         }
+
+//         ros::Duration(1.0).sleep();
+//         homeArm(true);
+//         if (state == POINT) state = WAIT;
+//         ROS_INFO("Arm status is now WAIT");
+//     }
+
+
+//   float planToGraspPosition(float objx, float objy, float objz) {
+//     return planToGraspPosition(objx, objy, objz, 0.0);
+//   }
+
+//   float planToGraspPosition(float objx, float objy, float objz, float yaw)
+//   {
+//     //ROS_INFO("Planning to a grasp yaw of: %f", yaw);
+//     float foundAngle = -1;
+//     int tries = 0;
+
+//     while (tries < numRetries) {
+//       for (std::vector<float>::iterator i = approachAngles.begin();
+//            i != approachAngles.end(); i++) {
+//         tf2::Transform rot = tf2::Transform(yawPitchToQuat(yaw, *i));
+//         tf2::Vector3 ob = tf2::Vector3(objx, objy, objz);
+//         tf2::Vector3 trans = rot*approachOffset;
+
+//         tf2::Vector3 out = ob-trans;
+//         if (planToXYZAngleTarget(out.x(), out.y(), out.z(), *i, yaw)) {
+//           foundAngle = *i;
+//           break;
+//         }
+//       }
+
+//       if (foundAngle != -1) break;
+//       tries++;
+//     }
+
+//     return foundAngle;
+//   }
+  
+  void publishStatus(const ros::TimerEvent& e)
+  {
+    rosie_msgs::RobotAction msg = rosie_msgs::RobotAction();
+    msg.utime = ros::Time::now().toNSec();
+    msg.action = asToString(state).c_str();
+    msg.armHome = armHomeState;
+    msg.failure_reason = failureReason;
+    msg.obj_id = grabbedObject;
+    statusPublisher.publish(msg);
+    goalPublisher.publish(graspGoal);
+
+    try {
+      camXform = tfBuf.lookupTransform("base_link", "head_camera_rgb_optical_frame",
+                                       ros::Time(0));
+    } catch (tf2::TransformException &ex) {
+      ROS_WARN("%s",ex.what());
+    }
+    camXPublisher.publish(camXform);
+  }
+
+//     void setUpScene()
+//     {
+//       std::vector<std::string> known = scene.getKnownObjectNames();
+//       scene.removeCollisionObjects(known);
+//       //ROS_INFO("Removing known collision objects");
+//       ros::Duration(1).sleep();
+
+//       boost::lock_guard<boost::mutex> guard(objMutex);
+//       std::vector<moveit_msgs::CollisionObject> coList;
+//       for (std::map<int, std::vector<float> >::iterator i = objectPoses.begin();
+//            i != objectPoses.end(); i++) {
+//           moveit_msgs::CollisionObject co;
+//           co.header.frame_id = group.getPlanningFrame();
+
+//           int objID = i->first;
+//           std::stringstream ss;
+//           ss << objID;
+//           co.id = ss.str();
+//           //ROS_INFO("Adding object %s", co.id.c_str());
+
+//           geometry_msgs::Pose box_pose;
+//           box_pose.position.x = i->second[0];
+//           box_pose.position.y = i->second[1];
+//           box_pose.position.z = i->second[2];
+
+//           geometry_msgs::Quaternion q = tf2::toMsg(objectRotations[objID]);
+//           box_pose.orientation = q;
+
+//           shape_msgs::SolidPrimitive primitive;
+//           primitive.type = primitive.BOX;
+//           primitive.dimensions.resize(3);
+//           primitive.dimensions[0] = objectSizes[objID][0]+0.02;
+//           primitive.dimensions[1] = objectSizes[objID][1]+0.02;
+//           primitive.dimensions[2] = objectSizes[objID][2]+0.02;
+
+//           co.primitives.push_back(primitive);
+//           co.primitive_poses.push_back(box_pose);
+//           co.operation = co.ADD;
+//           coList.push_back(co);
+//       }
+//       moveit_msgs::CollisionObject planeobj;
+//       planeobj.header.frame_id = group.getPlanningFrame();
+//       planeobj.id = "table";
+
+//       geometry_msgs::Pose planep;
+//       planep.position.x = 0.8;
+//       planep.position.y = 0.0;
+//       planep.position.z = ((currentTable[3] + currentTable[0]*0.8 +
+//                             currentTable[1]*0.0) / -currentTable[2]);
+//       planep.orientation.w = 1.0;
+
+//       shape_msgs::SolidPrimitive primitive;
+//       primitive.type = primitive.BOX;
+//       primitive.dimensions.resize(3);
+//       primitive.dimensions[0] = 1;
+//       primitive.dimensions[1] = 1;
+//       primitive.dimensions[2] = 0.02;
+
+//       planeobj.primitives.push_back(primitive);
+//       planeobj.primitive_poses.push_back(planep);
+//       planeobj.operation = planeobj.ADD;
+//       coList.push_back(planeobj);
+
+//       scene.addCollisionObjects(coList);
+//       ros::Duration(2).sleep();
+//     }
+
+//     // Ignores all objects for a last-ditch effort to get home even
+//     // if arm hits something
+//     void setUpEmptyScene() {
+//       std::vector<std::string> known = scene.getKnownObjectNames();
+//       scene.removeCollisionObjects(known);
+//       //ROS_INFO("Removing known collision objects");
+//       ros::Duration(1).sleep();
+
+//       std::vector<moveit_msgs::CollisionObject> coList;
+
+//       // JUST add the table
+//       moveit_msgs::CollisionObject planeobj;
+//       planeobj.header.frame_id = group.getPlanningFrame();
+//       planeobj.id = "table";
+
+//       geometry_msgs::Pose planep;
+//       planep.position.x = 0.8;
+//       planep.position.y = 0.0;
+//       planep.position.z = ((currentTable[3] + currentTable[0]*0.8 +
+//                             currentTable[1]*0.0) / -currentTable[2]);
+//       planep.orientation.w = 1.0;
+
+//       shape_msgs::SolidPrimitive primitive;
+//       primitive.type = primitive.BOX;
+//       primitive.dimensions.resize(3);
+//       primitive.dimensions[0] = 1;
+//       primitive.dimensions[1] = 1;
+//       primitive.dimensions[2] = 0.02;
+
+//       planeobj.primitives.push_back(primitive);
+//       planeobj.primitive_poses.push_back(planep);
+//       planeobj.operation = planeobj.ADD;
+//       coList.push_back(planeobj);
+
+//       scene.addCollisionObjects(coList);
+//       ros::Duration(1).sleep();
+//     }
+
+//   bool safetyCheck()
+//   {
+//     if (!checkPlans) return true;
+//     std::string input;
+//     std::cout << "Is this motion plan okay? ";
+//     std::cin >> input;
+
+//     if (input.find("y")!=std::string::npos)
+//       {
+//         ROS_INFO("Plan accepted; starting execution");
+//         return true;
+//       }
+
+//     if (input.find("n")!=std::string::npos)
+//       {
+//         ROS_INFO("Plan rejected; cancelling execution");
+//         return false;
+//       }
+
+//     ROS_INFO("Confusing input to safety check; cancelling execution");
+//     return false;
+//   }
+
+//     void homeArm(bool forceHome = false)
+//     {
+//         ros::Duration(0.5).sleep();
+
+//         std::vector<double> joints = std::vector<double>();
+//         joints.push_back(1.32);
+//         joints.push_back(0.7);
+//         joints.push_back(0.0);
+//         joints.push_back(-2.0);
+//         joints.push_back(0.0);
+//         joints.push_back(-0.57);
+//         joints.push_back(0.0);
+//         group.setJointValueTarget(joints);
+
+//         moveit::planning_interface::MoveGroup::Plan homePlan;
+
+//         int tries = 0;
+//         std::string failure = "";
+//         moveit::planning_interface::MoveItErrorCode success;
+//         while(!success && tries < numRetries) {
+//           tries++;
+//           group.setStartStateToCurrentState();
+
+//           group.setPlannerId("LBKPIECEkConfigDefault");
+//           success = group.plan(homePlan);
+
+//           if (!success) {
+//             group.setPlannerId("RRTConnectkConfigDefault");
+//             success = group.plan(homePlan);
+//           }
+
+//           if (!success) {
+//             failure = "planning";
+//             continue;
+//           }
+
+//           if (!safetyCheck()) {
+//             failureReason = "safety";
+//             state = FAILURE;
+//             return;
+//           }
+
+//           moveit::planning_interface::MoveItErrorCode moveSuccess = group.execute(homePlan);
+//           success = moveSuccess;
+//           if (!moveSuccess) {
+//             failure = "execution";
+//           }
+//         }
+
+//         if (!success && forceHome) {
+//           ROS_INFO("Homing arm failed with blocks in the way, attempting to force home");
+//           setUpEmptyScene();
+
+//           int forceCount = 0;
+//           while (!success && forceCount < 10) {
+//             group.setStartStateToCurrentState();
+//             success = group.plan(homePlan);
+//             if (!success) {
+//               failure = "planning";
+//             }
+
+//             if (!safetyCheck()) {
+//               failureReason = "safety";
+//               state = FAILURE;
+//               return;
+//             }
+
+//             moveit::planning_interface::MoveItErrorCode fhSuccess = group.execute(homePlan);
+//             success = fhSuccess;
+//             if (!fhSuccess) {
+//               failure = "execution";
+//             }
+//             forceCount++;
+//           }
+//         }
+
+//         if (!success) {
+//           ROS_INFO("Homing arm failed.");
+//           return;
+//         }
+
+//         // This should ONLY get set back to true HERE after success
+//         armHomeState = true;
+//     }
 
   void closeGripper()
   {
@@ -1292,231 +1294,231 @@ public:
     gripper.waitForResult(ros::Duration(2.0));
   }
 
-  // Estimate whether the gripper can reach a position on the tabletop
-  bool tooFar(float x, float y, bool gripperDown)
-  {
-    if (gripperDown)
-      return (sqrt(pow(x, 2) + pow(y, 2)) > 0.82);
-    else
-      return (sqrt(pow(x, 2) + pow(y, 2)) > 0.95);
-  }
+//   // Estimate whether the gripper can reach a position on the tabletop
+//   bool tooFar(float x, float y, bool gripperDown)
+//   {
+//     if (gripperDown)
+//       return (sqrt(pow(x, 2) + pow(y, 2)) > 0.82);
+//     else
+//       return (sqrt(pow(x, 2) + pow(y, 2)) > 0.95);
+//   }
 
-  bool tooFar(std::vector<float> loc, bool gripperDown)
-  {
-    return tooFar(loc[0], loc[1], gripperDown);
-  }
+//   bool tooFar(std::vector<float> loc, bool gripperDown)
+//   {
+//     return tooFar(loc[0], loc[1], gripperDown);
+//   }
 
-  geometry_msgs::Pose xyzypTargetToPoseMsg(float x, float y, float z,
-                                           float yaw, float pitch)
-  {
-    tf2::Quaternion q = yawPitchToQuat(yaw, pitch);
-    geometry_msgs::Pose p = geometry_msgs::Pose();
-    p.orientation = tf2::toMsg(q);
+//   geometry_msgs::Pose xyzypTargetToPoseMsg(float x, float y, float z,
+//                                            float yaw, float pitch)
+//   {
+//     tf2::Quaternion q = yawPitchToQuat(yaw, pitch);
+//     geometry_msgs::Pose p = geometry_msgs::Pose();
+//     p.orientation = tf2::toMsg(q);
 
-    std::vector<float> eeTarg = fingertipToEEFrame(x, y, z, q);
+//     std::vector<float> eeTarg = fingertipToEEFrame(x, y, z, q);
 
-    p.position.x = eeTarg[0];
-    p.position.y = eeTarg[1];
-    p.position.z = eeTarg[2];
+//     p.position.x = eeTarg[0];
+//     p.position.y = eeTarg[1];
+//     p.position.z = eeTarg[2];
 
-    return p;
-  }
+//     return p;
+//   }
 
 
-  bool planToXYZQuaternionTarget(float x, float y, float z, tf2::Quaternion q)
-  {
-    group.setStartStateToCurrentState();
-    geometry_msgs::Pose target = geometry_msgs::Pose();
-    target.orientation = tf2::toMsg(q);
+//   bool planToXYZQuaternionTarget(float x, float y, float z, tf2::Quaternion q)
+//   {
+//     group.setStartStateToCurrentState();
+//     geometry_msgs::Pose target = geometry_msgs::Pose();
+//     target.orientation = tf2::toMsg(q);
 
-    std::vector<float> targ = fingertipToEEFrame(x, y, z, q);
-    target.position.x = targ[0];
-    target.position.y = targ[1];
-    target.position.z = targ[2];
+//     std::vector<float> targ = fingertipToEEFrame(x, y, z, q);
+//     target.position.x = targ[0];
+//     target.position.y = targ[1];
+//     target.position.z = targ[2];
 
-    geometry_msgs::Pose fingerTarget = geometry_msgs::Pose();
-    fingerTarget.orientation = tf2::toMsg(q);
-    fingerTarget.position.x = x;
-    fingerTarget.position.y = y;
-    fingerTarget.position.z = z;
+//     geometry_msgs::Pose fingerTarget = geometry_msgs::Pose();
+//     fingerTarget.orientation = tf2::toMsg(q);
+//     fingerTarget.position.x = x;
+//     fingerTarget.position.y = y;
+//     fingerTarget.position.z = z;
 
-    graspGoal.pose = fingerTarget;
-    graspGoal.header.frame_id = group.getPlanningFrame();
-    ros::Duration(1.0).sleep();
+//     graspGoal.pose = fingerTarget;
+//     graspGoal.header.frame_id = group.getPlanningFrame();
+//     ros::Duration(1.0).sleep();
 
-    group.setPoseTarget(target);
-    moveit::planning_interface::MoveGroup::Plan xyzPlan;
+//     group.setPoseTarget(target);
+//     moveit::planning_interface::MoveGroup::Plan xyzPlan;
 
-    // First try what we've been using
-    group.setPlannerId("LBKPIECEkConfigDefault");
-    moveit::planning_interface::MoveItErrorCode success = group.plan(xyzPlan);
-    // To stop it thinking it's successful if postprocessing is the problem
-    if (xyzPlan.trajectory_.joint_trajectory.points.empty() &&
-        xyzPlan.trajectory_.multi_dof_joint_trajectory.points.empty()) {
-      success = false;
-    }
+//     // First try what we've been using
+//     group.setPlannerId("LBKPIECEkConfigDefault");
+//     moveit::planning_interface::MoveItErrorCode success = group.plan(xyzPlan);
+//     // To stop it thinking it's successful if postprocessing is the problem
+//     if (xyzPlan.trajectory_.joint_trajectory.points.empty() &&
+//         xyzPlan.trajectory_.multi_dof_joint_trajectory.points.empty()) {
+//       success = false;
+//     }
 
-    // Then try RRT-Connect just in case it does any better if prev failed
-    if (!success) {
-      group.setPlannerId("RRTConnectkConfigDefault");
-      success = group.plan(xyzPlan);
-      // To stop it thinking it's successful if postprocessing is the problem
-      if (xyzPlan.trajectory_.joint_trajectory.points.empty() &&
-          xyzPlan.trajectory_.multi_dof_joint_trajectory.points.empty()) {
-        success = false;
-      }
-    }
+//     // Then try RRT-Connect just in case it does any better if prev failed
+//     if (!success) {
+//       group.setPlannerId("RRTConnectkConfigDefault");
+//       success = group.plan(xyzPlan);
+//       // To stop it thinking it's successful if postprocessing is the problem
+//       if (xyzPlan.trajectory_.joint_trajectory.points.empty() &&
+//           xyzPlan.trajectory_.multi_dof_joint_trajectory.points.empty()) {
+//         success = false;
+//       }
+//     }
 
-    if (!success) {
-      currentPlan = moveit::planning_interface::MoveGroup::Plan();
-      return false;
-    }
+//     if (!success) {
+//       currentPlan = moveit::planning_interface::MoveGroup::Plan();
+//       return false;
+//     }
 
-    currentPlan = xyzPlan;
-    return true;
-  }
+//     currentPlan = xyzPlan;
+//     return true;
+//   }
 
-    bool planToXYZAngleTarget(float x, float y, float z, float pitch, float yaw)
-    {
-      tf2::Quaternion q = yawPitchToQuat(yaw, pitch);
-      return planToXYZQuaternionTarget(x, y, z, q);
-    }
+//     bool planToXYZAngleTarget(float x, float y, float z, float pitch, float yaw)
+//     {
+//       tf2::Quaternion q = yawPitchToQuat(yaw, pitch);
+//       return planToXYZQuaternionTarget(x, y, z, q);
+//     }
 
-    bool executeCurrentPlan()
-    {
-        if (!safetyCheck()) {
-          return false;
-        }
+//     bool executeCurrentPlan()
+//     {
+//         if (!safetyCheck()) {
+//           return false;
+//         }
 
-        moveit::planning_interface::MoveItErrorCode moveSuccess = group.execute(currentPlan);
-        if (!moveSuccess) {
-          ROS_INFO("Execution failed with error code %d", moveSuccess.val);
-          return false;
-        }
+//         moveit::planning_interface::MoveItErrorCode moveSuccess = group.execute(currentPlan);
+//         if (!moveSuccess) {
+//           ROS_INFO("Execution failed with error code %d", moveSuccess.val);
+//           return false;
+//         }
 
-        return true;
-    }
+//         return true;
+//     }
 
-  std::vector<float> eeFrametoFingertip(geometry_msgs::Pose p)
-  {
-    tf2::Transform rotationX;
-    tf2::fromMsg(p, rotationX);
-    rotationX.setOrigin(tf2::Vector3(0, 0, 0));
+//   std::vector<float> eeFrametoFingertip(geometry_msgs::Pose p)
+//   {
+//     tf2::Transform rotationX;
+//     tf2::fromMsg(p, rotationX);
+//     rotationX.setOrigin(tf2::Vector3(0, 0, 0));
 
-    tf2::Vector3 trans = rotationX*tf2::Vector3(-fingerToWrist[0],
-                                              -fingerToWrist[1],
-                                              -fingerToWrist[2]);
+//     tf2::Vector3 trans = rotationX*tf2::Vector3(-fingerToWrist[0],
+//                                               -fingerToWrist[1],
+//                                               -fingerToWrist[2]);
 
-    std::vector<float> res;
-    res.push_back(p.position.x + trans.x());
-    res.push_back(p.position.y + trans.y());
-    res.push_back(p.position.z + trans.z());
+//     std::vector<float> res;
+//     res.push_back(p.position.x + trans.x());
+//     res.push_back(p.position.y + trans.y());
+//     res.push_back(p.position.z + trans.z());
 
-    return res;
-  }
+//     return res;
+//   }
 
-  std::vector<float> fingertipToEEFrame(float fx, float fy, float fz,
-                                        float hr, float hp, float hy)
-  {
-    std::vector<float> finger;
-    finger.push_back(fx);
-    finger.push_back(fy);
-    finger.push_back(fz);
+//   std::vector<float> fingertipToEEFrame(float fx, float fy, float fz,
+//                                         float hr, float hp, float hy)
+//   {
+//     std::vector<float> finger;
+//     finger.push_back(fx);
+//     finger.push_back(fy);
+//     finger.push_back(fz);
 
-    std::vector<float> ang;
-    ang.push_back(hr);
-    ang.push_back(hp);
-    ang.push_back(hy);
+//     std::vector<float> ang;
+//     ang.push_back(hr);
+//     ang.push_back(hp);
+//     ang.push_back(hy);
 
-    return fingertipToEEFrame(finger, ang);
-  }
+//     return fingertipToEEFrame(finger, ang);
+//   }
 
-  std::vector<float> fingertipToEEFrame(float fx, float fy, float fz,
-                                        tf2::Quaternion q)
-  {
-    std::vector<float> finger;
-    finger.push_back(fx);
-    finger.push_back(fy);
-    finger.push_back(fz);
+//   std::vector<float> fingertipToEEFrame(float fx, float fy, float fz,
+//                                         tf2::Quaternion q)
+//   {
+//     std::vector<float> finger;
+//     finger.push_back(fx);
+//     finger.push_back(fy);
+//     finger.push_back(fz);
 
-    return fingertipToEEFrame(finger, q);
-  }
+//     return fingertipToEEFrame(finger, q);
+//   }
 
-  std::vector<float> fingertipToEEFrame(std::vector<float> fingertip,
-                                        tf2::Quaternion q)
-  {
-    tf2::Transform rot = tf2::Transform(q);
-    tf2::Vector3 ft = tf2::Vector3(fingertip[0],
-                                 fingertip[1],
-                                 fingertip[2]);
-    tf2::Vector3 trans = rot*tf2::Vector3(fingerToWrist[0],
-                                        fingerToWrist[1],
-                                        fingerToWrist[2]);
+//   std::vector<float> fingertipToEEFrame(std::vector<float> fingertip,
+//                                         tf2::Quaternion q)
+//   {
+//     tf2::Transform rot = tf2::Transform(q);
+//     tf2::Vector3 ft = tf2::Vector3(fingertip[0],
+//                                  fingertip[1],
+//                                  fingertip[2]);
+//     tf2::Vector3 trans = rot*tf2::Vector3(fingerToWrist[0],
+//                                         fingerToWrist[1],
+//                                         fingerToWrist[2]);
 
-    tf2::Vector3 out = ft+trans;
+//     tf2::Vector3 out = ft+trans;
 
-    std::vector<float> res;
-    res.push_back(out.x());
-    res.push_back(out.y());
-    res.push_back(out.z());
+//     std::vector<float> res;
+//     res.push_back(out.x());
+//     res.push_back(out.y());
+//     res.push_back(out.z());
 
-    return res;
-  }
+//     return res;
+//   }
 
-  std::vector<float> fingertipToEEFrame(std::vector<float> fingertip,
-                                        std::vector<float> handRPY)
-  {
-    tf2::Quaternion q;
-    q.setRPY(handRPY[0], handRPY[1], handRPY[2]);
-    return fingertipToEEFrame(fingertip, q);
-  }
+//   std::vector<float> fingertipToEEFrame(std::vector<float> fingertip,
+//                                         std::vector<float> handRPY)
+//   {
+//     tf2::Quaternion q;
+//     q.setRPY(handRPY[0], handRPY[1], handRPY[2]);
+//     return fingertipToEEFrame(fingertip, q);
+//   }
 
 private:
-    ros::NodeHandle n;
-    ros::Subscriber obsSubscriber;
-    ros::Subscriber commSubscriber;
-    ros::Subscriber jointsSubscriber;
+  ros::NodeHandle n;
+  ros::Subscriber obsSubscriber;
+  ros::Subscriber commSubscriber;
+  ros::Subscriber jointsSubscriber;
 
-    tf2_ros::Buffer tfBuf;
-    tf2_ros::TransformListener tfListener;
+  tf2_ros::Buffer tfBuf;
+  tf2_ros::TransformListener tfListener;
 
-    ros::Publisher statusPublisher;
-    ros::Publisher goalPublisher;
-    ros::Publisher camXPublisher;
-    geometry_msgs::PoseStamped graspGoal;
-    geometry_msgs::TransformStamped camXform;
-    actionlib::SimpleActionClient<control_msgs::GripperCommandAction> gripper;
-    ros::Timer pubTimer;
+  ros::Publisher statusPublisher;
+  ros::Publisher goalPublisher;
+  ros::Publisher camXPublisher;
+  geometry_msgs::PoseStamped graspGoal;
+  geometry_msgs::TransformStamped camXform;
+  actionlib::SimpleActionClient<control_msgs::GripperCommandAction> gripper;
+  ros::Timer pubTimer;
 
-    ActionState state;
-    bool armHomeState;
-    moveit::planning_interface::MoveGroup::Plan currentPlan;
-    std::string failureReason;
-    int numRetries;
-    long lastCommandTime;
-    int grabbedObject;
-    std::vector<float> grabbedObjSize;
-    bool gripperClosed;
-    bool checkPlans;
-    bool isSimRobot;
-    tf2::Vector3 fingerToWrist;
+  ActionState state;
+  bool armHomeState;
+//     moveit::planning_interface::MoveGroup::Plan currentPlan;
+  std::string failureReason;
+  int numRetries;
+  long lastCommandTime;
+  int grabbedObject;
+  std::vector<float> grabbedObjSize;
+  bool gripperClosed;
+  bool checkPlans;
+  bool isSimRobot;
+  tf2::Vector3 fingerToWrist;
 
-    // Grasp position variations
-    std::vector<float> approachAngles;
-    float preferredDropAngle;
-    tf2::Vector3 approachOffset;
-    tf2::Vector3 grabMotion;
-    tf2::Vector3 dropMotion;
-    float pushOffset;
+  // Grasp position variations
+  std::vector<float> approachAngles;
+  float preferredDropAngle;
+  tf2::Vector3 approachOffset;
+  tf2::Vector3 grabMotion;
+  tf2::Vector3 dropMotion;
+  float pushOffset;
 
-    moveit::planning_interface::MoveGroup group;
-    moveit::planning_interface::PlanningSceneInterface scene;
+  moveit::planning_interface::MoveGroupInterface group;
+  moveit::planning_interface::PlanningSceneInterface scene;
 
-    std::map<int, std::vector<float> > objectPoses;
-    std::map<int, tf2::Quaternion> objectRotations;
-    std::map<int, std::vector<float> > objectSizes;
-    std::vector<float> currentTable;
-    boost::mutex objMutex;
+  std::map<int, std::vector<float> > objectPoses;
+  std::map<int, tf2::Quaternion> objectRotations;
+  std::map<int, std::vector<float> > objectSizes;
+  std::vector<float> currentTable;
+  boost::mutex objMutex;
 };
 
 int main(int argc, char** argv)
