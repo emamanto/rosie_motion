@@ -23,8 +23,7 @@
 #include "moveit_msgs/CollisionObject.h"
 #include "rosie_msgs/RobotCommand.h"
 #include "rosie_msgs/RobotAction.h"
-#include "rosie_msgs/Observations.h"
-#include "rosie_msgs/ObjectData.h"
+#include "gazebo_msgs/ModelStates.h"
 #include "control_msgs/GripperCommandAction.h"
 #include "control_msgs/GripperCommandGoal.h"
 
@@ -103,7 +102,7 @@ public:
 
         group.setMaxVelocityScalingFactor(0.4);
 
-        obsSubscriber = n.subscribe("rosie_observations", 10,
+        obsSubscriber = n.subscribe("gazebo/model_states", 10,
                                     &MotionServer::obsCallback, this);
         commSubscriber = n.subscribe("rosie_arm_commands", 10,
                                      &MotionServer::commandCallback, this);
@@ -134,7 +133,7 @@ public:
         ROS_INFO("RosieMotionServer READY!");
   };
 
-  void obsCallback(const rosie_msgs::Observations::ConstPtr& msg)
+  void obsCallback(const gazebo_msgs::ModelStates::ConstPtr& msg)
   {
     boost::lock_guard<boost::mutex> guard(objMutex);
 
@@ -142,25 +141,24 @@ public:
     objectSizes.clear();
     objectRotations.clear();
 
-    currentTable = msg->table;
+    //currentTable = msg->table;
 
-    for (std::vector<rosie_msgs::ObjectData>::const_iterator i = msg->observations.begin();
-         i != msg->observations.end(); i++) {
-      std::vector<float> pos = std::vector<float>();
-      pos.push_back(i->bbox_xyzrpy.translation.x);
-      pos.push_back(i->bbox_xyzrpy.translation.y);
-      pos.push_back(i->bbox_xyzrpy.translation.z);
-      objectPoses.insert(std::pair<int, std::vector<float> >(i->obj_id, pos));
+    for (int i = 0; i < msg->name.size(); i++) {
+      // std::vector<float> pos = std::vector<float>();
+      // pos.push_back(i->bbox_xyzrpy.translation.x);
+      // pos.push_back(i->bbox_xyzrpy.translation.y);
+      // pos.push_back(i->bbox_xyzrpy.translation.z);
+      // objectPoses.insert(std::pair<int, std::vector<float> >(i->obj_id, pos));
 
-      tf2::Quaternion quat;
-      tf2::fromMsg(i->bbox_xyzrpy.rotation, quat);
-      objectRotations.insert(std::pair<int, tf2::Quaternion>(i->obj_id, quat));
+      // tf2::Quaternion quat;
+      // tf2::fromMsg(i->bbox_xyzrpy.rotation, quat);
+      // objectRotations.insert(std::pair<int, tf2::Quaternion>(i->obj_id, quat));
 
-      std::vector<float> dim = std::vector<float>();
-      dim.push_back(i->bbox_dim.x);
-      dim.push_back(i->bbox_dim.y);
-      dim.push_back(i->bbox_dim.z);
-      objectSizes.insert(std::pair<int, std::vector<float> >(i->obj_id, dim));
+      // std::vector<float> dim = std::vector<float>();
+      // dim.push_back(i->bbox_dim.x);
+      // dim.push_back(i->bbox_dim.y);
+      // dim.push_back(i->bbox_dim.z);
+      // objectSizes.insert(std::pair<int, std::vector<float> >(i->obj_id, dim));
     }
   }
 
