@@ -68,7 +68,7 @@ public:
                                        failureReason("none"),
                                        numRetries(3),
                                        lastCommandTime(0),
-                                       grabbedObject(-1),
+                                       grabbedObject("none"),
                                        checkPlans(humanCheck),
                                        gripperClosed(false),
                                        fingerToWrist(-0.16645, 0, 0),
@@ -141,24 +141,26 @@ public:
     objectSizes.clear();
     objectRotations.clear();
 
-    //currentTable = msg->table;
-
     for (int i = 0; i < msg->name.size(); i++) {
-      // std::vector<float> pos = std::vector<float>();
-      // pos.push_back(i->bbox_xyzrpy.translation.x);
-      // pos.push_back(i->bbox_xyzrpy.translation.y);
-      // pos.push_back(i->bbox_xyzrpy.translation.z);
-      // objectPoses.insert(std::pair<int, std::vector<float> >(i->obj_id, pos));
+      geometry_msgs::Pose p = msg->pose[i];
+      std::vector<float> pos = std::vector<float>();
+      pos.push_back(p.position.x);
+      pos.push_back(p.position.y);
+      pos.push_back(p.position.z);
+      objectPoses.insert(std::pair<std::string, std::vector<float> >(msg->name[i],
+                                                                     pos));
 
-      // tf2::Quaternion quat;
-      // tf2::fromMsg(i->bbox_xyzrpy.rotation, quat);
-      // objectRotations.insert(std::pair<int, tf2::Quaternion>(i->obj_id, quat));
+      tf2::Quaternion quat;
+      tf2::fromMsg(p.orientation, quat);
+      objectRotations.insert(std::pair<std::string, tf2::Quaternion>(msg->name[i],
+                                                                     quat));
 
-      // std::vector<float> dim = std::vector<float>();
-      // dim.push_back(i->bbox_dim.x);
-      // dim.push_back(i->bbox_dim.y);
-      // dim.push_back(i->bbox_dim.z);
-      // objectSizes.insert(std::pair<int, std::vector<float> >(i->obj_id, dim));
+      std::vector<float> dim = std::vector<float>();
+      dim.push_back(0.2);
+      dim.push_back(0.2);
+      dim.push_back(0.2);
+      objectSizes.insert(std::pair<std::string, std::vector<float> >(msg->name[i],
+                                                                     dim));
     }
   }
 
@@ -189,6 +191,7 @@ public:
     if (msg->action.find("GRAB")!=std::string::npos)
       {
         state = GRAB;
+        // Figure out what this will look like
         std::string num = msg->action.substr(msg->action.find("=")+1);
         ROS_INFO("Handling pickup command for object %s", num.c_str());
 
@@ -200,7 +203,7 @@ public:
         }
 
         setUpScene();
-        handleGrabCommand(idNum);
+        handleGrabCommand(num);
       }
     else if (msg->action.find("DROP")!=std::string::npos){
       ROS_INFO("Handling putdown command");
@@ -217,6 +220,7 @@ public:
       std::string num = msg->action.substr(msg->action.find("=")+1);
       ROS_INFO("Handling push command for object %s", num.c_str());
 
+      // Same as grasping; need to change
       int idNum;
       std::stringstream ss(num);
       if (!(ss >> idNum)) {
@@ -230,13 +234,14 @@ public:
       t.push_back(msg->dest.translation.z);
 
       setUpScene();
-      handlePushCommand(idNum, t);
+      handlePushCommand(num, t);
     }
     else if (msg->action.find("POINT")!=std::string::npos){
       state = POINT;
       std::string num = msg->action.substr(msg->action.find("=")+1);
       ROS_INFO("Handling point command for object %s", num.c_str());
 
+      // Same; need to fix
       int idNum;
       std::stringstream ss(num);
       if (!(ss >> idNum)) {
@@ -244,7 +249,7 @@ public:
         return;
       }
       setUpScene();
-      handlePointCommand(idNum);
+      handlePointCommand(num);
     }
     else if (msg->action.find("HOME")!=std::string::npos){
       ROS_INFO("Handling home command");
@@ -271,12 +276,12 @@ public:
     }
   }
 
-  void handleGrabCommand(int id)
+  void handleGrabCommand(std::string id)
   {
     boost::lock_guard<boost::mutex> guard(objMutex);
     if (objectSizes.find(id) == objectSizes.end() ||
         objectPoses.find(id) == objectSizes.end()) {
-      ROS_INFO("Object ID %d is not being perceived", id);
+      ROS_INFO("Object ID %s is not being perceived", id.c_str());
 
       state = FAILURE;
       failureReason = "planning";
@@ -332,8 +337,6 @@ public:
     gp.position.z = out.z();
 
     std::vector<float> fPos = eeFrametoFingertip(gp);
-    float tableH = ((currentTable[3] + currentTable[0]*objectPoses[id][0] +
-                     currentTable[1]*objectPoses[id][1]) / -currentTable[2]) + 0.04;
     if (fPos[2] < tableH) {
       gp.position.z += (tableH - fPos[2]);
     }
@@ -362,7 +365,7 @@ public:
     }
 
     if (gripperClosed) {
-      ROS_INFO("Robot seems to have missed block %d", id);
+      ROS_INFO("Robot seems to have missed block %s", id.c_str());
       std::stringstream ss;
       ss << id;
       std::vector<std::string> missed;
@@ -418,8 +421,8 @@ public:
     homeArm(true);
 
     if (gripperClosed) {
-      ROS_INFO("Robot seems to have dropped block %d", id);
-      grabbedObject = -1;
+      ROS_INFO("Robot seems to have dropped block %s", id.c_str());
+      grabbedObject = "none";
 
       std::stringstream ss;
       ss << id;
@@ -439,15 +442,12 @@ public:
 
     void handleDropCommand(std::vector<float> target)
     {
-      if (grabbedObject == -1) {
+      if (grabbedObject == "none") {
         ROS_INFO("Cannot drop because robot is not holding an object.");
         failureReason = "invaliddrop";
         state = FAILURE;
         return;
       }
-
-      float tableH = ((currentTable[3] + currentTable[0]*target[0] +
-                       currentTable[1]*target[1]) / -currentTable[2]) + 0.02;
 
       if (target[2] == -1) target[2] = tableH;
       target[2] += grabbedObjSize[2] + 0.01;
@@ -537,12 +537,10 @@ public:
       moveit_msgs::CollisionObject droppedObj;
       droppedObj.header.frame_id = group.getPlanningFrame();
 
-      std::stringstream ss;
-      ss << grabbedObject;
-      droppedObj.id = ss.str();
+      droppedObj.id = grabbedObject;
 
       std::vector<std::string> toRem;
-      toRem.push_back(ss.str());
+      toRem.push_back(grabbedObject);
       scene.removeCollisionObjects(toRem);
       ros::Duration(1.0).sleep();
 
@@ -567,7 +565,7 @@ public:
       toAdd.push_back(droppedObj);
       scene.addCollisionObjects(toAdd);
 
-      grabbedObject = -1;
+      grabbedObject = "none";
       ros::Duration(0.5).sleep();
 
       std::vector<geometry_msgs::Pose> waypoints2;
@@ -608,12 +606,12 @@ public:
         return rotated;
     }
 
-    void handlePushCommand(int id, std::vector<float> pV)
+  void handlePushCommand(std::string id, std::vector<float> pV)
     {
         boost::lock_guard<boost::mutex> guard(objMutex);
         if (objectSizes.find(id) == objectSizes.end() ||
             objectPoses.find(id) == objectSizes.end()) {
-          ROS_INFO("Object ID %d is not being perceived", id);
+          ROS_INFO("Object ID %s is not being perceived", id.c_str());
           failureReason = "planning";
           state = FAILURE;
           return;
@@ -747,7 +745,7 @@ public:
         ROS_INFO("Arm status is now WAIT");
     }
 
-  plan_vector planPush(int id, float dist, axis a)
+  plan_vector planPush(std::string id, float dist, axis a)
   {
     float x = objectPoses[id][0];
     float y = objectPoses[id][1];
@@ -832,8 +830,6 @@ public:
       tp.position.z -= 0.04;
 
       std::vector<float> fPos = eeFrametoFingertip(tp);
-      float tableH = ((currentTable[3] + currentTable[0]*objectPoses[id][0] +
-                       currentTable[1]*objectPoses[id][1]) / -currentTable[2]) + 0.04;
       if (fPos[2] < tableH) {
         tp.position.z += (tableH - fPos[2]);
       }
@@ -972,12 +968,12 @@ public:
     return t.getRotation();
   }
 
-  void handlePointCommand(int id)
+  void handlePointCommand(std::string id)
   {
     boost::lock_guard<boost::mutex> guard(objMutex);
     if (objectSizes.find(id) == objectSizes.end()||
         objectPoses.find(id) == objectSizes.end()) {
-      ROS_INFO("Object ID %d is not being perceived", id);
+      ROS_INFO("Object ID %s is not being perceived", id.c_str());
       return;
     }
 
@@ -1068,31 +1064,28 @@ public:
 
     boost::lock_guard<boost::mutex> guard(objMutex);
     std::vector<moveit_msgs::CollisionObject> coList;
-    for (std::map<int, std::vector<float> >::iterator i = objectPoses.begin();
+    for (std::map<std::string, std::vector<float> >::iterator i = objectPoses.begin();
          i != objectPoses.end(); i++) {
       moveit_msgs::CollisionObject co;
       co.header.frame_id = group.getPlanningFrame();
 
-      int objID = i->first;
-      std::stringstream ss;
-      ss << objID;
-      co.id = ss.str();
-      //ROS_INFO("Adding object %s", co.id.c_str());
+      co.id = i->first;
+      ROS_INFO("Adding object %s", i->first.c_str());
 
       geometry_msgs::Pose box_pose;
       box_pose.position.x = i->second[0];
       box_pose.position.y = i->second[1];
       box_pose.position.z = i->second[2];
 
-      geometry_msgs::Quaternion q = tf2::toMsg(objectRotations[objID]);
+      geometry_msgs::Quaternion q = tf2::toMsg(objectRotations[i->first]);
       box_pose.orientation = q;
 
       shape_msgs::SolidPrimitive primitive;
       primitive.type = primitive.BOX;
       primitive.dimensions.resize(3);
-      primitive.dimensions[0] = objectSizes[objID][0]+0.02;
-      primitive.dimensions[1] = objectSizes[objID][1]+0.02;
-      primitive.dimensions[2] = objectSizes[objID][2]+0.02;
+      primitive.dimensions[0] = objectSizes[i->first][0]+0.02;
+      primitive.dimensions[1] = objectSizes[i->first][1]+0.02;
+      primitive.dimensions[2] = objectSizes[i->first][2]+0.02;
 
       co.primitives.push_back(primitive);
       co.primitive_poses.push_back(box_pose);
@@ -1106,8 +1099,7 @@ public:
     geometry_msgs::Pose planep;
     planep.position.x = 0.8;
     planep.position.y = 0.0;
-    planep.position.z = ((currentTable[3] + currentTable[0]*0.8 +
-                          currentTable[1]*0.0) / -currentTable[2]);
+    planep.position.z = tableH;
     planep.orientation.w = 1.0;
 
     shape_msgs::SolidPrimitive primitive;
@@ -1144,8 +1136,7 @@ public:
     geometry_msgs::Pose planep;
     planep.position.x = 0.8;
     planep.position.y = 0.0;
-    planep.position.z = ((currentTable[3] + currentTable[0]*0.8 +
-                          currentTable[1]*0.0) / -currentTable[2]);
+    planep.position.z = tableH;
     planep.orientation.w = 1.0;
 
     shape_msgs::SolidPrimitive primitive;
@@ -1473,7 +1464,7 @@ private:
   std::string failureReason;
   int numRetries;
   long lastCommandTime;
-  int grabbedObject;
+  std::string grabbedObject;
   std::vector<float> grabbedObjSize;
   bool gripperClosed;
   bool checkPlans;
@@ -1491,10 +1482,10 @@ private:
   moveit::planning_interface::MoveGroupInterface group;
   moveit::planning_interface::PlanningSceneInterface scene;
 
-  std::map<int, std::vector<float> > objectPoses;
-  std::map<int, tf2::Quaternion> objectRotations;
-  std::map<int, std::vector<float> > objectSizes;
-  std::vector<float> currentTable;
+  std::map<std::string, std::vector<float> > objectPoses;
+  std::map<std::string, tf2::Quaternion> objectRotations;
+  std::map<std::string, std::vector<float> > objectSizes;
+  float tableH;
   boost::mutex objMutex;
 };
 
