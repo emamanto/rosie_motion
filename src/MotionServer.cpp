@@ -1062,18 +1062,32 @@ public:
     //ROS_INFO("Removing known collision objects");
     ros::Duration(1).sleep();
 
+    geometry_msgs::TransformStamped worldXformMsg;
+    try {
+      worldXformMsg = tfBuf.lookupTransform("world", "base_link",
+                                       ros::Time(0));
+    } catch (tf2::TransformException &ex) {
+      ROS_WARN("%s",ex.what());
+    }
+    tf2::Transform worldXform;
+    tf2::fromMsg(worldXformMsg, worldXform);
+
     boost::lock_guard<boost::mutex> guard(objMutex);
     std::vector<moveit_msgs::CollisionObject> coList;
+    tf2::Vector3 fetchVec(objectPoses["fetch"][0],
+                          objectPoses["fetch"][1],
+                          objectPoses["fetch"][2]);
     for (std::map<std::string, std::vector<float> >::iterator i = objectPoses.begin();
          i != objectPoses.end(); i++) {
       // Ignore the fetch
       if (i->first == "fetch") continue;
 
       // Check if the fetch could actually hit this
-      float x_diff = i->second[0] - objectPoses["fetch"][0];
-      float y_diff = i->second[1] - objectPoses["fetch"][1];
-      float z_diff = i->second[2] - objectPoses["fetch"][2];
-      float dist = sqrt(pow(x_diff, 2) + pow(y_diff, 2) + pow(z_diff, 2));
+      tf2::Vector3 objVec(i->second[0],
+                          i->second[1],
+                          i->second[2]);
+
+      float dist = tf2::tf2Distance(fetchVec, objVec);
 
       if (dist > 2) {
         ROS_INFO("Object %s is out of reasonable range", i->first.c_str());
@@ -1093,9 +1107,10 @@ public:
       ROS_INFO("Adding object %s", i->first.c_str());
 
       geometry_msgs::Pose box_pose;
-      box_pose.position.x = i->second[0];
-      box_pose.position.y = i->second[1];
-      box_pose.position.z = i->second[2];
+      tf2::Vector3 fetchCentered = worldXform*objVec;
+      box_pose.position.x = fetchCentered.x();
+      box_pose.position.y = fetchCentered.y();
+      box_pose.position.z = fetchCentered.z();
 
       geometry_msgs::Quaternion q = tf2::toMsg(objectRotations[i->first]);
       box_pose.orientation = q;
