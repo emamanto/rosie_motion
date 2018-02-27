@@ -1066,6 +1066,26 @@ public:
     std::vector<moveit_msgs::CollisionObject> coList;
     for (std::map<std::string, std::vector<float> >::iterator i = objectPoses.begin();
          i != objectPoses.end(); i++) {
+      // Ignore the fetch
+      if (i->first == "fetch") continue;
+
+      // Check if the fetch could actually hit this
+      float x_diff = i->second[0] - objectPoses["fetch"][0];
+      float y_diff = i->second[1] - objectPoses["fetch"][1];
+      float z_diff = i->second[2] - objectPoses["fetch"][2];
+      float dist = sqrt(pow(x_diff, 2) + pow(y_diff, 2) + pow(z_diff, 2));
+
+      if (dist > 2) {
+        ROS_INFO("Object %s is out of reasonable range", i->first.c_str());
+        continue;
+      }
+      else if (i->first == "ground_plane") {
+        ROS_INFO("Do something with ground plane");
+      }
+      else if (i->first.find("table") != std::string::npos) {
+        ROS_INFO("Do something with table");
+      }
+
       moveit_msgs::CollisionObject co;
       co.header.frame_id = group.getPlanningFrame();
 
