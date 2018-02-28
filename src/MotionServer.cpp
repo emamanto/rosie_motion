@@ -1062,21 +1062,18 @@ public:
     //ROS_INFO("Removing known collision objects");
     ros::Duration(1).sleep();
 
-    geometry_msgs::TransformStamped worldXformMsg;
-    try {
-      worldXformMsg = tfBuf.lookupTransform("world", "base_link",
-                                       ros::Time(0));
-    } catch (tf2::TransformException &ex) {
-      ROS_WARN("%s",ex.what());
-    }
-    tf2::Transform worldXform;
-    tf2::fromMsg(worldXformMsg, worldXform);
-
     boost::lock_guard<boost::mutex> guard(objMutex);
     std::vector<moveit_msgs::CollisionObject> coList;
     tf2::Vector3 fetchVec(objectPoses["fetch"][0],
                           objectPoses["fetch"][1],
                           objectPoses["fetch"][2]);
+
+    tf2::Quaternion fetchQuat(objectRotations["fetch"][0],
+                              objectRotations["fetch"][1],
+                              objectRotations["fetch"][2],
+                              objectRotations["fetch"][3]);
+    tf2::Transform worldXform = tf2::Transform(fetchQuat, fetchVec).inverse();
+
     for (std::map<std::string, std::vector<float> >::iterator i = objectPoses.begin();
          i != objectPoses.end(); i++) {
       // Ignore the fetch
@@ -1095,9 +1092,11 @@ public:
       }
       else if (i->first == "ground_plane") {
         ROS_INFO("Do something with ground plane");
+        continue;
       }
       else if (i->first.find("table") != std::string::npos) {
         ROS_INFO("Do something with table");
+        continue;
       }
 
       moveit_msgs::CollisionObject co;
@@ -1111,6 +1110,9 @@ public:
       box_pose.position.x = fetchCentered.x();
       box_pose.position.y = fetchCentered.y();
       box_pose.position.z = fetchCentered.z();
+      // box_pose.position.x = objVec.x();
+      // box_pose.position.y = objVec.y();
+      // box_pose.position.z = objVec.z();
 
       geometry_msgs::Quaternion q = tf2::toMsg(objectRotations[i->first]);
       box_pose.orientation = q;
@@ -1127,28 +1129,6 @@ public:
       co.operation = co.ADD;
       coList.push_back(co);
     }
-    moveit_msgs::CollisionObject planeobj;
-    planeobj.header.frame_id = group.getPlanningFrame();
-    planeobj.id = "table";
-
-    geometry_msgs::Pose planep;
-    planep.position.x = 0.8;
-    planep.position.y = 0.0;
-    planep.position.z = tableH;
-    planep.orientation.w = 1.0;
-
-    shape_msgs::SolidPrimitive primitive;
-    primitive.type = primitive.BOX;
-    primitive.dimensions.resize(3);
-    primitive.dimensions[0] = 1;
-    primitive.dimensions[1] = 1;
-    primitive.dimensions[2] = 0.02;
-
-    planeobj.primitives.push_back(primitive);
-    planeobj.primitive_poses.push_back(planep);
-    planeobj.operation = planeobj.ADD;
-    coList.push_back(planeobj);
-
     scene.addCollisionObjects(coList);
     ros::Duration(2).sleep();
   }
