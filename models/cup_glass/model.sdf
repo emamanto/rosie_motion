@@ -1,6 +1,6 @@
 <?xml version='1.0'?>
 <sdf version='1.6'>
-  <model name='cup_glass_v2'>
+  <model name='cup_glass'>
     <static>0</static>
     <link name='link_16'>
       <self_collide>0</self_collide>

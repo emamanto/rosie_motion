@@ -130,6 +130,38 @@ public:
                                  &MotionServer::publishStatus, this);
 
         closeGripper();
+
+        shape_msgs::SolidPrimitive glassCup;
+        glassCup.type = glassCup.CYLINDER;
+        glassCup.dimensions.resize(2);
+        glassCup.dimensions[0] = 0.09;
+        glassCup.dimensions[1] = 0.04;
+        collisionModels.insert(std::pair<std::string,
+                               shape_msgs::SolidPrimitive>("cup_glass",
+                                                           glassCup));
+
+        shape_msgs::SolidPrimitive coke;
+        coke.type = coke.CYLINDER;
+        coke.dimensions.resize(2);
+        coke.dimensions[0] = 0.1;
+        coke.dimensions[1] = 0.04;
+        collisionModels.insert(std::pair<std::string,
+                               shape_msgs::SolidPrimitive>("coca_cola",
+                                                           coke));
+
+        for (int i = 3; i <= 13; i += 2) {
+          shape_msgs::SolidPrimitive block;
+          block.type = block.BOX;
+          block.dimensions.resize(3);
+          block.dimensions[0] = (double)i/100;
+          block.dimensions[1] = (double)i/100;
+          block.dimensions[2] = (double)i/100;
+          std::string name = "cube" + std::to_string(i) + "cm";
+          collisionModels.insert(std::pair<std::string,
+                                 shape_msgs::SolidPrimitive>(name,
+                                                             block));
+        }
+
         ROS_INFO("RosieMotionServer READY!");
   };
 
@@ -1110,19 +1142,23 @@ public:
       box_pose.position.x = fetchCentered.x();
       box_pose.position.y = fetchCentered.y();
       box_pose.position.z = fetchCentered.z();
-      // box_pose.position.x = objVec.x();
-      // box_pose.position.y = objVec.y();
-      // box_pose.position.z = objVec.z();
 
       geometry_msgs::Quaternion q = tf2::toMsg(objectRotations[i->first]);
       box_pose.orientation = q;
 
       shape_msgs::SolidPrimitive primitive;
-      primitive.type = primitive.BOX;
-      primitive.dimensions.resize(3);
-      primitive.dimensions[0] = objectSizes[i->first][0]+0.02;
-      primitive.dimensions[1] = objectSizes[i->first][1]+0.02;
-      primitive.dimensions[2] = objectSizes[i->first][2]+0.02;
+      bool found = false;
+      for (std::map<std::string, shape_msgs::SolidPrimitive>::iterator j =
+             collisionModels.begin();
+           j != collisionModels.end(); j++) {
+        if (i->first.find(j->first) != std::string::npos) {
+          found = true;
+          ROS_INFO("Found shape under name %s", j->first.c_str());
+          primitive = j->second;
+          break;
+        }
+      }
+      if (!found) continue;
 
       co.primitives.push_back(primitive);
       co.primitive_poses.push_back(box_pose);
@@ -1502,6 +1538,8 @@ private:
   std::map<std::string, std::vector<float> > objectSizes;
   float tableH;
   boost::mutex objMutex;
+
+  std::map<std::string, shape_msgs::SolidPrimitive> collisionModels;
 };
 
 int main(int argc, char** argv)
