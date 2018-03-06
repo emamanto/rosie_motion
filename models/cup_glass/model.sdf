@@ -7,7 +7,6 @@
       <kinematic>0</kinematic>
       <gravity>1</gravity>
       <inertial>
-        <pose frame=''>0 0 0.05 0 -0 0</pose>
         <mass>0.3</mass>
         <inertia>
           <ixx>5e-04</ixx>
@@ -19,6 +18,7 @@
         </inertia>
       </inertial>
       <visual name='visual'>
+        <pose frame=''>0 0 -0.05 0 -0 0</pose>
         <geometry>
           <mesh>
             <uri>model://cup_glass/meshes/cup_glass.dae</uri>
@@ -43,6 +43,7 @@
         <transparency>0.6</transparency>
       </visual>
       <collision name='collision'>
+        <pose frame=''>0 0 -0.05 0 -0 0</pose>
         <geometry>
           <mesh>
             <uri>/home/mamantov/catkin_ws/src/rosie_motion/models/cup_glass/meshes/cup_glass.dae</uri>

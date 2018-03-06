@@ -143,8 +143,8 @@ public:
         shape_msgs::SolidPrimitive coke;
         coke.type = coke.CYLINDER;
         coke.dimensions.resize(2);
-        coke.dimensions[0] = 0.1;
-        coke.dimensions[1] = 0.04;
+        coke.dimensions[0] = 0.12;
+        coke.dimensions[1] = 0.035;
         collisionModels.insert(std::pair<std::string,
                                shape_msgs::SolidPrimitive>("coca_cola",
                                                            coke));
@@ -1104,6 +1104,7 @@ public:
                               objectRotations["fetch"][1],
                               objectRotations["fetch"][2],
                               objectRotations["fetch"][3]);
+
     tf2::Transform worldXform = tf2::Transform(fetchQuat, fetchVec).inverse();
 
     for (std::map<std::string, std::vector<float> >::iterator i = objectPoses.begin();
@@ -1143,7 +1144,8 @@ public:
       box_pose.position.y = fetchCentered.y();
       box_pose.position.z = fetchCentered.z();
 
-      geometry_msgs::Quaternion q = tf2::toMsg(objectRotations[i->first]);
+      tf2::Quaternion objQuat = objectRotations[i->first];
+      geometry_msgs::Quaternion q = tf2::toMsg(worldXform*objQuat);
       box_pose.orientation = q;
 
       shape_msgs::SolidPrimitive primitive;
