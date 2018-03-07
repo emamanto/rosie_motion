@@ -1094,9 +1094,6 @@ public:
 
     for (std::map<std::string, tf2::Vector3>::iterator i = objectPoses.begin();
          i != objectPoses.end(); i++) {
-      // Ignore the fetch
-      if (i->first == "fetch") continue;
-
       // Check if the fetch could actually hit this
       tf2::Vector3 objVec(i->second[0],
                           i->second[1],
@@ -1107,12 +1104,36 @@ public:
         ROS_INFO("Object %s is out of reasonable range", i->first.c_str());
         continue;
       }
-      else if (i->first == "ground_plane") {
+      else if (i->first.find("ground_plane") != std::string::npos) {
         ROS_INFO("Do something with ground plane");
         continue;
       }
       else if (i->first.find("table") != std::string::npos) {
-        ROS_INFO("Do something with table");
+        ROS_INFO("Adding the table top to collision map.");
+        moveit_msgs::CollisionObject planeobj;
+        planeobj.header.frame_id = group.getPlanningFrame();
+        planeobj.id = "table";
+
+        tf2::Vector3 fetchCentered = worldXform*objVec;
+        geometry_msgs::Pose planep;
+        planep.position.x = fetchCentered.x();
+        planep.position.y = fetchCentered.y();
+        planep.position.z = 0.675;
+
+        planep.orientation = tf2::toMsg(worldXform*
+                                        objectRotations[i->first]);
+
+        shape_msgs::SolidPrimitive primitive;
+        primitive.type = primitive.BOX;
+        primitive.dimensions.resize(3);
+        primitive.dimensions[0] = 0.95;
+        primitive.dimensions[1] = 0.95;
+        primitive.dimensions[2] = 0.05;
+
+        planeobj.primitives.push_back(primitive);
+        planeobj.primitive_poses.push_back(planep);
+        planeobj.operation = planeobj.ADD;
+        coList.push_back(planeobj);
         continue;
       }
 
@@ -1139,7 +1160,7 @@ public:
            j != collisionModels.end(); j++) {
         if (i->first.find(j->first) != std::string::npos) {
           found = true;
-          ROS_INFO("Found shape under name %s", j->first.c_str());
+          //ROS_INFO("Found shape under name %s", j->first.c_str());
           primitive = j->second;
           break;
         }
@@ -1166,27 +1187,6 @@ public:
     std::vector<moveit_msgs::CollisionObject> coList;
 
     // JUST add the table
-    moveit_msgs::CollisionObject planeobj;
-    planeobj.header.frame_id = group.getPlanningFrame();
-    planeobj.id = "table";
-
-    geometry_msgs::Pose planep;
-    planep.position.x = 0.8;
-    planep.position.y = 0.0;
-    planep.position.z = tableH;
-    planep.orientation.w = 1.0;
-
-    shape_msgs::SolidPrimitive primitive;
-    primitive.type = primitive.BOX;
-    primitive.dimensions.resize(3);
-    primitive.dimensions[0] = 1;
-    primitive.dimensions[1] = 1;
-    primitive.dimensions[2] = 0.02;
-
-    planeobj.primitives.push_back(primitive);
-    planeobj.primitive_poses.push_back(planep);
-    planeobj.operation = planeobj.ADD;
-    coList.push_back(planeobj);
 
     scene.addCollisionObjects(coList);
     ros::Duration(1).sleep();
