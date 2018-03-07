@@ -223,19 +223,11 @@ public:
     if (msg->action.find("GRAB")!=std::string::npos)
       {
         state = GRAB;
-        // Figure out what this will look like
-        std::string num = msg->action.substr(msg->action.find("=")+1);
-        ROS_INFO("Handling pickup command for object %s", num.c_str());
-
-        int idNum;
-        std::stringstream ss(num);
-        if (!(ss >> idNum)) {
-          ROS_INFO("Invalid object ID number %s", num.c_str());
-          return;
-        }
+        std::string name = msg->action.substr(msg->action.find("=")+1);
+        ROS_INFO("Handling pickup command for %s", name.c_str());
 
         setUpScene();
-        handleGrabCommand(num);
+        handleGrabCommand(name);
       }
     else if (msg->action.find("DROP")!=std::string::npos){
       ROS_INFO("Handling putdown command");
@@ -311,9 +303,18 @@ public:
   void handleGrabCommand(std::string id)
   {
     boost::lock_guard<boost::mutex> guard(objMutex);
-    if (objectSizes.find(id) == objectSizes.end() ||
-        objectPoses.find(id) == objectSizes.end()) {
-      ROS_INFO("Object ID %s is not being perceived", id.c_str());
+
+    std::string foundName = "";
+    for (std::map<std::string, std::vector<float> >::iterator i = objectPoses.begin();
+         i != objectPoses.end(); i++) {
+      if (i->first.find(id) != std::string::npos) {
+        foundName = i->first;
+        break;
+      }
+    }
+
+    if (foundName == "") {
+      ROS_INFO("%s is not being perceived", id.c_str());
 
       state = FAILURE;
       failureReason = "planning";
@@ -321,13 +322,13 @@ public:
     }
 
     // This only works for objects that can be picked up like squares!!!
-    float yaw = tf2::getYaw(objectRotations[id]);
+    float yaw = tf2::getYaw(objectRotations[foundName]);
     if (fabs(yaw + M_PI/2.0) < fabs(yaw)) yaw += M_PI/2.0;
     if (fabs(yaw - M_PI/2.0) < fabs(yaw)) yaw -= M_PI/2.0;
 
-    float a = planToGraspPosition(objectPoses[id][0],
-                                  objectPoses[id][1],
-                                  objectPoses[id][2] + objectSizes[id][2]/2.0,
+    float a = planToGraspPosition(objectPoses[foundName][0],
+                                  objectPoses[foundName][1],
+                                  objectPoses[foundName][2] + objectSizes[foundName][2]/2.0,
                                   yaw);
 
     preferredDropAngle = a;
@@ -419,7 +420,7 @@ public:
       allowed.push_back("gripper_link");
       group.attachObject(ss.str(), group.getEndEffectorLink(), allowed);
       grabbedObject = id;
-      grabbedObjSize = objectSizes[id];
+      grabbedObjSize = objectSizes[foundName];
 
       std::vector<std::string> attached;
       attached.push_back(ss.str());

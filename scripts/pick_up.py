@@ -8,12 +8,12 @@ from rosie_msgs.msg import RobotCommand
 if __name__ == '__main__':
     rospy.init_node("rosie_pickup")
 
-    obj = input("Object ID? ")
+    objname = raw_input('Object name? ')
 
     pub = rospy.Publisher("/rosie_arm_commands", RobotCommand, queue_size=10)
 
     msg = RobotCommand()
-    msg.action = "GRAB=" + str(obj)
+    msg.action = "GRAB=" + objname
     msg.utime = long(time.time()*1000)
 
     for i in range(0, 10):
