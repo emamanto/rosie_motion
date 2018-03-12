@@ -36,6 +36,8 @@ public:
   static const axis Z_AXIS = 2;
 
   typedef std::vector<moveit::planning_interface::MoveGroupInterface::Plan> plan_vector;
+  typedef std::pair<tf2::Transform, tf2::Transform> grasp_pair;
+
   enum ActionState {WAIT,
                     HOME,
                     GRAB,
@@ -131,6 +133,7 @@ public:
 
         closeGripper();
 
+        // GLASS CUP
         shape_msgs::SolidPrimitive glassCup;
         glassCup.type = glassCup.CYLINDER;
         glassCup.dimensions.resize(2);
@@ -140,6 +143,19 @@ public:
                                shape_msgs::SolidPrimitive>("cup_glass",
                                                            glassCup));
 
+        //tf2::Quaternion glassRot = tf2::Quaternion::getIdentity();
+        tf2::Quaternion glassRot;
+        glassRot.setRPY(0, M_PI/2, 0);
+        grasp_pair glassP = std::make_pair(tf2::Transform(glassRot,
+                                                          tf2::Vector3(0.0, 0.0, 0.15)),
+                                           tf2::Transform(glassRot,
+                                                          tf2::Vector3(0.0, 0.0, 0.10)));
+        std::vector<grasp_pair> glassGrasps;
+        glassGrasps.push_back(glassP);
+        grasps.insert(std::pair<std::string, std::vector<grasp_pair> >("cup_glass",
+                                                                       glassGrasps));
+
+        // COKE CAN
         shape_msgs::SolidPrimitive coke;
         coke.type = coke.CYLINDER;
         coke.dimensions.resize(2);
@@ -149,6 +165,7 @@ public:
                                shape_msgs::SolidPrimitive>("coca_cola",
                                                            coke));
 
+        // ALL THE BLOCKS
         for (int i = 3; i <= 13; i += 2) {
           shape_msgs::SolidPrimitive block;
           block.type = block.BOX;
@@ -323,10 +340,7 @@ public:
     tf2::Vector3 objVec = worldXform*objectPoses[foundName];
     tf2::Quaternion objQuat = worldXform*objectRotations[foundName];
 
-    float a = planToGraspPosition(objVec.x(),
-                                  objVec.y(),
-                                  objVec.z(),
-                                  tf2::getYaw(objQuat));
+    float a = planToGraspPosition(foundName);
 
     preferredDropAngle = a;
     if (a == -1) {
@@ -1030,6 +1044,30 @@ public:
     ROS_INFO("Arm status is now WAIT");
   }
 
+  float planToGraspPosition(std::string objId) {
+    tf2::Transform objPose(objectRotations[objId], objectPoses[objId]);
+
+    bool found = false;
+    std::vector<grasp_pair> potentialGrasps;
+
+    for (std::map<std::string, std::vector<grasp_pair> >::iterator j =
+           grasps.begin(); j != grasps.end(); j++) {
+      if (objId.find(j->first) != std::string::npos) {
+        found = true;
+        ROS_INFO("Found shape under name %s", j->first.c_str());
+        potentialGrasps = j->second;
+        break;
+      }
+    }
+
+    ROS_INFO("I see %i grasps for this obj", (int)potentialGrasps.size());
+
+    if (potentialGrasps.size() == 0) return 0.0;
+
+    tf2::Transform objToFetch = worldXform*objPose;
+    tf2::Transform firstPose = objToFetch*potentialGrasps.at(0).first;
+    return planToXformTarget(firstPose);
+  }
 
   float planToGraspPosition(float objx, float objy, float objz) {
     return planToGraspPosition(objx, objy, objz, 0.0);
@@ -1389,6 +1427,13 @@ public:
     return planToXYZQuaternionTarget(x, y, z, q);
   }
 
+  bool planToXformTarget(tf2::Transform xform)
+  {
+    tf2::Quaternion q = xform.getRotation();
+    tf2::Vector3 v3 = xform.getOrigin();
+    return planToXYZQuaternionTarget(v3.x(), v3.y(), v3.z(), q);
+  }
+
   bool executeCurrentPlan()
   {
     if (!safetyCheck()) {
@@ -1526,6 +1571,7 @@ private:
   boost::mutex objMutex;
 
   std::map<std::string, shape_msgs::SolidPrimitive> collisionModels;
+  std::map<std::string, std::vector<grasp_pair> > grasps;
 };
 
 int main(int argc, char** argv)
