@@ -76,7 +76,7 @@ generate_messages (DEPENDENCIES actionlib_msgs rosie_msgs)
 ## CATKIN_DEPENDS: catkin_packages dependent projects also need
 ## DEPENDS: system dependencies of this project that dependent projects also need
 catkin_package(
-#  INCLUDE_DIRS include
+INCLUDE_DIRS include
 #  LIBRARIES rosie_motion
 CATKIN_DEPENDS moveit_core moveit_ros_planning_interface moveit_ros_move_group tf2_ros
 #  DEPENDS system_lib
@@ -88,7 +88,7 @@ CATKIN_DEPENDS moveit_core moveit_ros_planning_interface moveit_ros_move_group t
 
 ## Specify additional locations of header files
 ## Your package locations should be listed before other locations
-# include_directories(include)
+include_directories(include)
 include_directories(
   ${catkin_INCLUDE_DIRS}
 )
@@ -104,16 +104,15 @@ include_directories(
 # add_dependencies(rosie_motion ${${PROJECT_NAME}_EXPORTED_TARGETS} ${catkin_EXPORTED_TARGETS})
 
 ## Declare a C++ executable
-# add_executable(rosie_motion_node src/rosie_motion_node.cpp)
+add_executable(motionserver src/MotionServer.cpp
+  src/ObjectDatabase.cpp)
 
 ## Add cmake target dependencies of the executable
 ## same as for the library above
 # add_dependencies(rosie_motion_node ${${PROJECT_NAME}_EXPORTED_TARGETS} ${catkin_EXPORTED_TARGETS})
 
 ## Specify libraries to link a library or executable target against
-# target_link_libraries(rosie_motion_node
-#   ${catkin_LIBRARIES}
-# )
+target_link_libraries(motionserver ${catkin_LIBRARIES})
 
 #############
 ## Install ##
@@ -162,6 +161,3 @@ include_directories(
 
 ## Add folders to be run by python nosetests
 # catkin_add_nosetests(test)
-
-add_executable(motionserver src/MotionServer.cpp)
-target_link_libraries(motionserver ${catkin_LIBRARIES})

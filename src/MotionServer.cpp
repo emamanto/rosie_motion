@@ -27,6 +27,8 @@
 #include "control_msgs/GripperCommandAction.h"
 #include "control_msgs/GripperCommandGoal.h"
 
+#include "ObjectDatabase.h"
+
 class MotionServer
 {
 public:
@@ -132,53 +134,6 @@ public:
                                  &MotionServer::publishStatus, this);
 
         closeGripper();
-
-        // GLASS CUP
-        shape_msgs::SolidPrimitive glassCup;
-        glassCup.type = glassCup.CYLINDER;
-        glassCup.dimensions.resize(2);
-        glassCup.dimensions[0] = 0.09;
-        glassCup.dimensions[1] = 0.04;
-        collisionModels.insert(std::pair<std::string,
-                               shape_msgs::SolidPrimitive>("cup_glass",
-                                                           glassCup));
-
-        //tf2::Quaternion glassRot = tf2::Quaternion::getIdentity();
-        tf2::Quaternion glassRot;
-        glassRot.setRPY(0, M_PI/2, 0);
-        grasp_pair glassP = std::make_pair(tf2::Transform(glassRot,
-                                                          tf2::Vector3(0.0, 0.0, 0.15)),
-                                           tf2::Transform(glassRot,
-                                                          tf2::Vector3(0.0, 0.0, 0.10)));
-        std::vector<grasp_pair> glassGrasps;
-        glassGrasps.push_back(glassP);
-        grasps.insert(std::pair<std::string, std::vector<grasp_pair> >("cup_glass",
-                                                                       glassGrasps));
-
-        // COKE CAN
-        shape_msgs::SolidPrimitive coke;
-        coke.type = coke.CYLINDER;
-        coke.dimensions.resize(2);
-        coke.dimensions[0] = 0.12;
-        coke.dimensions[1] = 0.035;
-        collisionModels.insert(std::pair<std::string,
-                               shape_msgs::SolidPrimitive>("coca_cola",
-                                                           coke));
-
-        // ALL THE BLOCKS
-        for (int i = 3; i <= 13; i += 2) {
-          shape_msgs::SolidPrimitive block;
-          block.type = block.BOX;
-          block.dimensions.resize(3);
-          block.dimensions[0] = (double)i/100;
-          block.dimensions[1] = (double)i/100;
-          block.dimensions[2] = (double)i/100;
-          std::string name = "cube" + std::to_string(i) + "cm";
-          collisionModels.insert(std::pair<std::string,
-                                 shape_msgs::SolidPrimitive>(name,
-                                                             block));
-        }
-
         ROS_INFO("RosieMotionServer READY!");
   };
 
@@ -316,34 +271,43 @@ public:
     }
   }
 
+  // ID needs to be a substring of the object's model name
   void handleGrabCommand(std::string id)
   {
     boost::lock_guard<boost::mutex> guard(objMutex);
 
-    std::string foundName = "";
+    // Find the object in the scene if it's there
+    std::string objectName = "";
     for (std::map<std::string, tf2::Vector3>::iterator i = objectPoses.begin();
          i != objectPoses.end(); i++) {
       if (i->first.find(id) != std::string::npos) {
-        foundName = i->first;
+        objectName = i->first;
         break;
       }
     }
-
-    if (foundName == "") {
-      ROS_INFO("%s is not being perceived", id.c_str());
-
+    if (objectName == "") {
+      ROS_INFO("%s is not in the scene", id.c_str());
       state = FAILURE;
       failureReason = "planning";
       return;
     }
 
-    tf2::Vector3 objVec = worldXform*objectPoses[foundName];
-    tf2::Quaternion objQuat = worldXform*objectRotations[foundName];
+    // Find the grasp information for this object
+    std::string databaseName = "";
+    if (objData.isInDatabase(objectName)) {
+      databaseName = objData.findDatabaseName(objectName);
+    }
+    else {
+      ROS_INFO("We do not have a grasp list for %s", id.c_str());
+      state = FAILURE;
+      failureReason = "planning";
+      return;
+    }
 
-    float a = planToGraspPosition(foundName);
+    int graspIndex = planToGraspPosition(objectName, databaseName);
 
-    preferredDropAngle = a;
-    if (a == -1) {
+    //preferredDropAngle = a;
+    if (graspIndex == -1) {
       ROS_INFO("Arm not reaching because planning failed");
       failureReason = "planning";
       state = FAILURE;
@@ -367,23 +331,23 @@ public:
 
     geometry_msgs::Pose gp = waypoints[0];
 
-    tf2::Quaternion qtemp;
-    qtemp.setRPY(0.0, a, 0.0);
-    tf2::Transform rot = tf2::Transform(qtemp);
-    tf2::Vector3 ob = tf2::Vector3(gp.position.x,
-                                   gp.position.y,
-                                   gp.position.z);
-    tf2::Vector3 trans = rot*grabMotion;
-    tf2::Vector3 out = ob+trans;
+    ROS_INFO("I am using the grasp at index %i", graspIndex);
 
-    gp.position.x = out.x();
-    gp.position.y = out.y();
-    gp.position.z = out.z();
+    tf2::Transform objToFetch(objectRotations[objectName],
+                              objectPoses[objectName]);
+    objToFetch *= worldXform;
+    tf2::Transform graspPose = objData.getAllGrasps(databaseName).at(graspIndex).second;
+    graspPose *= objToFetch;
+    gp.position.x = graspPose.getOrigin().x();
+    gp.position.y = graspPose.getOrigin().y();
+    gp.position.z = graspPose.getOrigin().z();
+    gp.orientation = tf2::toMsg(graspPose.getRotation());
 
-    std::vector<float> fPos = eeFrametoFingertip(gp);
-    if (fPos[2] < tableH) {
-      gp.position.z += (tableH - fPos[2]);
-    }
+    // Need to check for the fingertip, not the wrist here
+    // if (gp.position.z < tableH) {
+    //   ROS_INFO("Don't put the hand through the table!!!");
+    //   gp.position.z += ((tableH - gp.position.z) + 0.01);
+    // }
 
     waypoints.push_back(gp);
     geometry_msgs::Pose returnto = waypoints[0];
@@ -1044,29 +1008,21 @@ public:
     ROS_INFO("Arm status is now WAIT");
   }
 
-  float planToGraspPosition(std::string objId) {
+  int planToGraspPosition(std::string objId, std::string graspName) {
     tf2::Transform objPose(objectRotations[objId], objectPoses[objId]);
 
     bool found = false;
-    std::vector<grasp_pair> potentialGrasps;
-
-    for (std::map<std::string, std::vector<grasp_pair> >::iterator j =
-           grasps.begin(); j != grasps.end(); j++) {
-      if (objId.find(j->first) != std::string::npos) {
-        found = true;
-        ROS_INFO("Found shape under name %s", j->first.c_str());
-        potentialGrasps = j->second;
-        break;
-      }
-    }
-
-    ROS_INFO("I see %i grasps for this obj", (int)potentialGrasps.size());
-
-    if (potentialGrasps.size() == 0) return 0.0;
+    std::vector<grasp_pair> potentialGrasps = objData.getAllGrasps(graspName);
+    ROS_INFO("I see %i grasps for this obj", objData.getNumGrasps(graspName));
+    if (objData.getNumGrasps(graspName) == 0) return -1;
 
     tf2::Transform objToFetch = worldXform*objPose;
     tf2::Transform firstPose = objToFetch*potentialGrasps.at(0).first;
-    return planToXformTarget(firstPose);
+    // Should be index of grasp in vector when there are more grasps
+    int ind = 0;
+    float s = planToXformTarget(firstPose);
+    if (s != -1) return ind;
+    else return -1;
   }
 
   float planToGraspPosition(float objx, float objy, float objz) {
@@ -1191,24 +1147,16 @@ public:
       geometry_msgs::Quaternion q = tf2::toMsg(worldXform*objQuat);
       box_pose.orientation = q;
 
-      shape_msgs::SolidPrimitive primitive;
-      bool found = false;
-      for (std::map<std::string, shape_msgs::SolidPrimitive>::iterator j =
-             collisionModels.begin();
-           j != collisionModels.end(); j++) {
-        if (i->first.find(j->first) != std::string::npos) {
-          found = true;
-          //ROS_INFO("Found shape under name %s", j->first.c_str());
-          primitive = j->second;
-          break;
-        }
+      if (objData.isInDatabase(i->first)) {
+        shape_msgs::SolidPrimitive primitive = objData.getCollisionModel(objData.findDatabaseName(i->first));
+        co.primitives.push_back(primitive);
+        co.primitive_poses.push_back(box_pose);
+        co.operation = co.ADD;
+        coList.push_back(co);
       }
-      if (!found) continue;
-
-      co.primitives.push_back(primitive);
-      co.primitive_poses.push_back(box_pose);
-      co.operation = co.ADD;
-      coList.push_back(co);
+      else {
+        ROS_INFO("%s was not found in the database", i->first.c_str());
+      }
     }
     scene.addCollisionObjects(coList);
     ros::Duration(2).sleep();
@@ -1570,8 +1518,7 @@ private:
   float tableH;
   boost::mutex objMutex;
 
-  std::map<std::string, shape_msgs::SolidPrimitive> collisionModels;
-  std::map<std::string, std::vector<grasp_pair> > grasps;
+  ObjectDatabase objData;
 };
 
 int main(int argc, char** argv)
