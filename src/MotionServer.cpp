@@ -333,15 +333,20 @@ public:
 
     ROS_INFO("I am using the grasp at index %i", graspIndex);
 
-    tf2::Transform objToFetch(objectRotations[objectName],
-                              objectPoses[objectName]);
-    objToFetch *= worldXform;
-    tf2::Transform graspPose = objData.getAllGrasps(databaseName).at(graspIndex).second;
-    graspPose *= objToFetch;
+    tf2::Transform objPose(objectRotations[objectName],
+                           objectPoses[objectName]);
+
+    tf2::Transform objToFetch = worldXform*objPose;
+    tf2::Transform graspPose = objToFetch*objData.getAllGrasps(databaseName).at(graspIndex).second;
+
     gp.position.x = graspPose.getOrigin().x();
     gp.position.y = graspPose.getOrigin().y();
     gp.position.z = graspPose.getOrigin().z();
     gp.orientation = tf2::toMsg(graspPose.getRotation());
+
+    graspGoal.pose = gp;
+    graspGoal.header.frame_id = group.getPlanningFrame();
+    ros::Duration(1.0).sleep();
 
     // Need to check for the fingertip, not the wrist here
     // if (gp.position.z < tableH) {
@@ -1340,11 +1345,12 @@ public:
     target.position.y = targ[1];
     target.position.z = targ[2];
 
+    // Not finger target lol
     geometry_msgs::Pose fingerTarget = geometry_msgs::Pose();
     fingerTarget.orientation = tf2::toMsg(q);
-    fingerTarget.position.x = x;
-    fingerTarget.position.y = y;
-    fingerTarget.position.z = z;
+    fingerTarget.position.x = targ[0];
+    fingerTarget.position.y = targ[1];
+    fingerTarget.position.z = targ[2];
 
     graspGoal.pose = fingerTarget;
     graspGoal.header.frame_id = group.getPlanningFrame();

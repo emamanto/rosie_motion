@@ -7,26 +7,37 @@ bool ObjectDatabase::isInDatabase(std::string objectID) {
       return true;
     }
   }
+  for (std::map<std::string, shape_msgs::SolidPrimitive>::iterator p =
+         collisionModels.begin(); p != collisionModels.end(); p++) {
+    if (objectID.find(p->first) != std::string::npos) {
+      return true;
+    }
+  }
+
   return false;
 }
 
 std::string ObjectDatabase::findDatabaseName(std::string objectID) {
-  std::string databaseName = "";
   for (std::map<std::string, std::vector<GraspPair> >::iterator j =
          grasps.begin(); j != grasps.end(); j++) {
     if (objectID.find(j->first) != std::string::npos) {
-      databaseName = j->first;
-      ROS_INFO("Found %s under database name %s", objectID.c_str(),
-               databaseName.c_str());
-      break;
+      ROS_INFO("Found %s under GRASP database name %s", objectID.c_str(),
+               j->first.c_str());
+      return j->first;
     }
   }
 
-  if (databaseName == "") {
-    ROS_INFO("Could not find database entry for %s", objectID.c_str());
+  for (std::map<std::string, shape_msgs::SolidPrimitive>::iterator p =
+         collisionModels.begin(); p != collisionModels.end(); p++) {
+    if (objectID.find(p->first) != std::string::npos) {
+      ROS_INFO("Found %s under MODEL database name %s", objectID.c_str(),
+               p->first.c_str());
+      return p->first;
+    }
   }
 
-  return databaseName;
+  ROS_INFO("Could not find database entry for %s", objectID.c_str());
+  return "";
 }
 
 shape_msgs::SolidPrimitive ObjectDatabase::getCollisionModel(std::string dbName) {
