@@ -1,0 +1,6 @@
+<launch>
+
+<node name="move_gazebo_fetch_model" pkg="rosie_motion" type="move_fetch.py" output="screen" >
+</node>
+
+</launch>
