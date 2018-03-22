@@ -298,9 +298,8 @@ public:
     geometry_msgs::Pose gp = waypoints[0];
 
     ROS_INFO("I am using the grasp at index %i", graspIndex);
-
-    tf2::Transform objToFetch = world.getWorldXform()*world.getXformOf(objectName);
-    tf2::Transform graspPose = objToFetch*objData.getAllGrasps(databaseName).at(graspIndex).second;
+    tf2::Transform graspPose = (world.worldXformTimesTrans(objectName)*
+                                objData.getAllGrasps(databaseName).at(graspIndex).second);
 
     gp.position.x = graspPose.getOrigin().x();
     gp.position.y = graspPose.getOrigin().y();
@@ -986,16 +985,17 @@ public:
     ROS_INFO("Arm status is now WAIT");
   }
 
+  // This takes the name of the OBJECT IN THE SCENE, then the name of the
+  // TYPE OF OBJECT IN THE DATABASE
   int planToGraspPosition(std::string objId, std::string graspName) {
-    tf2::Transform objPose = world.getXformOf(objId);
-
     bool found = false;
     std::vector<grasp_pair> potentialGrasps = objData.getAllGrasps(graspName);
     ROS_INFO("I see %i grasps for this obj", objData.getNumGrasps(graspName));
     if (objData.getNumGrasps(graspName) == 0) return -1;
 
-    tf2::Transform objToFetch = world.getWorldXform()*objPose;
-    tf2::Transform firstPose = objToFetch*potentialGrasps.at(0).first;
+    tf2::Transform firstPose = (world.worldXformTimesTrans(objId)*
+                                potentialGrasps.at(0).first);
+
     // Should be index of grasp in vector when there are more grasps
     int ind = 0;
     float s = planToXformTarget(firstPose);
@@ -1075,9 +1075,7 @@ public:
         continue;
       }
 
-      tf2::Vector3 fetchCentered = (world.getWorldXform()*
-                                    world.getPositionOf(*i));
-
+      tf2::Vector3 fetchCentered = world.worldXformTimesPos(*i);
       if (i->find("ground_plane") != std::string::npos) {
         ROS_INFO("Do something with ground plane");
         continue;
@@ -1093,8 +1091,7 @@ public:
         planep.position.y = fetchCentered.y();
         planep.position.z = 0.675;
 
-        planep.orientation = tf2::toMsg(world.getWorldXform()*
-                                        world.getRotationOf(*i));
+        planep.orientation = tf2::toMsg(world.worldXformTimesRot(*i));
 
         shape_msgs::SolidPrimitive primitive;
         primitive.type = primitive.BOX;
@@ -1121,8 +1118,7 @@ public:
       box_pose.position.y = fetchCentered.y();
       box_pose.position.z = fetchCentered.z();
 
-      geometry_msgs::Quaternion q = tf2::toMsg(world.getWorldXform()*
-                                               world.getRotationOf(*i));
+      geometry_msgs::Quaternion q = tf2::toMsg(world.worldXformTiemsRot(*i));
       box_pose.orientation = q;
 
       if (objData.isInDatabase(*i)) {

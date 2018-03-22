@@ -29,6 +29,10 @@ public:
   tf2::Transform getWorldXform() { return worldXform; }
   float getTableH() { return tableH; }
 
+  tf2::Vector3 worldXformTimesPos(std::string name);
+  tf2::Quaternion worldXformTimesRot(std::string name);
+  tf2::Transform worldXformTimesTrans(std::string name);
+
 private:
   std::map<std::string, tf2::Vector3> objectPoses;
   std::map<std::string, tf2::Quaternion> objectRotations;

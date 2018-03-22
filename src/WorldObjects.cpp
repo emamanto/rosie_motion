@@ -83,3 +83,18 @@ tf2::Quaternion WorldObjects::getRotationOf(std::string name) {
   boost::lock_guard<boost::mutex> guard(objMutex);
   return objectRotations[name];
 }
+
+tf2::Vector3 WorldObjects::worldXformTimesPos(std::string name) {
+  boost::lock_guard<boost::mutex> guard(objMutex);
+  return worldXform*objectPoses[name];
+}
+
+tf2::Quaternion WorldObjects::worldXformTimesRot(std::string name) {
+  boost::lock_guard<boost::mutex> guard(objMutex);
+  return worldXform*objectRotations[name];
+}
+
+tf2::Transform WorldObjects::worldXformTimesTrans(std::string name) {
+  boost::lock_guard<boost::mutex> guard(objMutex);
+  return worldXform*tf2::Transform(objectRotations[name], objectPoses[name]);
+}
