@@ -105,7 +105,8 @@ include_directories(
 
 ## Declare a C++ executable
 add_executable(motionserver src/MotionServer.cpp
-  src/ObjectDatabase.cpp)
+  src/ObjectDatabase.cpp
+  src/WorldObjects.cpp)
 
 ## Add cmake target dependencies of the executable
 ## same as for the library above

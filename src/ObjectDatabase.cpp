@@ -1,19 +1,26 @@
 #include "ObjectDatabase.h"
 
 bool ObjectDatabase::isInDatabase(std::string objectID) {
+  return (dbHasGrasps(objectID) || dbHasModel(objectID));
+}
+
+bool ObjectDatabase::dbHasGrasps(std::string objectID) {
   for (std::map<std::string, std::vector<GraspPair> >::iterator j =
          grasps.begin(); j != grasps.end(); j++) {
-    if (objectID.find(j->first) != std::string::npos) {
+    if (j->first.find(objectID) != std::string::npos) {
       return true;
     }
   }
+  return false;
+}
+
+bool ObjectDatabase::dbHasModel(std::string objectID) {
   for (std::map<std::string, shape_msgs::SolidPrimitive>::iterator p =
          collisionModels.begin(); p != collisionModels.end(); p++) {
-    if (objectID.find(p->first) != std::string::npos) {
+    if (p->first.find(objectID) != std::string::npos) {
       return true;
     }
   }
-
   return false;
 }
 
@@ -72,7 +79,7 @@ void ObjectDatabase::init() {
   GraspPair glassP = std::make_pair(tf2::Transform(glassRot,
                                                    tf2::Vector3(0.0, 0.0, 0.15)),
                                     tf2::Transform(glassRot,
-                                                   tf2::Vector3(0.0, 0.0, 0.10)));
+                                                   tf2::Vector3(0.0, 0.0, 0.12)));
   std::vector<GraspPair> glassGrasps;
   glassGrasps.push_back(glassP);
   grasps.insert(std::pair<std::string, std::vector<GraspPair> >("cup_glass",

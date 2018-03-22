@@ -16,6 +16,8 @@ public:
   }
 
   bool isInDatabase(std::string objectID);
+  bool dbHasGrasps(std::string objectID);
+  bool dbHasModel(std::string objectID);
   std::string findDatabaseName(std::string objectID);
 
   shape_msgs::SolidPrimitive getCollisionModel(std::string dbName);

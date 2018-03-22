@@ -28,6 +28,7 @@
 #include "control_msgs/GripperCommandGoal.h"
 
 #include "ObjectDatabase.h"
+#include "WorldObjects.h"
 
 class MotionServer
 {
@@ -139,32 +140,7 @@ public:
 
   void obsCallback(const gazebo_msgs::ModelStates::ConstPtr& msg)
   {
-    boost::lock_guard<boost::mutex> guard(objMutex);
-
-    objectPoses.clear();
-    objectRotations.clear();
-
-    for (int i = 0; i < msg->name.size(); i++) {
-      geometry_msgs::Pose p = msg->pose[i];
-
-      if (msg->name[i].find("fetch") != std::string::npos) {
-        tf2::Vector3 fetchVec;
-        tf2::fromMsg(p.position, fetchVec);
-        tf2::Quaternion fetchQuat;
-        tf2::fromMsg(p.orientation, fetchQuat);
-        worldXform = tf2::Transform(fetchQuat, fetchVec).inverse();
-        continue;
-      }
-      tf2::Vector3 v;
-      tf2::fromMsg(p.position, v);
-      objectPoses.insert(std::pair<std::string, tf2::Vector3>(msg->name[i],
-                                                              v));
-
-      tf2::Quaternion quat;
-      tf2::fromMsg(p.orientation, quat);
-      objectRotations.insert(std::pair<std::string, tf2::Quaternion>(msg->name[i],
-                                                                     quat));
-    }
+    world.update(msg);
   }
 
   void jointCallback(const sensor_msgs::JointState::ConstPtr& msg)
@@ -274,27 +250,17 @@ public:
   // ID needs to be a substring of the object's model name
   void handleGrabCommand(std::string id)
   {
-    boost::lock_guard<boost::mutex> guard(objMutex);
-
-    // Find the object in the scene if it's there
-    std::string objectName = "";
-    for (std::map<std::string, tf2::Vector3>::iterator i = objectPoses.begin();
-         i != objectPoses.end(); i++) {
-      if (i->first.find(id) != std::string::npos) {
-        objectName = i->first;
-        break;
-      }
-    }
-    if (objectName == "") {
+    if (!world.isInScene(id)) {
       ROS_INFO("%s is not in the scene", id.c_str());
       state = FAILURE;
       failureReason = "planning";
       return;
     }
+    std::string objectName = world.nameInScene(id);
 
     // Find the grasp information for this object
     std::string databaseName = "";
-    if (objData.isInDatabase(objectName)) {
+    if (objData.dbHasGrasps(id)) {
       databaseName = objData.findDatabaseName(objectName);
     }
     else {
@@ -333,10 +299,7 @@ public:
 
     ROS_INFO("I am using the grasp at index %i", graspIndex);
 
-    tf2::Transform objPose(objectRotations[objectName],
-                           objectPoses[objectName]);
-
-    tf2::Transform objToFetch = worldXform*objPose;
+    tf2::Transform objToFetch = world.getWorldXform()*world.getXformOf(objectName);
     tf2::Transform graspPose = objToFetch*objData.getAllGrasps(databaseName).at(graspIndex).second;
 
     gp.position.x = graspPose.getOrigin().x();
@@ -461,7 +424,7 @@ public:
         return;
       }
 
-      if (target[2] == -1) target[2] = tableH;
+      if (target[2] == -1) target[2] = world.getTableH();
       target[2] += grabbedObjSize[2] + 0.01;
 
       // Try the angle you picked it up at first
@@ -515,9 +478,9 @@ public:
       gp.position.z = out.z();
 
       std::vector<float> fPos = eeFrametoFingertip(gp);
-      tableH += 0.02;
-      if (fPos[2] < tableH) {
-        gp.position.z += (tableH - fPos[2]);
+      if (fPos[2] < world.getTableH() + 0.02) {
+        // FIXME
+        gp.position.z = world.getTableH() + 0.1;
       }
 
       waypoints.push_back(gp);
@@ -981,15 +944,25 @@ public:
 
   void handlePointCommand(std::string id)
   {
-    boost::lock_guard<boost::mutex> guard(objMutex);
-    if (objectPoses.find(id) == objectPoses.end()) {
+    if (world.isInScene(id)) {
       ROS_INFO("Object ID %s is not being perceived", id.c_str());
       return;
     }
+    std::string objID = world.nameInScene(id);
 
-    float a = planToGraspPosition(objectPoses[id].x(),
-                                  objectPoses[id].y(),
-                                  objectPoses[id].z());
+    // Find the grasp information for this object
+    std::string databaseName = "";
+    if (objData.dbHasGrasps(id)) {
+      databaseName = objData.findDatabaseName(objID);
+    }
+    else {
+      ROS_INFO("We do not have a grasp list for %s", id.c_str());
+      state = FAILURE;
+      failureReason = "planning";
+      return;
+    }
+
+    int a = planToGraspPosition(objID, databaseName);
 
     if (a == -1) {
       ROS_INFO("Arm not pointing because planning failed");
@@ -1014,14 +987,14 @@ public:
   }
 
   int planToGraspPosition(std::string objId, std::string graspName) {
-    tf2::Transform objPose(objectRotations[objId], objectPoses[objId]);
+    tf2::Transform objPose = world.getXformOf(objId);
 
     bool found = false;
     std::vector<grasp_pair> potentialGrasps = objData.getAllGrasps(graspName);
     ROS_INFO("I see %i grasps for this obj", objData.getNumGrasps(graspName));
     if (objData.getNumGrasps(graspName) == 0) return -1;
 
-    tf2::Transform objToFetch = worldXform*objPose;
+    tf2::Transform objToFetch = world.getWorldXform()*objPose;
     tf2::Transform firstPose = objToFetch*potentialGrasps.at(0).first;
     // Should be index of grasp in vector when there are more grasps
     int ind = 0;
@@ -1088,39 +1061,40 @@ public:
     //ROS_INFO("Removing known collision objects");
     ros::Duration(1).sleep();
 
-    boost::lock_guard<boost::mutex> guard(objMutex);
     std::vector<moveit_msgs::CollisionObject> coList;
 
-    for (std::map<std::string, tf2::Vector3>::iterator i = objectPoses.begin();
-         i != objectPoses.end(); i++) {
+    std::vector<std::string> objectIDs = world.allObjectNames();
+    for (std::vector<std::string>::iterator i = objectIDs.begin();
+         i != objectIDs.end(); i++) {
       // Check if the fetch could actually hit this
-      tf2::Vector3 objVec(i->second[0],
-                          i->second[1],
-                          i->second[2]);
-      float dist = tf2::tf2Distance(worldXform.getOrigin(), objVec);
+      float dist = tf2::tf2Distance(world.getWorldXform().getOrigin(),
+                                    world.getPositionOf(*i));
 
       if (dist > 2) {
-        ROS_INFO("Object %s is out of reasonable range", i->first.c_str());
+        ROS_INFO("Object %s is out of reasonable range", i->c_str());
         continue;
       }
-      else if (i->first.find("ground_plane") != std::string::npos) {
+
+      tf2::Vector3 fetchCentered = (world.getWorldXform()*
+                                    world.getPositionOf(*i));
+
+      if (i->find("ground_plane") != std::string::npos) {
         ROS_INFO("Do something with ground plane");
         continue;
       }
-      else if (i->first.find("table") != std::string::npos) {
+      else if (i->find("table") != std::string::npos) {
         ROS_INFO("Adding the table top to collision map.");
         moveit_msgs::CollisionObject planeobj;
         planeobj.header.frame_id = group.getPlanningFrame();
         planeobj.id = "table";
 
-        tf2::Vector3 fetchCentered = worldXform*objVec;
         geometry_msgs::Pose planep;
         planep.position.x = fetchCentered.x();
         planep.position.y = fetchCentered.y();
         planep.position.z = 0.675;
 
-        planep.orientation = tf2::toMsg(worldXform*
-                                        objectRotations[i->first]);
+        planep.orientation = tf2::toMsg(world.getWorldXform()*
+                                        world.getRotationOf(*i));
 
         shape_msgs::SolidPrimitive primitive;
         primitive.type = primitive.BOX;
@@ -1139,28 +1113,27 @@ public:
       moveit_msgs::CollisionObject co;
       co.header.frame_id = group.getPlanningFrame();
 
-      co.id = i->first;
-      ROS_INFO("Adding object %s", i->first.c_str());
+      co.id = *i;
+      ROS_INFO("Adding object %s", i->c_str());
 
       geometry_msgs::Pose box_pose;
-      tf2::Vector3 fetchCentered = worldXform*objVec;
       box_pose.position.x = fetchCentered.x();
       box_pose.position.y = fetchCentered.y();
       box_pose.position.z = fetchCentered.z();
 
-      tf2::Quaternion objQuat = objectRotations[i->first];
-      geometry_msgs::Quaternion q = tf2::toMsg(worldXform*objQuat);
+      geometry_msgs::Quaternion q = tf2::toMsg(world.getWorldXform()*
+                                               world.getRotationOf(*i));
       box_pose.orientation = q;
 
-      if (objData.isInDatabase(i->first)) {
-        shape_msgs::SolidPrimitive primitive = objData.getCollisionModel(objData.findDatabaseName(i->first));
+      if (objData.isInDatabase(*i)) {
+        shape_msgs::SolidPrimitive primitive = objData.getCollisionModel(objData.findDatabaseName(*i));
         co.primitives.push_back(primitive);
         co.primitive_poses.push_back(box_pose);
         co.operation = co.ADD;
         coList.push_back(co);
       }
       else {
-        ROS_INFO("%s was not found in the database", i->first.c_str());
+        ROS_INFO("%s was not found in the database", i->c_str());
       }
     }
     scene.addCollisionObjects(coList);
@@ -1518,12 +1491,7 @@ private:
   moveit::planning_interface::MoveGroupInterface group;
   moveit::planning_interface::PlanningSceneInterface scene;
 
-  std::map<std::string, tf2::Vector3> objectPoses;
-  std::map<std::string, tf2::Quaternion> objectRotations;
-  tf2::Transform worldXform;
-  float tableH;
-  boost::mutex objMutex;
-
+  WorldObjects world;
   ObjectDatabase objData;
 };
 
