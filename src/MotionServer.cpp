@@ -16,19 +16,15 @@
 #include <tf2_ros/transform_listener.h>
 #include <tf2_geometry_msgs/tf2_geometry_msgs.h>
 #include <tf2/utils.h>
-#include <moveit/move_group_interface/move_group_interface.h>
-#include <moveit/planning_scene_interface/planning_scene_interface.h>
-#include <actionlib/client/simple_action_client.h>
 
-#include "moveit_msgs/CollisionObject.h"
 #include "rosie_msgs/RobotCommand.h"
 #include "rosie_msgs/RobotAction.h"
 #include "gazebo_msgs/ModelStates.h"
-#include "control_msgs/GripperCommandAction.h"
-#include "control_msgs/GripperCommandGoal.h"
+#include "moveit_msgs/CollisionObject.h"
 
 #include "ObjectDatabase.h"
 #include "WorldObjects.h"
+#include "ArmController.h"
 
 class MotionServer
 {
@@ -38,104 +34,58 @@ public:
   static const axis Y_AXIS = 1;
   static const axis Z_AXIS = 2;
 
-  typedef std::vector<moveit::planning_interface::MoveGroupInterface::Plan> plan_vector;
-  typedef std::pair<tf2::Transform, tf2::Transform> grasp_pair;
-
-  enum ActionState {WAIT,
-                    HOME,
-                    GRAB,
-                    POINT,
-                    DROP,
-                    PUSH,
-                    FAILURE,
-                    SCENE};
-
-  static std::string asToString(ActionState a)
+  MotionServer() : tfBuf(),
+                   tfListener(tfBuf),
+                   lastCommandTime(0)
   {
-    switch (a)
-      {
-      case WAIT: return "WAIT";
-      case HOME: return "HOME";
-      case GRAB: return "GRAB";
-      case POINT: return "POINT";
-      case DROP: return "DROP";
-      case PUSH: return "PUSH";
-      case FAILURE: return "FAILURE";
-      case SCENE: return "SCENE";
-      default: return "WTF";
-      }
-  }
+    bool isSimRobot = false;
+    // Check params and output useful info to terminal
+    if (!n.getParam("/rosie_motion_server/rosie_is_sim", isSimRobot)) {
+      ROS_INFO("RosieMotionServer is missing rosie_is_sim, assuming real robot.");
+    }
+    else if (isSimRobot == true) {
+      ROS_INFO("RosieMotionServer is expecting a simulated robot.");
+    }
+    else {
+      ROS_INFO("RosieMotionServer is expecting a real robot.");
+    }
 
-  MotionServer(bool humanCheck=true) : tfBuf(),
-                                       tfListener(tfBuf),
-                                       state(WAIT),
-                                       armHomeState(true),
-                                       failureReason("none"),
-                                       numRetries(3),
-                                       lastCommandTime(0),
-                                       grabbedObject("none"),
-                                       checkPlans(humanCheck),
-                                       gripperClosed(false),
-                                       fingerToWrist(-0.16645, 0, 0),
-                                       approachOffset(0.08, 0, 0),
-                                       grabMotion(0.09, 0, 0),
-                                       dropMotion(0.08, 0, 0),
-                                       pushOffset(0.06),
-                                       group("arm"),
-                                       gripper("gripper_controller/gripper_action", true)
-  {
-        if (!n.getParam("/rosie_motion_server/rosie_is_sim", isSimRobot)) {
-          ROS_INFO("RosieMotionServer is missing rosie_is_sim, assuming real robot.");
-        }
-        else if (isSimRobot == true) {
-          ROS_INFO("RosieMotionServer is expecting a simulated robot.");
-        }
-        else {
-          ROS_INFO("RosieMotionServer is expecting a real robot.");
-        }
+    // Also provide correct params to ArmController
+    if (!n.getParam("/rosie_motion_server/human_check", checkPlans)) {
+      ROS_INFO("RosieMotionServer is missing human_check parameter, keeping checks on.");
+      arm = ArmController(true);
+    }
+    else if (checkPlans == false) {
+      ROS_INFO("RosieMotionServer human checks on motion planning are OFF.");
+      arm = ArmController(false);
+    }
+    else {
+      ROS_INFO("RosieMotionServer human checks on motion planning are on.");
+      arm = ArmController(true);
+    }
 
-        if (!n.getParam("/rosie_motion_server/human_check", checkPlans)) {
-          ROS_INFO("RosieMotionServer is missing human_check parameter, keeping checks on.");
-        }
-        else if (checkPlans == false) {
-          ROS_INFO("RosieMotionServer human checks on motion planning are OFF.");
-        }
-        else {
-          ROS_INFO("RosieMotionServer human checks on motion planning are on.");
-        }
-        ros::param::set("/move_group/trajectory_execution/allowed_start_tolerance", 0.0);
+    ros::param::set("/move_group/trajectory_execution/allowed_start_tolerance", 0.0);
 
-        group.setMaxVelocityScalingFactor(0.4);
+    obsSubscriber = n.subscribe("gazebo/model_states", 10,
+                                &MotionServer::obsCallback, this);
+    commSubscriber = n.subscribe("rosie_arm_commands", 10,
+                                 &MotionServer::commandCallback, this);
+    jointsSubscriber = n.subscribe("joint_states", 10,
+                                   &MotionServer::jointCallback, this);
 
-        obsSubscriber = n.subscribe("gazebo/model_states", 10,
-                                    &MotionServer::obsCallback, this);
-        commSubscriber = n.subscribe("rosie_arm_commands", 10,
-                                     &MotionServer::commandCallback, this);
-        jointsSubscriber = n.subscribe("joint_states", 10,
-                                     &MotionServer::jointCallback, this);
+    statusPublisher = n.advertise<rosie_msgs::RobotAction>("rosie_arm_status", 10);
+    goalPublisher = n.advertise<geometry_msgs::PoseStamped>("rosie_grasp_target", 10);
+    camXPublisher = n.advertise<geometry_msgs::TransformStamped>("rosie_camera", 10);
+    pubTimer = n.createTimer(ros::Duration(0.1),
+                             &MotionServer::publishStatus, this);
 
-        statusPublisher = n.advertise<rosie_msgs::RobotAction>("rosie_arm_status", 10);
-        goalPublisher = n.advertise<geometry_msgs::PoseStamped>("rosie_grasp_target", 10);
-        camXPublisher = n.advertise<geometry_msgs::TransformStamped>("rosie_camera", 10);
+    graspGoal.pose.position.x = 0;
+    graspGoal.pose.position.y = 0;
+    graspGoal.pose.position.z = 0;
+    graspGoal.pose.orientation.w = 1.0;
+    graspGoal.header.frame_id = arm.armPlanningFrame();
 
-        gripper.waitForServer();
-
-        graspGoal.pose.position.x = 0;
-        graspGoal.pose.position.y = 0;
-        graspGoal.pose.position.z = 0;
-        graspGoal.pose.orientation.w = 1.0;
-        graspGoal.header.frame_id = group.getPlanningFrame();
-
-        approachAngles.push_back(M_PI/2.0);
-        approachAngles.push_back(M_PI/3.0);
-        approachAngles.push_back(M_PI/4.0);
-        approachAngles.push_back(2.0*M_PI/3.0);
-
-        pubTimer = n.createTimer(ros::Duration(0.1),
-                                 &MotionServer::publishStatus, this);
-
-        closeGripper();
-        ROS_INFO("RosieMotionServer READY!");
+    ROS_INFO("RosieMotionServer READY!");
   };
 
   void obsCallback(const gazebo_msgs::ModelStates::ConstPtr& msg)
@@ -271,8 +221,6 @@ public:
     }
 
     int graspIndex = planToGraspPosition(objectName, databaseName);
-
-    //preferredDropAngle = a;
     if (graspIndex == -1) {
       ROS_INFO("Arm not reaching because planning failed");
       failureReason = "planning";
@@ -1054,7 +1002,7 @@ public:
     camXPublisher.publish(camXform);
   }
 
-  void setUpScene()
+  std::vector<moveit_msgs::CollisionObject> getCollisionModels()
   {
     std::vector<std::string> known = scene.getKnownObjectNames();
     scene.removeCollisionObjects(known);
@@ -1118,7 +1066,7 @@ public:
       box_pose.position.y = fetchCentered.y();
       box_pose.position.z = fetchCentered.z();
 
-      geometry_msgs::Quaternion q = tf2::toMsg(world.worldXformTiemsRot(*i));
+      geometry_msgs::Quaternion q = tf2::toMsg(world.worldXformTimesRot(*i));
       box_pose.orientation = q;
 
       if (objData.isInDatabase(*i)) {
@@ -1132,8 +1080,8 @@ public:
         ROS_INFO("%s was not found in the database", i->c_str());
       }
     }
-    scene.addCollisionObjects(coList);
-    ros::Duration(2).sleep();
+
+    return coList;
   }
 
   // Ignores all objects for a last-ditch effort to get home even
@@ -1250,26 +1198,6 @@ public:
 
     // This should ONLY get set back to true HERE after success
     armHomeState = true;
-  }
-
-  void closeGripper()
-  {
-    setGripperTo(0.0);
-  }
-
-  void openGripper()
-  {
-    setGripperTo(0.1);
-  }
-
-  void setGripperTo(float m)
-  {
-    control_msgs::GripperCommandGoal gripperGoal;
-    gripperGoal.command.max_effort = 0.0;
-    gripperGoal.command.position = m;
-
-    gripper.sendGoal(gripperGoal);
-    gripper.waitForResult(ros::Duration(2.0));
   }
 
   // Estimate whether the gripper can reach a position on the tabletop
@@ -1450,6 +1378,7 @@ private:
   ros::NodeHandle n;
   ros::Subscriber obsSubscriber;
   ros::Subscriber commSubscriber;
+  long lastCommandTime;
   ros::Subscriber jointsSubscriber;
 
   tf2_ros::Buffer tfBuf;
@@ -1460,35 +1389,12 @@ private:
   ros::Publisher camXPublisher;
   geometry_msgs::PoseStamped graspGoal;
   geometry_msgs::TransformStamped camXform;
-  actionlib::SimpleActionClient<control_msgs::GripperCommandAction> gripper;
   ros::Timer pubTimer;
-
-  ActionState state;
-  bool armHomeState;
-  moveit::planning_interface::MoveGroupInterface::Plan currentPlan;
-  std::string failureReason;
-  int numRetries;
-  long lastCommandTime;
-  std::string grabbedObject;
-  std::vector<float> grabbedObjSize;
-  bool gripperClosed;
-  bool checkPlans;
-  bool isSimRobot;
-  tf2::Vector3 fingerToWrist;
-
-  // Grasp position variations
-  std::vector<float> approachAngles;
-  float preferredDropAngle;
-  tf2::Vector3 approachOffset;
-  tf2::Vector3 grabMotion;
-  tf2::Vector3 dropMotion;
-  float pushOffset;
-
-  moveit::planning_interface::MoveGroupInterface group;
-  moveit::planning_interface::PlanningSceneInterface scene;
 
   WorldObjects world;
   ObjectDatabase objData;
+  ArmController arm;
+  bool gripperClosed;
 };
 
 int main(int argc, char** argv)
