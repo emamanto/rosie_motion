@@ -105,6 +105,7 @@ include_directories(
 
 ## Declare a C++ executable
 add_executable(motionserver src/MotionServer.cpp
+  src/ArmController.cpp
   src/ObjectDatabase.cpp
   src/WorldObjects.cpp)
 

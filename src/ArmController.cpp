@@ -1,15 +1,11 @@
 #include "ArmController.h"
 
-ArmController::ArmController(bool humanChecksPlans) : state(WAIT),
-                                                      armHomeState(true),
-                                                      failureReason("none"),
-                                                      numRetries(3),
-                                                      grabbedObject("none"),
-                                                      checkPlans(humanChecksPlans),
-                                                      gripperClosed(false),
-                                                      fingerToWrist(-0.16645, 0, 0),
-                                                      group("arm"),
-                                                      gripper("gripper_controller/gripper_action", true)
+ArmController::ArmController() : numRetries(3),
+                                 grabbedObject("none"),
+                                 checkPlans(true),
+                                 fingerToWrist(-0.16645, 0, 0),
+                                 group("arm"),
+                                 gripper("gripper_controller/gripper_action", true)
 {
   group.setMaxVelocityScalingFactor(0.4);
   gripper.waitForServer();
@@ -19,6 +15,17 @@ ArmController::ArmController(bool humanChecksPlans) : state(WAIT),
 
 std::string ArmController::armPlanningFrame() {
   return group.getPlanningFrame();
+}
+
+void ArmController::buildCollisionScene(std::vector<moveit_msgs::CollisionObject> cos) {
+  clearCollisionScene();
+  scene.addCollisionObjects(cos);
+}
+
+void ArmController::clearCollisionScene() {
+  std::vector<std::string> known = scene.getKnownObjectNames();
+  scene.removeCollisionObjects(known);
+  ros::Duration(0.1).sleep();
 }
 
 void ArmController::closeGripper() {

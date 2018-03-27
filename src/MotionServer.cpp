@@ -34,6 +34,31 @@ public:
   static const axis Y_AXIS = 1;
   static const axis Z_AXIS = 2;
 
+  enum ActionState {WAIT,
+                    HOME,
+                    GRAB,
+                    POINT,
+                    DROP,
+                    PUSH,
+                    FAILURE,
+                    SCENE};
+
+  static std::string asToString(ActionState a)
+  {
+    switch (a)
+      {
+      case WAIT: return "WAIT";
+      case HOME: return "HOME";
+      case GRAB: return "GRAB";
+      case POINT: return "POINT";
+      case DROP: return "DROP";
+      case PUSH: return "PUSH";
+      case FAILURE: return "FAILURE";
+      case SCENE: return "SCENE";
+      default: return "WTF";
+      }
+  }
+
   MotionServer() : tfBuf(),
                    tfListener(tfBuf),
                    lastCommandTime(0)
@@ -50,19 +75,18 @@ public:
       ROS_INFO("RosieMotionServer is expecting a real robot.");
     }
 
+    bool checkPlans = true;
     // Also provide correct params to ArmController
     if (!n.getParam("/rosie_motion_server/human_check", checkPlans)) {
       ROS_INFO("RosieMotionServer is missing human_check parameter, keeping checks on.");
-      arm = ArmController(true);
     }
     else if (checkPlans == false) {
       ROS_INFO("RosieMotionServer human checks on motion planning are OFF.");
-      arm = ArmController(false);
     }
     else {
       ROS_INFO("RosieMotionServer human checks on motion planning are on.");
-      arm = ArmController(true);
     }
+    arm.setHumanChecks(checkPlans);
 
     ros::param::set("/move_group/trajectory_execution/allowed_start_tolerance", 0.0);
 
@@ -117,23 +141,25 @@ public:
 
     failureReason = "none";
     lastCommandTime = msg->utime;
-    if (msg->action.find("GRAB")!=std::string::npos)
-      {
+    if (msg->action.find("GRAB")!=std::string::npos) {
+        state = SCENE;
+        arm.buildCollisionScene(getCollisionModels());
+
         state = GRAB;
         std::string name = msg->action.substr(msg->action.find("=")+1);
         ROS_INFO("Handling pickup command for %s", name.c_str());
-
-        setUpScene();
         handleGrabCommand(name);
       }
-    else if (msg->action.find("DROP")!=std::string::npos){
+    else if (msg->action.find("DROP")!=std::string::npos) {
+      state = SCENE;
+      arm.buildCollisionScene(getCollisionModels());
+
       ROS_INFO("Handling putdown command");
       state = DROP;
       std::vector<float> t = std::vector<float>();
       t.push_back(msg->dest.translation.x);
       t.push_back(msg->dest.translation.y);
       t.push_back(msg->dest.translation.z);
-      setUpScene();
       handleDropCommand(t);
     }
     // else if (msg->action.find("PUSH")!=std::string::npos){
@@ -157,20 +183,14 @@ public:
     //   setUpScene();
     //   //handlePushCommand(num, t);
     // }
-    else if (msg->action.find("POINT")!=std::string::npos){
-      state = POINT;
-      std::string num = msg->action.substr(msg->action.find("=")+1);
-      ROS_INFO("Handling point command for object %s", num.c_str());
+    else if (msg->action.find("POINT")!=std::string::npos) {
+      state = SCENE;
+      arm.buildCollisionScene(getCollisionModels());
 
-      // Same; need to fix
-      int idNum;
-      std::stringstream ss(num);
-      if (!(ss >> idNum)) {
-        ROS_INFO("Invalid object ID number %s", num.c_str());
-        return;
-      }
-      setUpScene();
-      handlePointCommand(num);
+      state = POINT;
+      std::string name = msg->action.substr(msg->action.find("=")+1);
+      ROS_INFO("Handling point command for object %s", name.c_str());
+      handlePointCommand(name);
     }
     else if (msg->action.find("HOME")!=std::string::npos){
       ROS_INFO("Handling home command");
@@ -187,7 +207,7 @@ public:
     else if (msg->action.find("SCENE")!=std::string::npos){
       ROS_INFO("Handling build scene command");
       state = SCENE;
-      setUpScene();
+      arm.buildCollisionScene(getCollisionModels());
       state = WAIT;
     }
     else {
@@ -220,6 +240,7 @@ public:
       return;
     }
 
+    arm.buildCollisionScene(getCollisionModels());
     int graspIndex = planToGraspPosition(objectName, databaseName);
     if (graspIndex == -1) {
       ROS_INFO("Arm not reaching because planning failed");
@@ -238,7 +259,7 @@ public:
     }
 
     ros::Duration(0.5).sleep();
-    openGripper();
+    arm.openGripper();
 
     std::vector<geometry_msgs::Pose> waypoints;
     waypoints.push_back(group.getCurrentPose().pose);
@@ -293,7 +314,7 @@ public:
       ss << id;
       std::vector<std::string> missed;
       missed.push_back(ss.str());
-      scene.removeCollisionObjects(missed);
+      //scene.removeCollisionObjects(missed);
       ros::Duration(0.5).sleep();
 
       ROS_INFO("Arm will return home because grabbing failed");
@@ -314,7 +335,7 @@ public:
       std::vector<std::string> attached;
       attached.push_back(ss.str());
 
-      scene.removeCollisionObjects(attached);
+      //scene.removeCollisionObjects(attached);
       ros::Duration(0.5).sleep();
     }
 
@@ -335,8 +356,7 @@ public:
     if (frac2 < 0.5 || !executeCurrentPlan() || state == FAILURE) {
       ROS_INFO("Arm returning home because execution failed");
       homeArm(true);
-      if (state != FAILURE) failureReason = "execution";
-      state = FAILURE;
+      if (state == FAILURE) failureReason = "execution";
       return;
     }
 
@@ -350,7 +370,7 @@ public:
       ss << id;
       std::vector<std::string> missed;
       missed.push_back(ss.str());
-      scene.removeCollisionObjects(missed);
+      //scene.removeCollisionObjects(missed);
       ros::Duration(0.5).sleep();
 
       failureReason = "grasping";
@@ -463,7 +483,7 @@ public:
 
       std::vector<std::string> toRem;
       toRem.push_back(grabbedObject);
-      scene.removeCollisionObjects(toRem);
+      //scene.removeCollisionObjects(toRem);
       ros::Duration(1.0).sleep();
 
       geometry_msgs::Pose dropP;
@@ -485,7 +505,7 @@ public:
 
       std::vector<moveit_msgs::CollisionObject> toAdd;
       toAdd.push_back(droppedObj);
-      scene.addCollisionObjects(toAdd);
+      //scene.addCollisionObjects(toAdd);
 
       grabbedObject = "none";
       ros::Duration(0.5).sleep();
@@ -937,7 +957,7 @@ public:
   // TYPE OF OBJECT IN THE DATABASE
   int planToGraspPosition(std::string objId, std::string graspName) {
     bool found = false;
-    std::vector<grasp_pair> potentialGrasps = objData.getAllGrasps(graspName);
+    std::vector<GraspPair> potentialGrasps = objData.getAllGrasps(graspName);
     ROS_INFO("I see %i grasps for this obj", objData.getNumGrasps(graspName));
     if (objData.getNumGrasps(graspName) == 0) return -1;
 
@@ -1004,11 +1024,7 @@ public:
 
   std::vector<moveit_msgs::CollisionObject> getCollisionModels()
   {
-    std::vector<std::string> known = scene.getKnownObjectNames();
-    scene.removeCollisionObjects(known);
-    //ROS_INFO("Removing known collision objects");
-    ros::Duration(1).sleep();
-
+    arm.clearCollisionScene();
     std::vector<moveit_msgs::CollisionObject> coList;
 
     std::vector<std::string> objectIDs = world.allObjectNames();
@@ -1084,22 +1100,6 @@ public:
     return coList;
   }
 
-  // Ignores all objects for a last-ditch effort to get home even
-  // if arm hits something
-  void setUpEmptyScene() {
-    std::vector<std::string> known = scene.getKnownObjectNames();
-    scene.removeCollisionObjects(known);
-    //ROS_INFO("Removing known collision objects");
-    ros::Duration(1).sleep();
-
-    std::vector<moveit_msgs::CollisionObject> coList;
-
-    // JUST add the table
-
-    scene.addCollisionObjects(coList);
-    ros::Duration(1).sleep();
-  }
-
   bool safetyCheck()
   {
     if (!checkPlans) return true;
@@ -1166,7 +1166,7 @@ public:
 
     if (!success && forceHome) {
       ROS_INFO("Homing arm failed with blocks in the way, attempting to force home");
-      setUpEmptyScene();
+      //setUpEmptyScene();
 
       int forceCount = 0;
       while (!success && forceCount < 10) {
@@ -1390,6 +1390,10 @@ private:
   geometry_msgs::PoseStamped graspGoal;
   geometry_msgs::TransformStamped camXform;
   ros::Timer pubTimer;
+
+  ActionState state;
+  std::string failureReason;
+  bool armHomeState;
 
   WorldObjects world;
   ObjectDatabase objData;
