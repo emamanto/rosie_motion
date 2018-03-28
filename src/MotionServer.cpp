@@ -857,7 +857,7 @@ public:
       else if (i->find("table") != std::string::npos) {
         ROS_INFO("Adding the table top to collision map.");
         moveit_msgs::CollisionObject planeobj;
-        //planeobj.header.frame_id = group.getPlanningFrame();
+        planeobj.header.frame_id = arm.armPlanningFrame();
         planeobj.id = "table";
 
         geometry_msgs::Pose planep;
@@ -882,7 +882,7 @@ public:
       }
 
       moveit_msgs::CollisionObject co;
-      //co.header.frame_id = group.getPlanningFrame();
+      co.header.frame_id = arm.armPlanningFrame();
 
       co.id = *i;
       ROS_INFO("Adding object %s", i->c_str());

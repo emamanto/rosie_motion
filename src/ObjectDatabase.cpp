@@ -79,7 +79,7 @@ void ObjectDatabase::init() {
   GraspPair glassP = std::make_pair(tf2::Transform(glassRot,
                                                    tf2::Vector3(0.0, 0.0, 0.15)),
                                     tf2::Transform(glassRot,
-                                                   tf2::Vector3(0.0, 0.0, 0.12)));
+                                                   tf2::Vector3(0.0, 0.0, 0.18)));
   std::vector<GraspPair> glassGrasps;
   glassGrasps.push_back(glassP);
   grasps.insert(std::pair<std::string, std::vector<GraspPair> >("cup_glass",

@@ -190,24 +190,29 @@ bool ArmController::safetyCheck() {
 
 void ArmController::reverseCurrentPlan() {
   moveit_msgs::RobotTrajectory reversed;
+  moveit_msgs::RobotTrajectory curTraj = currentPlan.trajectory_;
 
-  // for (std::vector<trajectory_msgs::JointTrajectoryPoint>::iterator i =
-  //        currentPlan.trajectory_.joint_trajectory.points.rbegin();
-  //      i!= currentPlan.trajectory_.joint_trajectory.points.rend(); i++) {
-  //   reversed.joint_trajectory.push_back(*i);
-  // }
+  std::vector<trajectory_msgs::JointTrajectoryPoint> rps;
+  for (std::vector<trajectory_msgs::JointTrajectoryPoint>::reverse_iterator i =
+         curTraj.joint_trajectory.points.rbegin();
+       i!= curTraj.joint_trajectory.points.rend(); i++) {
+    rps.push_back(*i);
+  }
+  reversed.joint_trajectory.points = rps;
 
-  // for (std::vector<trajectory_msgs::MultiDOFJointTrajectoryPoint>::iterator i =
-  //        currentPlan.trajectory_.multi_dof_joint_trajectory.points.rbegin();
-  //      i!= currentPlan.trajectory_.multi_dof_joint_trajectory.points.rend(); i++) {
-  //   reversed.multi_dof_joint_trajectory.push_back(*i);
-  // }
+  std::vector<trajectory_msgs::MultiDOFJointTrajectoryPoint> mdrps;
+  for (std::vector<trajectory_msgs::MultiDOFJointTrajectoryPoint>::reverse_iterator i =
+         curTraj.multi_dof_joint_trajectory.points.rbegin();
+       i!= curTraj.multi_dof_joint_trajectory.points.rend(); i++) {
+    mdrps.push_back(*i);
+  }
+  reversed.multi_dof_joint_trajectory.points = mdrps;
 
-  // reversed.joint_trajectory.header = currentPlan.joint_trajectory.header;
-  // reversed.multi_dof_joint_trajectory.header = currentPlan.multi_dof_joint_trajectory.header;
+  reversed.joint_trajectory.header = curTraj.joint_trajectory.header;
+  reversed.multi_dof_joint_trajectory.header = curTraj.multi_dof_joint_trajectory.header;
 
-  // reversed.joint_trajectory.joint_names = currentPlan.joint_trajectory.joint_names;
-  // reversed.multi_dof_joint_trajectory.joint_names = currentPlan.multi_dof_joint_trajectory.joint_names;
+  reversed.joint_trajectory.joint_names = curTraj.joint_trajectory.joint_names;
+  reversed.multi_dof_joint_trajectory.joint_names = curTraj.multi_dof_joint_trajectory.joint_names;
 
   currentPlan.trajectory_ = reversed;
 }
