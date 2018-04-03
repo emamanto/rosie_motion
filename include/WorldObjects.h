@@ -6,6 +6,7 @@
 #include <tf2/utils.h>
 #include <boost/thread.hpp>
 
+#include <ros/ros.h>
 #include "gazebo_msgs/ModelStates.h"
 
 class WorldObjects {

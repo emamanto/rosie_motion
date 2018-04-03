@@ -7,7 +7,8 @@ bool ObjectDatabase::isInDatabase(std::string objectID) {
 bool ObjectDatabase::dbHasGrasps(std::string objectID) {
   for (std::map<std::string, std::vector<GraspPair> >::iterator j =
          grasps.begin(); j != grasps.end(); j++) {
-    if (j->first.find(objectID) != std::string::npos) {
+    if (j->first.find(objectID) != std::string::npos ||
+        objectID.find(j->first) != std::string::npos) {
       return true;
     }
   }
@@ -17,7 +18,8 @@ bool ObjectDatabase::dbHasGrasps(std::string objectID) {
 bool ObjectDatabase::dbHasModel(std::string objectID) {
   for (std::map<std::string, shape_msgs::SolidPrimitive>::iterator p =
          collisionModels.begin(); p != collisionModels.end(); p++) {
-    if (p->first.find(objectID) != std::string::npos) {
+    if (p->first.find(objectID) != std::string::npos ||
+        objectID.find(p->first) != std::string::npos) {
       return true;
     }
   }
@@ -27,7 +29,8 @@ bool ObjectDatabase::dbHasModel(std::string objectID) {
 std::string ObjectDatabase::findDatabaseName(std::string objectID) {
   for (std::map<std::string, std::vector<GraspPair> >::iterator j =
          grasps.begin(); j != grasps.end(); j++) {
-    if (objectID.find(j->first) != std::string::npos) {
+    if (j->first.find(objectID) != std::string::npos ||
+        objectID.find(j->first) != std::string::npos) {
       ROS_INFO("Found %s under GRASP database name %s", objectID.c_str(),
                j->first.c_str());
       return j->first;
@@ -36,7 +39,8 @@ std::string ObjectDatabase::findDatabaseName(std::string objectID) {
 
   for (std::map<std::string, shape_msgs::SolidPrimitive>::iterator p =
          collisionModels.begin(); p != collisionModels.end(); p++) {
-    if (objectID.find(p->first) != std::string::npos) {
+    if (p->first.find(objectID) != std::string::npos ||
+        objectID.find(p->first) != std::string::npos) {
       ROS_INFO("Found %s under MODEL database name %s", objectID.c_str(),
                p->first.c_str());
       return p->first;
@@ -77,9 +81,9 @@ void ObjectDatabase::init() {
   tf2::Quaternion glassRot;
   glassRot.setRPY(0, M_PI/2, 0);
   GraspPair glassP = std::make_pair(tf2::Transform(glassRot,
-                                                   tf2::Vector3(0.0, 0.0, 0.15)),
+                                                   tf2::Vector3(0.0, 0.0, 0.2)),
                                     tf2::Transform(glassRot,
-                                                   tf2::Vector3(0.0, 0.0, 0.18)));
+                                                   tf2::Vector3(0.0, 0.0, 0.17)));
   std::vector<GraspPair> glassGrasps;
   glassGrasps.push_back(glassP);
   grasps.insert(std::pair<std::string, std::vector<GraspPair> >("cup_glass",

@@ -13,6 +13,7 @@
 #include <boost/thread.hpp>
 
 #include <ros/ros.h>
+#include <ros/callback_queue.h>
 #include <tf2_ros/transform_listener.h>
 #include <tf2_geometry_msgs/tf2_geometry_msgs.h>
 #include <tf2/utils.h>
@@ -59,9 +60,12 @@ public:
       }
   }
 
-  MotionServer() : tfBuf(),
+  MotionServer() : spinner(0, &inputQueue),
+                   armSpinner(0, &armQueue),
+                   tfBuf(),
                    tfListener(tfBuf),
-                   lastCommandTime(0)
+                   lastCommandTime(0),
+                   arm(n)
   {
     bool isSimRobot = false;
     // Check params and output useful info to terminal
@@ -90,27 +94,45 @@ public:
 
     ros::param::set("/move_group/trajectory_execution/allowed_start_tolerance", 0.0);
 
-    obsSubscriber = n.subscribe("gazebo/model_states", 10,
-                                &MotionServer::obsCallback, this);
-    commSubscriber = n.subscribe("rosie_arm_commands", 10,
-                                 &MotionServer::commandCallback, this);
-    jointsSubscriber = n.subscribe("joint_states", 10,
-                                   &MotionServer::jointCallback, this);
+    ros::SubscribeOptions optionsObs =
+      ros::SubscribeOptions::create<gazebo_msgs::ModelStates>("gazebo/model_states",
+                                                              10,
+                                                              boost::bind(&MotionServer::obsCallback,
+                                                                          this, _1),
+                                                              ros::VoidPtr(), &inputQueue);
+    ros::SubscribeOptions optionsJoint =
+      ros::SubscribeOptions::create<sensor_msgs::JointState>("joint_states",
+                                                              10,
+                                                              boost::bind(&MotionServer::jointCallback,
+                                                                          this, _1),
+                                                              ros::VoidPtr(), &inputQueue);
+
+    obsSubscriber = n.subscribe(optionsObs);
+    jointsSubscriber = n.subscribe(optionsJoint);
+
+    ros::SubscribeOptions optionsArm =
+      ros::SubscribeOptions::create<rosie_msgs::RobotCommand>("rosie_arm_commands",
+                                                              1,
+                                                              boost::bind(&MotionServer::commandCallback,
+                                                                          this, _1),
+                                                              ros::VoidPtr(), &armQueue);
+    commSubscriber = n.subscribe(optionsArm);
 
     statusPublisher = n.advertise<rosie_msgs::RobotAction>("rosie_arm_status", 10);
-    goalPublisher = n.advertise<geometry_msgs::PoseStamped>("rosie_grasp_target", 10);
     camXPublisher = n.advertise<geometry_msgs::TransformStamped>("rosie_camera", 10);
     pubTimer = n.createTimer(ros::Duration(0.1),
                              &MotionServer::publishStatus, this);
 
-    graspGoal.pose.position.x = 0;
-    graspGoal.pose.position.y = 0;
-    graspGoal.pose.position.z = 0;
-    graspGoal.pose.orientation.w = 1.0;
-    graspGoal.header.frame_id = arm.armPlanningFrame();
-
     ROS_INFO("RosieMotionServer READY!");
   };
+
+  void start() {
+    spinner.start();
+    ROS_INFO("RosieMotionServer started INPUT SPINNER");
+
+    armSpinner.start();
+    ROS_INFO("RosieMotionServer started ARM SPINNER");
+  }
 
   void obsCallback(const gazebo_msgs::ModelStates::ConstPtr& msg)
   {
@@ -142,14 +164,11 @@ public:
     failureReason = "none";
     lastCommandTime = msg->utime;
     if (msg->action.find("GRAB")!=std::string::npos) {
-        state = SCENE;
-        arm.buildCollisionScene(getCollisionModels());
-
         state = GRAB;
         std::string name = msg->action.substr(msg->action.find("=")+1);
         ROS_INFO("Handling pickup command for %s", name.c_str());
         handleGrabCommand(name);
-      }
+    }
     else if (msg->action.find("DROP")!=std::string::npos) {
       state = SCENE;
       arm.buildCollisionScene(getCollisionModels());
@@ -819,9 +838,8 @@ public:
     msg.action = asToString(state).c_str();
     msg.armHome = armHomeState;
     msg.failure_reason = failureReason;
-    //msg.obj_id = grabbedObject;
+    msg.obj_id = arm.getHeld();
     statusPublisher.publish(msg);
-    goalPublisher.publish(graspGoal);
 
     try {
       camXform = tfBuf.lookupTransform("base_link", "head_camera_rgb_optical_frame",
@@ -912,6 +930,10 @@ public:
 
 private:
   ros::NodeHandle n;
+  ros::AsyncSpinner spinner;
+  ros::AsyncSpinner armSpinner;
+  ros::CallbackQueue armQueue;
+  ros::CallbackQueue inputQueue;
   ros::Subscriber obsSubscriber;
   ros::Subscriber commSubscriber;
   long lastCommandTime;
@@ -921,9 +943,7 @@ private:
   tf2_ros::TransformListener tfListener;
 
   ros::Publisher statusPublisher;
-  ros::Publisher goalPublisher;
   ros::Publisher camXPublisher;
-  geometry_msgs::PoseStamped graspGoal;
   geometry_msgs::TransformStamped camXform;
   ros::Timer pubTimer;
 
@@ -941,9 +961,11 @@ int main(int argc, char** argv)
 {
     ros::init(argc, argv, "rosie_motion_server");
     MotionServer ms;
+    ms.start();
 
-    ros::AsyncSpinner spinner(4);
-    spinner.start();
+    ROS_INFO("Starting up the MAIN spinner");
+    ros::AsyncSpinner mainSpinner(0);
+    mainSpinner.start();
     ros::waitForShutdown();
 
     return 0;

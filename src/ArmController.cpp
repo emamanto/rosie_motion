@@ -1,16 +1,24 @@
 #include "ArmController.h"
 
-ArmController::ArmController() : numRetries(3),
-                                 grabbedObject("none"),
-                                 checkPlans(true),
-                                 fingerToWrist(-0.16645, 0, 0),
-                                 group("arm"),
-                                 gripper("gripper_controller/gripper_action", true)
+ArmController::ArmController(ros::NodeHandle& nh) : numRetries(3),
+                                                    grabbedObject("none"),
+                                                    checkPlans(true),
+                                                    group("arm"),
+                                                    gripper("gripper_controller/gripper_action", true)
 {
   group.setMaxVelocityScalingFactor(0.4);
   gripper.waitForServer();
   closeGripper();
 
+  currentGoal.pose.position.x = 0;
+  currentGoal.pose.position.y = 0;
+  currentGoal.pose.position.z = 0;
+  currentGoal.pose.orientation.w = 1.0;
+  currentGoal.header.frame_id = group.getPlanningFrame();
+
+  goalPublisher = nh.advertise<geometry_msgs::PoseStamped>("rosie_grasp_target", 10);
+  pubTimer = nh.createTimer(ros::Duration(0.1),
+                            &ArmController::publishCurrentGoal, this);
 }
 
 std::string ArmController::armPlanningFrame() {
@@ -20,6 +28,9 @@ std::string ArmController::armPlanningFrame() {
 void ArmController::buildCollisionScene(std::vector<moveit_msgs::CollisionObject> cos) {
   clearCollisionScene();
   scene.addCollisionObjects(cos);
+  ros::Duration(1.0).sleep();
+  std::vector<std::string> known = scene.getKnownObjectNames();
+  ROS_INFO("Added %i objects to collision scene", (int)known.size());
 }
 
 void ArmController::clearCollisionScene() {
@@ -49,15 +60,21 @@ bool ArmController::pickUp(tf2::Transform objXform,
                            std::vector<std::pair<tf2::Transform,
                            tf2::Transform> > graspList) {
   tf2::Transform firstPose = objXform*graspList.at(0).first;
+  setCurrentGoalTo(firstPose);
   if (!planToXform(firstPose)) return false;
   if (!executeCurrentPlan()) return false;
 
+  ros::Duration(1.0).sleep();
   openGripper();
+  ros::Duration(1.0).sleep();
 
+  setCurrentGoalTo(objXform*graspList.at(0).second);
   if (!planStraightLineMotion(objXform*graspList.at(0).second)) return false;
   if (!executeCurrentPlan()) return false;
 
+  ros::Duration(1.0).sleep();
   closeGripper();
+  ros::Duration(1.0).sleep();
 
   // if (gripperClosed) {
   //   ROS_INFO("Robot seems to have missed block %s", id.c_str());
@@ -73,7 +90,8 @@ bool ArmController::pickUp(tf2::Transform objXform,
   //   state = FAILURE;
   // }
 
-  reverseCurrentPlan();
+  if (!planStraightLineMotion(objXform*graspList.at(0).first)) return false;
+  setCurrentGoalTo(firstPose);
   if (!executeCurrentPlan()) return false;
 
   if (!homeArm()) return false;
@@ -115,6 +133,7 @@ bool ArmController::planToXform(tf2::Transform t) {
   target.position.y = t.getOrigin().y();
   target.position.z = t.getOrigin().z();
   group.setPoseTarget(target);
+  ros::Duration(1.0).sleep();
 
   moveit::planning_interface::MoveGroupInterface::Plan mp;
   moveit::planning_interface::MoveItErrorCode success = group.plan(mp);
@@ -191,6 +210,7 @@ bool ArmController::safetyCheck() {
 void ArmController::reverseCurrentPlan() {
   moveit_msgs::RobotTrajectory reversed;
   moveit_msgs::RobotTrajectory curTraj = currentPlan.trajectory_;
+  ROS_INFO("The original trajectory has %i points", (int)curTraj.joint_trajectory.points.size());
 
   std::vector<trajectory_msgs::JointTrajectoryPoint> rps;
   for (std::vector<trajectory_msgs::JointTrajectoryPoint>::reverse_iterator i =
@@ -214,5 +234,18 @@ void ArmController::reverseCurrentPlan() {
   reversed.joint_trajectory.joint_names = curTraj.joint_trajectory.joint_names;
   reversed.multi_dof_joint_trajectory.joint_names = curTraj.multi_dof_joint_trajectory.joint_names;
 
+  ROS_INFO("The new trajectory has %i points", (int)reversed.joint_trajectory.points.size());
+
   currentPlan.trajectory_ = reversed;
+}
+
+void ArmController::publishCurrentGoal(const ros::TimerEvent& e) {
+  goalPublisher.publish(currentGoal);
+}
+
+void ArmController::setCurrentGoalTo(tf2::Transform t) {
+  currentGoal.pose.position.x = t.getOrigin().x();
+  currentGoal.pose.position.y = t.getOrigin().y();
+  currentGoal.pose.position.z = t.getOrigin().z();
+  currentGoal.pose.orientation = tf2::toMsg(t.getRotation());
 }

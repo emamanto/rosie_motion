@@ -22,10 +22,11 @@ public:
   typedef std::vector<moveit::planning_interface::MoveGroupInterface::Plan> PlanVector;
   typedef std::pair<tf2::Transform, tf2::Transform> GraspPair;
 
-  ArmController();
+  ArmController(ros::NodeHandle& nh);
   void setHumanChecks(bool on) { checkPlans = on; }
 
   std::string armPlanningFrame();
+  std::string getHeld() { return grabbedObject; }
 
   void buildCollisionScene(std::vector<moveit_msgs::CollisionObject> cos);
   void clearCollisionScene();
@@ -45,6 +46,8 @@ private:
   bool executeCurrentPlan();
   bool safetyCheck();
   void reverseCurrentPlan();
+  void publishCurrentGoal(const ros::TimerEvent& e);
+  void setCurrentGoalTo(tf2::Transform t);
 
   moveit::planning_interface::MoveGroupInterface::Plan currentPlan;
   int numRetries;
@@ -52,7 +55,10 @@ private:
   std::vector<float> grabbedObjSize;
   actionlib::SimpleActionClient<control_msgs::GripperCommandAction> gripper;
   bool checkPlans;
-  tf2::Vector3 fingerToWrist;
+
+  geometry_msgs::PoseStamped currentGoal;
+  ros::Publisher goalPublisher;
+  ros::Timer pubTimer;
 
   moveit::planning_interface::MoveGroupInterface group;
   moveit::planning_interface::PlanningSceneInterface scene;
