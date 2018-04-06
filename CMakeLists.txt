@@ -23,7 +23,7 @@ find_package(catkin REQUIRED COMPONENTS
   tf2_ros
 )
 
-generate_messages (DEPENDENCIES actionlib_msgs rosie_msgs)
+#generate_messages (DEPENDENCIES actionlib_msgs rosie_msgs)
 
 ## System dependencies are found with CMake's conventions
 # find_package(Boost REQUIRED COMPONENTS system)
