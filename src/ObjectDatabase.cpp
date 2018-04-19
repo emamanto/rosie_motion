@@ -31,8 +31,8 @@ std::string ObjectDatabase::findDatabaseName(std::string objectID) {
          grasps.begin(); j != grasps.end(); j++) {
     if (j->first.find(objectID) != std::string::npos ||
         objectID.find(j->first) != std::string::npos) {
-      ROS_INFO("Found %s under GRASP database name %s", objectID.c_str(),
-               j->first.c_str());
+      //ROS_INFO("Found %s under GRASP database name %s", objectID.c_str(),
+      //         j->first.c_str());
       return j->first;
     }
   }
@@ -41,8 +41,8 @@ std::string ObjectDatabase::findDatabaseName(std::string objectID) {
          collisionModels.begin(); p != collisionModels.end(); p++) {
     if (p->first.find(objectID) != std::string::npos ||
         objectID.find(p->first) != std::string::npos) {
-      ROS_INFO("Found %s under MODEL database name %s", objectID.c_str(),
-               p->first.c_str());
+      //ROS_INFO("Found %s under MODEL database name %s", objectID.c_str(),
+      //         p->first.c_str());
       return p->first;
     }
   }
@@ -81,9 +81,9 @@ void ObjectDatabase::init() {
   tf2::Quaternion glassRot;
   glassRot.setRPY(0, M_PI/2, 0);
   GraspPair glassP = std::make_pair(tf2::Transform(glassRot,
-                                                   tf2::Vector3(0.0, 0.0, 0.2)),
+                                                   tf2::Vector3(0.0, 0.0, 0.25)),
                                     tf2::Transform(glassRot,
-                                                   tf2::Vector3(0.0, 0.0, 0.17)));
+                                                   tf2::Vector3(0.0, 0.0, 0.25)));
   std::vector<GraspPair> glassGrasps;
   glassGrasps.push_back(glassP);
   grasps.insert(std::pair<std::string, std::vector<GraspPair> >("cup_glass",
@@ -98,6 +98,16 @@ void ObjectDatabase::init() {
   collisionModels.insert(std::pair<std::string,
                          shape_msgs::SolidPrimitive>("coca_cola",
                                                      coke));
+  tf2::Quaternion cokeRot;
+  cokeRot.setRPY(0, M_PI/2, 0);
+  GraspPair cokeP = std::make_pair(tf2::Transform(cokeRot,
+                                                  tf2::Vector3(0.0, 0.0, 0.26)),
+                                   tf2::Transform(cokeRot,
+                                                  tf2::Vector3(0.0, 0.0, 0.26)));
+  std::vector<GraspPair> cokeGrasps;
+  cokeGrasps.push_back(cokeP);
+  grasps.insert(std::pair<std::string, std::vector<GraspPair> >("coca_cola",
+                                                                cokeGrasps));
 
   // ALL THE BLOCKS
   for (int i = 3; i <= 13; i += 2) {

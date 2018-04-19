@@ -4,7 +4,8 @@ ArmController::ArmController(ros::NodeHandle& nh) : numRetries(3),
                                                     grabbedObject("none"),
                                                     checkPlans(true),
                                                     group("arm"),
-                                                    gripper("gripper_controller/gripper_action", true)
+                                                    gripper("gripper_controller/gripper_action", true),
+                                                    sceneMonitor(new planning_scene_monitor::PlanningSceneMonitor("robot_description"))
 {
   group.setMaxVelocityScalingFactor(0.4);
   gripper.waitForServer();
@@ -19,24 +20,51 @@ ArmController::ArmController(ros::NodeHandle& nh) : numRetries(3),
   goalPublisher = nh.advertise<geometry_msgs::PoseStamped>("rosie_grasp_target", 10);
   pubTimer = nh.createTimer(ros::Duration(0.1),
                             &ArmController::publishCurrentGoal, this);
+
+  sceneMonitor->startSceneMonitor("/move_group/monitored_planning_scene");
+  sceneMonitor->startPublishingPlanningScene(planning_scene_monitor::PlanningSceneMonitor::SceneUpdateType::UPDATE_GEOMETRY, "/planning_scene");
 }
 
 std::string ArmController::armPlanningFrame() {
   return group.getPlanningFrame();
 }
 
+void ArmController::setCollisionList(std::vector<moveit_msgs::CollisionObject> cos) {
+  boost::lock_guard<boost::mutex> guard(objMutex);
+  currentCollisionObjects = cos;
+}
+
 void ArmController::buildCollisionScene(std::vector<moveit_msgs::CollisionObject> cos) {
-  clearCollisionScene();
-  scene.addCollisionObjects(cos);
-  ros::Duration(1.0).sleep();
-  std::vector<std::string> known = scene.getKnownObjectNames();
-  ROS_INFO("Added %i objects to collision scene", (int)known.size());
+  {
+    boost::lock_guard<boost::mutex> guard(objMutex);
+    currentCollisionObjects = cos;
+  }
+  buildCollisionScene();
+}
+
+void ArmController::buildCollisionScene() {
+  {
+    planning_scene_monitor::LockedPlanningSceneRW ls(sceneMonitor);
+    ls->getWorldNonConst()->clearObjects();
+  }
+  moveit_msgs::PlanningScene scene;
+  {
+    boost::lock_guard<boost::mutex> guard(objMutex);
+    for (std::vector<moveit_msgs::CollisionObject>::iterator i =
+           currentCollisionObjects.begin();
+         i != currentCollisionObjects.end();
+         i++) {
+      scene.world.collision_objects.push_back(*i);
+    }
+  }
+  scene.name = "rosie_scene";
+  scene.is_diff = true;
+  sceneMonitor->newPlanningSceneMessage(scene);
 }
 
 void ArmController::clearCollisionScene() {
-  std::vector<std::string> known = scene.getKnownObjectNames();
-  scene.removeCollisionObjects(known);
-  ros::Duration(0.1).sleep();
+  planning_scene_monitor::LockedPlanningSceneRW ls(sceneMonitor);
+  ls->getWorldNonConst()->clearObjects();
 }
 
 void ArmController::closeGripper() {
@@ -61,6 +89,14 @@ bool ArmController::pickUp(tf2::Transform objXform,
                            tf2::Transform> > graspList) {
   tf2::Transform firstPose = objXform*graspList.at(0).first;
   setCurrentGoalTo(firstPose);
+
+  //std::vector<std::string> known = scene.getKnownObjectNames();
+  // ROS_INFO("There are %i objects in the collision scene", (int)known.size());
+  // for (std::vector<std::string>::iterator it = known.begin();
+  //      it != known.end(); it++) {
+  //   ROS_INFO("OBJ NAME: %s", it->c_str());
+  // }
+
   if (!planToXform(firstPose)) return false;
   if (!executeCurrentPlan()) return false;
 
@@ -126,6 +162,7 @@ bool ArmController::homeArm() {
 }
 
 bool ArmController::planToXform(tf2::Transform t) {
+  ROS_INFO("Starting to plan to a transform goal.");
   group.setStartStateToCurrentState();
   geometry_msgs::Pose target;
   target.orientation = tf2::toMsg(t.getRotation());
@@ -133,10 +170,12 @@ bool ArmController::planToXform(tf2::Transform t) {
   target.position.y = t.getOrigin().y();
   target.position.z = t.getOrigin().z();
   group.setPoseTarget(target);
-  ros::Duration(1.0).sleep();
+  ROS_INFO("Set the target, waiting for initialization.");
+  ros::Duration(5.0).sleep();
 
   moveit::planning_interface::MoveGroupInterface::Plan mp;
   moveit::planning_interface::MoveItErrorCode success = group.plan(mp);
+  ROS_INFO("Plan function has returned.");
 
   // To stop it thinking it's successful if postprocessing is the problem
   if (mp.trajectory_.joint_trajectory.points.empty() &&
@@ -144,6 +183,7 @@ bool ArmController::planToXform(tf2::Transform t) {
     success = false;
   }
 
+  ROS_INFO("Setting the current plan to the new one.");
   currentPlan = mp;
   return (bool)success;
 }

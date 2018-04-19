@@ -60,8 +60,8 @@ public:
       }
   }
 
-  MotionServer() : spinner(0, &inputQueue),
-                   armSpinner(0, &armQueue),
+  MotionServer() : spinner(1, &inputQueue),
+                   armSpinner(1, &armQueue),
                    tfBuf(),
                    tfListener(tfBuf),
                    lastCommandTime(0),
@@ -964,8 +964,8 @@ int main(int argc, char** argv)
     ms.start();
 
     ROS_INFO("Starting up the MAIN spinner");
-    ros::AsyncSpinner mainSpinner(0);
-    mainSpinner.start();
+    ros::AsyncSpinner mainSpin(4);
+    mainSpin.start();
     ros::waitForShutdown();
 
     return 0;
