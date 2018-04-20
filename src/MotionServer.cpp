@@ -852,7 +852,6 @@ public:
 
   std::vector<moveit_msgs::CollisionObject> getCollisionModels()
   {
-    arm.clearCollisionScene();
     std::vector<moveit_msgs::CollisionObject> coList;
 
     std::vector<std::string> objectIDs = world.allObjectNames();
@@ -869,7 +868,26 @@ public:
 
       tf2::Vector3 fetchCentered = world.worldXformTimesPos(*i);
       if (i->find("ground_plane") != std::string::npos) {
-        ROS_INFO("Do something with ground plane");
+        moveit_msgs::CollisionObject planeobj;
+        planeobj.id = "ground";
+
+        geometry_msgs::Pose planep;
+        planep.position.x = fetchCentered.x();
+        planep.position.y = fetchCentered.y();
+        planep.position.z = -0.025;
+
+        planep.orientation = tf2::toMsg(world.worldXformTimesRot(*i));
+
+        shape_msgs::SolidPrimitive primitive;
+        primitive.type = primitive.BOX;
+        primitive.dimensions.resize(3);
+        primitive.dimensions[0] = 2.0;
+        primitive.dimensions[1] = 2.0;
+        primitive.dimensions[2] = 0.05;
+
+        planeobj.primitives.push_back(primitive);
+        planeobj.primitive_poses.push_back(planep);
+        coList.push_back(planeobj);
         continue;
       }
       else if (i->find("table") != std::string::npos) {

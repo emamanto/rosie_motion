@@ -81,9 +81,9 @@ void ObjectDatabase::init() {
   tf2::Quaternion glassRot;
   glassRot.setRPY(0, M_PI/2, 0);
   GraspPair glassP = std::make_pair(tf2::Transform(glassRot,
-                                                   tf2::Vector3(0.0, 0.0, 0.25)),
+                                                   tf2::Vector3(0.0, 0.0, 0.26)),
                                     tf2::Transform(glassRot,
-                                                   tf2::Vector3(0.0, 0.0, 0.25)));
+                                                   tf2::Vector3(0.0, 0.0, 0.18)));
   std::vector<GraspPair> glassGrasps;
   glassGrasps.push_back(glassP);
   grasps.insert(std::pair<std::string, std::vector<GraspPair> >("cup_glass",
@@ -101,9 +101,9 @@ void ObjectDatabase::init() {
   tf2::Quaternion cokeRot;
   cokeRot.setRPY(0, M_PI/2, 0);
   GraspPair cokeP = std::make_pair(tf2::Transform(cokeRot,
-                                                  tf2::Vector3(0.0, 0.0, 0.26)),
+                                                  tf2::Vector3(0.0, 0.0, 0.28)),
                                    tf2::Transform(cokeRot,
-                                                  tf2::Vector3(0.0, 0.0, 0.26)));
+                                                  tf2::Vector3(0.0, 0.0, 0.20)));
   std::vector<GraspPair> cokeGrasps;
   cokeGrasps.push_back(cokeP);
   grasps.insert(std::pair<std::string, std::vector<GraspPair> >("coca_cola",
@@ -121,5 +121,21 @@ void ObjectDatabase::init() {
     collisionModels.insert(std::pair<std::string,
                            shape_msgs::SolidPrimitive>(name,
                                                        block));
+
+    tf2::Quaternion blockRot;
+    blockRot.setRPY(0, M_PI/2, 0);
+    GraspPair blockP = std::make_pair(tf2::Transform(blockRot,
+                                                     tf2::Vector3(0.0,
+                                                                  0.0,
+                                                                  block.dimensions[2] + 0.18)),
+                                      tf2::Transform(blockRot,
+                                                     tf2::Vector3(0.0,
+                                                                  0.0,
+                                                                  block.dimensions[2] + 0.12)));
+  std::vector<GraspPair> blockGrasps;
+  blockGrasps.push_back(blockP);
+  grasps.insert(std::pair<std::string, std::vector<GraspPair> >(name,
+                                                                blockGrasps));
+
   }
 }

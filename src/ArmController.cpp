@@ -29,7 +29,6 @@ std::string ArmController::armPlanningFrame() {
   return group.getPlanningFrame();
 }
 
-// FIXME
 void ArmController::updateCollisionScene(std::vector<moveit_msgs::CollisionObject> cos) {
   moveit_msgs::GetPlanningScene::Request getRequest;
   moveit_msgs::GetPlanningScene::Response getResponse;
@@ -95,10 +94,6 @@ void ArmController::updateCollisionScene(std::vector<moveit_msgs::CollisionObjec
   if (!applyResponse.success) {
     ROS_INFO("Updating the collision scene failed!!");
   }
-}
-
-// FIXME
-void ArmController::clearCollisionScene() {
 }
 
 void ArmController::closeGripper() {
@@ -196,7 +191,6 @@ bool ArmController::homeArm() {
 }
 
 bool ArmController::planToXform(tf2::Transform t) {
-  ROS_INFO("Starting to plan to a transform goal.");
   group.setStartStateToCurrentState();
   geometry_msgs::Pose target;
   target.orientation = tf2::toMsg(t.getRotation());
@@ -204,20 +198,16 @@ bool ArmController::planToXform(tf2::Transform t) {
   target.position.y = t.getOrigin().y();
   target.position.z = t.getOrigin().z();
   group.setPoseTarget(target);
-  ROS_INFO("Set the target, waiting for initialization.");
-  ros::Duration(5.0).sleep();
+  ros::Duration(0.1).sleep();
 
   moveit::planning_interface::MoveGroupInterface::Plan mp;
   moveit::planning_interface::MoveItErrorCode success = group.plan(mp);
-  ROS_INFO("Plan function has returned.");
-
   // To stop it thinking it's successful if postprocessing is the problem
   if (mp.trajectory_.joint_trajectory.points.empty() &&
       mp.trajectory_.multi_dof_joint_trajectory.points.empty()) {
     success = false;
   }
 
-  ROS_INFO("Setting the current plan to the new one.");
   currentPlan = mp;
   return (bool)success;
 }

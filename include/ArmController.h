@@ -28,7 +28,6 @@ public:
   std::string getHeld() { return grabbedObject; }
 
   void updateCollisionScene(std::vector<moveit_msgs::CollisionObject> cos);
-  void clearCollisionScene();
 
   void closeGripper();
   void openGripper();
