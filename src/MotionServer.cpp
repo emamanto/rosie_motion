@@ -171,7 +171,7 @@ public:
     }
     else if (msg->action.find("DROP")!=std::string::npos) {
       state = SCENE;
-      arm.buildCollisionScene(getCollisionModels());
+      arm.updateCollisionScene(getCollisionModels());
 
       ROS_INFO("Handling putdown command");
       state = DROP;
@@ -204,7 +204,7 @@ public:
     // }
     else if (msg->action.find("POINT")!=std::string::npos) {
       state = SCENE;
-      arm.buildCollisionScene(getCollisionModels());
+      arm.updateCollisionScene(getCollisionModels());
 
       state = POINT;
       std::string name = msg->action.substr(msg->action.find("=")+1);
@@ -226,7 +226,7 @@ public:
     else if (msg->action.find("SCENE")!=std::string::npos){
       ROS_INFO("Handling build scene command");
       state = SCENE;
-      arm.buildCollisionScene(getCollisionModels());
+      arm.updateCollisionScene(getCollisionModels());
       state = WAIT;
     }
     else {
@@ -259,7 +259,7 @@ public:
       return;
     }
 
-    arm.buildCollisionScene(getCollisionModels());
+    arm.updateCollisionScene(getCollisionModels());
     bool success = arm.pickUp(objXform, objData.getAllGrasps(databaseName));
 
     if (state == GRAB) state = WAIT;
@@ -873,9 +873,7 @@ public:
         continue;
       }
       else if (i->find("table") != std::string::npos) {
-        ROS_INFO("Adding the table top to collision map.");
         moveit_msgs::CollisionObject planeobj;
-        planeobj.header.frame_id = arm.armPlanningFrame();
         planeobj.id = "table";
 
         geometry_msgs::Pose planep;
@@ -894,16 +892,12 @@ public:
 
         planeobj.primitives.push_back(primitive);
         planeobj.primitive_poses.push_back(planep);
-        planeobj.operation = planeobj.ADD;
         coList.push_back(planeobj);
         continue;
       }
 
       moveit_msgs::CollisionObject co;
-      co.header.frame_id = arm.armPlanningFrame();
-
       co.id = *i;
-      ROS_INFO("Adding object %s", i->c_str());
 
       geometry_msgs::Pose box_pose;
       box_pose.position.x = fetchCentered.x();

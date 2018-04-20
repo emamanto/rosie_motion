@@ -4,8 +4,7 @@ ArmController::ArmController(ros::NodeHandle& nh) : numRetries(3),
                                                     grabbedObject("none"),
                                                     checkPlans(true),
                                                     group("arm"),
-                                                    gripper("gripper_controller/gripper_action", true),
-                                                    sceneMonitor(new planning_scene_monitor::PlanningSceneMonitor("robot_description"))
+                                                    gripper("gripper_controller/gripper_action", true)
 {
   group.setMaxVelocityScalingFactor(0.4);
   gripper.waitForServer();
@@ -20,51 +19,86 @@ ArmController::ArmController(ros::NodeHandle& nh) : numRetries(3),
   goalPublisher = nh.advertise<geometry_msgs::PoseStamped>("rosie_grasp_target", 10);
   pubTimer = nh.createTimer(ros::Duration(0.1),
                             &ArmController::publishCurrentGoal, this);
-
-  sceneMonitor->startSceneMonitor("/move_group/monitored_planning_scene");
-  sceneMonitor->startPublishingPlanningScene(planning_scene_monitor::PlanningSceneMonitor::SceneUpdateType::UPDATE_GEOMETRY, "/planning_scene");
+  psDiffClient = nh.serviceClient<moveit_msgs::ApplyPlanningScene>(move_group::APPLY_PLANNING_SCENE_SERVICE_NAME);
+  psDiffClient.waitForExistence();
+  getPSClient = nh.serviceClient<moveit_msgs::GetPlanningScene>(move_group::GET_PLANNING_SCENE_SERVICE_NAME);
+  getPSClient.waitForExistence();
 }
 
 std::string ArmController::armPlanningFrame() {
   return group.getPlanningFrame();
 }
 
-void ArmController::setCollisionList(std::vector<moveit_msgs::CollisionObject> cos) {
-  boost::lock_guard<boost::mutex> guard(objMutex);
-  currentCollisionObjects = cos;
-}
+// FIXME
+void ArmController::updateCollisionScene(std::vector<moveit_msgs::CollisionObject> cos) {
+  moveit_msgs::GetPlanningScene::Request getRequest;
+  moveit_msgs::GetPlanningScene::Response getResponse;
 
-void ArmController::buildCollisionScene(std::vector<moveit_msgs::CollisionObject> cos) {
-  {
-    boost::lock_guard<boost::mutex> guard(objMutex);
-    currentCollisionObjects = cos;
+  getRequest.components.components = getRequest.components.WORLD_OBJECT_GEOMETRY;
+  if (!getPSClient.call(getRequest, getResponse)) {
+    ROS_INFO("Requesting the current collision scene failed!!");
+    return;
   }
-  buildCollisionScene();
-}
 
-void ArmController::buildCollisionScene() {
-  {
-    planning_scene_monitor::LockedPlanningSceneRW ls(sceneMonitor);
-    ls->getWorldNonConst()->clearObjects();
-  }
-  moveit_msgs::PlanningScene scene;
-  {
-    boost::lock_guard<boost::mutex> guard(objMutex);
-    for (std::vector<moveit_msgs::CollisionObject>::iterator i =
-           currentCollisionObjects.begin();
-         i != currentCollisionObjects.end();
-         i++) {
-      scene.world.collision_objects.push_back(*i);
+  moveit_msgs::ApplyPlanningScene::Request applyRequest;
+  moveit_msgs::ApplyPlanningScene::Response applyResponse;
+  applyRequest.scene.is_diff = true;
+
+  // Check if scene objects need to be updated or removed
+  for (std::size_t i = 0; i < getResponse.scene.world.collision_objects.size(); i++) {
+    bool matched = false;
+    for (std::vector<moveit_msgs::CollisionObject>::iterator j = cos.begin();
+         j != cos.end(); j++) {
+      if (j->id.compare(getResponse.scene.world.collision_objects[i].id) != 0)
+        continue;
+
+      matched = true;
+      moveit_msgs::CollisionObject edits;
+      edits.header.frame_id = armPlanningFrame();
+      edits.id = j->id;
+      edits.operation = edits.MOVE;
+      edits.primitive_poses.push_back(j->primitive_poses[0]);
+      applyRequest.scene.world.collision_objects.push_back(edits);
+      break;
+    }
+
+    if (!matched) {
+      moveit_msgs::CollisionObject removal;
+      removal.header.frame_id = armPlanningFrame();
+      removal.id = getResponse.scene.world.collision_objects[i].id;
+      removal.operation = removal.REMOVE;
+      applyRequest.scene.world.collision_objects.push_back(removal);
     }
   }
-  scene.name = "rosie_scene";
-  scene.is_diff = true;
-  sceneMonitor->newPlanningSceneMessage(scene);
+
+  // Check if vector contains entirely new objects
+  for (std::vector<moveit_msgs::CollisionObject>::iterator j = cos.begin();
+       j != cos.end(); j++) {
+    bool isNewObj = true;
+    for (std::size_t i = 0; i < getResponse.scene.world.collision_objects.size();
+         i++) {
+      if (j->id.compare(getResponse.scene.world.collision_objects[i].id) == 0) {
+        isNewObj = false;
+        break;
+      }
+    }
+
+    if (!isNewObj) continue;
+
+    moveit_msgs::CollisionObject newObj = *j;
+    newObj.header.frame_id = armPlanningFrame();
+    newObj.operation = newObj.ADD;
+    applyRequest.scene.world.collision_objects.push_back(newObj);
+  }
+
+  psDiffClient.call(applyRequest, applyResponse);
+  if (!applyResponse.success) {
+    ROS_INFO("Updating the collision scene failed!!");
+  }
 }
 
+// FIXME
 void ArmController::clearCollisionScene() {
-  planning_scene_monitor::LockedPlanningSceneRW ls(sceneMonitor);
-  ls->getWorldNonConst()->clearObjects();
 }
 
 void ArmController::closeGripper() {

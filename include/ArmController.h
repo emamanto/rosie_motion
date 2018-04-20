@@ -15,8 +15,8 @@
 
 #include "control_msgs/GripperCommandAction.h"
 #include "control_msgs/GripperCommandGoal.h"
-#include "moveit_msgs/CollisionObject.h"
-
+#include "moveit_msgs/ApplyPlanningScene.h"
+#include "moveit_msgs/GetPlanningScene.h"
 
 class ArmController {
 public:
@@ -29,9 +29,7 @@ public:
   std::string armPlanningFrame();
   std::string getHeld() { return grabbedObject; }
 
-  void setCollisionList(std::vector<moveit_msgs::CollisionObject> cos);
-  void buildCollisionScene();
-  void buildCollisionScene(std::vector<moveit_msgs::CollisionObject> cos);
+  void updateCollisionScene(std::vector<moveit_msgs::CollisionObject> cos);
   void clearCollisionScene();
 
   void closeGripper();
@@ -63,9 +61,7 @@ private:
   ros::Publisher goalPublisher;
   ros::Timer pubTimer;
 
-  boost::mutex objMutex;
-  std::vector<moveit_msgs::CollisionObject> currentCollisionObjects;
-
   moveit::planning_interface::MoveGroupInterface group;
-  planning_scene_monitor::PlanningSceneMonitorPtr sceneMonitor;
+  ros::ServiceClient psDiffClient;
+  ros::ServiceClient getPSClient;
 };
