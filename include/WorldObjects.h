@@ -11,7 +11,7 @@
 
 class WorldObjects {
 public:
-  WorldObjects() {}
+ WorldObjects() : tableH(0.675) {}
 
   void update(const gazebo_msgs::ModelStates::ConstPtr& msg);
 

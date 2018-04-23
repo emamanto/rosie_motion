@@ -260,7 +260,9 @@ public:
     }
 
     arm.updateCollisionScene(getCollisionModels());
-    bool success = arm.pickUp(objXform, objData.getAllGrasps(databaseName));
+    bool success = arm.pickUp(objXform,
+                              objData.getAllGrasps(databaseName),
+                              world.nameInScene(id));
 
     if (state == GRAB) state = WAIT;
     ROS_INFO("Arm status is now WAIT");
@@ -268,158 +270,15 @@ public:
 
     void handleDropCommand(std::vector<float> target)
     {
-      // if (grabbedObject == "none") {
-      //   ROS_INFO("Cannot drop because robot is not holding an object.");
-      //   failureReason = "invaliddrop";
-      //   state = FAILURE;
-      //   return;
-      // }
+      if (target[2] == -1) target[2] = world.getTableH();
+      tf2::Transform targ;
+      targ.setIdentity();
+      targ.setOrigin(tf2::Vector3(target[0], target[1], target[2]));
+      std::vector<tf2::Transform> targList;
+      targList.push_back(targ);
 
-      // if (target[2] == -1) target[2] = world.getTableH();
-      // target[2] += grabbedObjSize[2] + 0.01;
-
-      // // Try the angle you picked it up at first
-      // tf2::Quaternion qtemp;
-      // qtemp.setRPY(0.0, preferredDropAngle, 0.0);
-      // tf2::Transform pRot = tf2::Transform(qtemp);
-      // tf2::Vector3 tV = tf2::Vector3(target[0], target[1], target[2]);
-      // tf2::Vector3 transIn = pRot*approachOffset;
-
-      // tf2::Vector3 in = tV-transIn;
-      // float a = -1;
-      // if (planToXYZAngleTarget(in.x(), in.y(), in.z(), preferredDropAngle, 0)) {
-      //   a = preferredDropAngle;
-      // } else {
-      //   a = planToGraspPosition(target[0], target[1], target[2]);
-      // }
-      // preferredDropAngle = -1;
-
-      // if (a == -1) {
-      //   ROS_INFO("Arm not reaching because planning failed");
-      //   failureReason = "planning";
-      //   state = FAILURE;
-      //   return;
-      // }
-
-      // armHomeState = false;
-      // if (!executeCurrentPlan()) {
-      //   ROS_INFO("Arm returning home because execution failed");
-      //   homeArm(true);
-      //   failureReason = "execution";
-      //   state = FAILURE;
-      //   return;
-      // }
-
-      // ros::Duration(0.5).sleep();
-      // std::vector<geometry_msgs::Pose> waypoints;
-      // waypoints.push_back(group.getCurrentPose().pose);
-      // geometry_msgs::Pose gp = waypoints[0];
-
-      // tf2::Quaternion qtemp2;
-      // qtemp2.setRPY(0.0, a, 0.0);
-      // tf2::Transform rot = tf2::Transform(qtemp2);
-      // tf2::Vector3 ob = tf2::Vector3(gp.position.x,
-      //                              gp.position.y,
-      //                              gp.position.z);
-      // tf2::Vector3 trans = rot*dropMotion;
-      // tf2::Vector3 out = ob+trans;
-
-      // gp.position.x = out.x();
-      // gp.position.y = out.y();
-      // gp.position.z = out.z();
-
-      // std::vector<float> fPos = eeFrametoFingertip(gp);
-      // if (fPos[2] < world.getTableH() + 0.02) {
-      //   // FIXME
-      //   gp.position.z = world.getTableH() + 0.1;
-      // }
-
-      // waypoints.push_back(gp);
-      // geometry_msgs::Pose returnto = waypoints[0];
-
-      // group.setStartStateToCurrentState();
-      // moveit_msgs::RobotTrajectory inTraj;
-      // double frac = group.computeCartesianPath(waypoints,
-      //                                          0.01, 0.0,
-      //                                          inTraj,
-      //                                          false);
-
-      // currentPlan = moveit::planning_interface::MoveGroupInterface::Plan();
-      // currentPlan.trajectory_ = inTraj;
-
-      // if (frac < 0.8 || !executeCurrentPlan()) {
-      //   ROS_INFO("Arm returning home because execution failed");
-      //   homeArm(true);
-      //   failureReason = "execution";
-      //   state = FAILURE;
-      //   return;
-      // }
-
-      // ros::Duration(0.5).sleep();
-      // openGripper();
-
-      // group.detachObject();
-
-      // moveit_msgs::CollisionObject droppedObj;
-      // droppedObj.header.frame_id = group.getPlanningFrame();
-
-      // droppedObj.id = grabbedObject;
-
-      // std::vector<std::string> toRem;
-      // toRem.push_back(grabbedObject);
-      // //scene.removeCollisionObjects(toRem);
-      // ros::Duration(1.0).sleep();
-
-      // geometry_msgs::Pose dropP;
-      // dropP.position.x = target[0];
-      // dropP.position.y = target[1];
-      // dropP.position.z = target[2] - 0.01 - grabbedObjSize[2]/2.0;
-      // dropP.orientation.w = 1.0;
-
-      // shape_msgs::SolidPrimitive primitive;
-      // primitive.type = primitive.BOX;
-      // primitive.dimensions.resize(3);
-      // primitive.dimensions[0] = grabbedObjSize[0]+0.01;
-      // primitive.dimensions[1] = grabbedObjSize[1]+0.01;
-      // primitive.dimensions[2] = grabbedObjSize[2]+0.01;
-
-      // droppedObj.primitives.push_back(primitive);
-      // droppedObj.primitive_poses.push_back(dropP);
-      // droppedObj.operation = droppedObj.ADD;
-
-      // std::vector<moveit_msgs::CollisionObject> toAdd;
-      // toAdd.push_back(droppedObj);
-      // //scene.addCollisionObjects(toAdd);
-
-      // grabbedObject = "none";
-      // ros::Duration(0.5).sleep();
-
-      // std::vector<geometry_msgs::Pose> waypoints2;
-      // waypoints2.push_back(group.getCurrentPose().pose);
-      // waypoints2.push_back(returnto);
-
-      // group.setStartStateToCurrentState();
-      // moveit_msgs::RobotTrajectory outTraj;
-      // double frac2 = group.computeCartesianPath(waypoints2,
-      //                                           0.01, 0.0,
-      //                                           outTraj,
-      //                                           false);
-
-      // currentPlan = moveit::planning_interface::MoveGroupInterface::Plan();
-      // currentPlan.trajectory_ = outTraj;
-
-      // if (frac2 < 0.8 || !executeCurrentPlan()) {
-      //   ROS_INFO("Arm returning home because execution failed");
-      //   homeArm(true);
-      //   failureReason = "execution";
-      //   state = FAILURE;
-      //   return;
-      // }
-
-      // ros::Duration(0.5).sleep();
-
-      // closeGripper();
-      // homeArm(true);
+      arm.updateCollisionScene(getCollisionModels());
+      bool success = arm.putDownHeldObj(targList);
 
       if (state == DROP) state = WAIT;
       ROS_INFO("Arm status is now WAIT");
@@ -897,7 +756,7 @@ public:
         geometry_msgs::Pose planep;
         planep.position.x = fetchCentered.x();
         planep.position.y = fetchCentered.y();
-        planep.position.z = 0.675;
+        planep.position.z = world.getTableH();
 
         planep.orientation = tf2::toMsg(world.worldXformTimesRot(*i));
 

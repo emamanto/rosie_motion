@@ -1,7 +1,6 @@
 #include "ArmController.h"
 
 ArmController::ArmController(ros::NodeHandle& nh) : numRetries(3),
-                                                    grabbedObject("none"),
                                                     checkPlans(true),
                                                     group("arm"),
                                                     gripper("gripper_controller/gripper_action", true)
@@ -45,12 +44,18 @@ void ArmController::updateCollisionScene(std::vector<moveit_msgs::CollisionObjec
 
   // Check if scene objects need to be updated or removed
   for (std::size_t i = 0; i < getResponse.scene.world.collision_objects.size(); i++) {
+    // Don't change anything about the held object
+    if (grabbedObject.id.compare(getResponse.scene.world.collision_objects[i].id) == 0)
+      continue;
+
+    // See if object in the world matches object in requested list
     bool matched = false;
     for (std::vector<moveit_msgs::CollisionObject>::iterator j = cos.begin();
          j != cos.end(); j++) {
       if (j->id.compare(getResponse.scene.world.collision_objects[i].id) != 0)
         continue;
 
+      // If so, update its position
       matched = true;
       moveit_msgs::CollisionObject edits;
       edits.header.frame_id = armPlanningFrame();
@@ -61,6 +66,7 @@ void ArmController::updateCollisionScene(std::vector<moveit_msgs::CollisionObjec
       break;
     }
 
+    // Otherwise it must have disappeared, remove it
     if (!matched) {
       moveit_msgs::CollisionObject removal;
       removal.header.frame_id = armPlanningFrame();
@@ -84,6 +90,7 @@ void ArmController::updateCollisionScene(std::vector<moveit_msgs::CollisionObjec
 
     if (!isNewObj) continue;
 
+    // Add object to the scene if it is new
     moveit_msgs::CollisionObject newObj = *j;
     newObj.header.frame_id = armPlanningFrame();
     newObj.operation = newObj.ADD;
@@ -93,6 +100,104 @@ void ArmController::updateCollisionScene(std::vector<moveit_msgs::CollisionObjec
   psDiffClient.call(applyRequest, applyResponse);
   if (!applyResponse.success) {
     ROS_INFO("Updating the collision scene failed!!");
+  }
+}
+
+void ArmController::attachToGripper(std::string objName) {
+  moveit_msgs::GetPlanningScene::Request getRequest;
+  moveit_msgs::GetPlanningScene::Response getResponse;
+
+  getRequest.components.components = getRequest.components.WORLD_OBJECT_GEOMETRY;
+  if (!getPSClient.call(getRequest, getResponse)) {
+    ROS_INFO("Requesting the current collision scene failed!!");
+    return;
+  }
+
+  moveit_msgs::CollisionObject co;
+  for (std::size_t i = 0; i < getResponse.scene.world.collision_objects.size(); i++) {
+    if (objName.compare(getResponse.scene.world.collision_objects[i].id) == 0) {
+        co = getResponse.scene.world.collision_objects[i];
+        break;
+    }
+  }
+
+  moveit_msgs::ApplyPlanningScene::Request applyRequest;
+  moveit_msgs::ApplyPlanningScene::Response applyResponse;
+  applyRequest.scene.is_diff = true;
+
+  applyRequest.scene.world.collision_objects.clear();
+  applyRequest.scene.robot_state.attached_collision_objects.clear();
+
+  moveit_msgs::CollisionObject removal;
+  removal.header.frame_id = armPlanningFrame();
+  removal.id = co.id;
+  removal.operation = removal.REMOVE;
+  applyRequest.scene.world.collision_objects.push_back(removal);
+  moveit_msgs::AttachedCollisionObject toAttach;
+  toAttach.link_name = "wrist_roll_link";
+  toAttach.touch_links.push_back("l_gripper_finger_link");
+  toAttach.touch_links.push_back("r_gripper_finger_link");
+  toAttach.touch_links.push_back("gripper_link");
+  toAttach.object = co;
+  toAttach.object.operation = toAttach.object.ADD;
+  applyRequest.scene.robot_state.is_diff = true;
+  applyRequest.scene.robot_state.attached_collision_objects.push_back(toAttach);
+
+  psDiffClient.call(applyRequest, applyResponse);
+  if (!applyResponse.success) {
+    ROS_INFO("Updating the collision scene with attached object failed!!");
+  }
+  else {
+    grabbedObject = co;
+  }
+}
+
+void ArmController::detachHeldObject() {
+  ROS_INFO("Detaching the object from robot");
+  moveit_msgs::GetPlanningScene::Request getRequest;
+  moveit_msgs::GetPlanningScene::Response getResponse;
+
+  getRequest.components.components = getRequest.components.WORLD_OBJECT_GEOMETRY;
+  if (!getPSClient.call(getRequest, getResponse)) {
+    ROS_INFO("Requesting the current collision scene failed!!");
+    return;
+  }
+
+  ROS_INFO("Finding which object needs to be added back...");
+  moveit_msgs::CollisionObject addBack;
+  for (std::size_t i = 0;
+       i < getResponse.scene.robot_state.attached_collision_objects.size();
+       i++) {
+    if (grabbedObject.id.compare(getResponse.scene.robot_state.attached_collision_objects[i].object.id) == 0) {
+      addBack = getResponse.scene.robot_state.attached_collision_objects[i].object;
+      break;
+    }
+  }
+
+  ROS_INFO("Setting up the scene diff... ");
+  moveit_msgs::ApplyPlanningScene::Request applyRequest;
+  moveit_msgs::ApplyPlanningScene::Response applyResponse;
+  applyRequest.scene.is_diff = true;
+
+  applyRequest.scene.world.collision_objects.clear();
+  applyRequest.scene.robot_state.attached_collision_objects.clear();
+  applyRequest.scene.robot_state.is_diff = true;
+
+  moveit_msgs::AttachedCollisionObject toDetach;
+  toDetach.object = grabbedObject;
+  toDetach.object.operation = toDetach.object.REMOVE;
+  applyRequest.scene.robot_state.attached_collision_objects.push_back(toDetach);
+
+  addBack.operation = addBack.ADD;
+  applyRequest.scene.world.collision_objects.push_back(addBack);
+
+  psDiffClient.call(applyRequest, applyResponse);
+  if (!applyResponse.success) {
+    ROS_INFO("Updating the collision scene with attached object failed!!");
+  }
+  else {
+    grabbedObject = moveit_msgs::CollisionObject();
+    grabbedObject.id = "NONE";
   }
 }
 
@@ -115,7 +220,8 @@ void ArmController::setGripperTo(float m) {
 
 bool ArmController::pickUp(tf2::Transform objXform,
                            std::vector<std::pair<tf2::Transform,
-                           tf2::Transform> > graspList) {
+                           tf2::Transform> > graspList,
+                           std::string objName) {
   tf2::Transform firstPose = objXform*graspList.at(0).first;
   setCurrentGoalTo(firstPose);
 
@@ -155,8 +261,11 @@ bool ArmController::pickUp(tf2::Transform objXform,
   //   state = FAILURE;
   // }
 
-  if (!planStraightLineMotion(objXform*graspList.at(0).first)) return false;
+  attachToGripper(objName);
+  usedGrasp = graspList.at(0);
+
   setCurrentGoalTo(firstPose);
+  if (!planStraightLineMotion(firstPose)) return false;
   if (!executeCurrentPlan()) return false;
 
   if (!homeArm()) return false;
@@ -165,6 +274,55 @@ bool ArmController::pickUp(tf2::Transform objXform,
 }
 
 bool ArmController::putDownHeldObj(std::vector<tf2::Transform> targets) {
+  if (grabbedObject.id == "NONE") {
+    ROS_WARN("Trying to put down an object with no object in hand!!");
+  }
+
+  float zAdjust = 0.5;
+  shape_msgs::SolidPrimitive sp = grabbedObject.primitives[0];
+  if (grabbedObject.primitives[0].type == grabbedObject.primitives[0].BOX) {
+    zAdjust *= (sp.dimensions[2] + 0.02);
+    ROS_INFO("Adding %f to z because it's a BOX", zAdjust);
+  }
+  else if (grabbedObject.primitives[0].type == grabbedObject.primitives[0].CYLINDER) {
+    zAdjust *= (sp.dimensions[0] + 0.02);
+    ROS_INFO("Adding %f to z because it's a CYLINDER", zAdjust);
+  }
+
+  for(std::vector<tf2::Transform>::iterator i = targets.begin();
+      i != targets.end(); i++) {
+    tf2::Vector3 v = i->getOrigin();
+    v.setZ(v.z() + zAdjust);
+    i->setOrigin(v);
+  }
+
+  ROS_INFO("The z value of the target is %f", targets.at(0).getOrigin().z());
+  tf2::Transform firstPose = targets.at(0)*usedGrasp.first;
+  setCurrentGoalTo(firstPose);
+
+  if (!planToXform(firstPose)) return false;
+  if (!executeCurrentPlan()) return false;
+
+  tf2::Transform secondPose = targets.at(0)*usedGrasp.second;
+  setCurrentGoalTo(secondPose);
+  if (!planStraightLineMotion(secondPose)) return false;
+  if (!executeCurrentPlan()) return false;
+
+  ros::Duration(1.0).sleep();
+  openGripper();
+  ros::Duration(1.0).sleep();
+
+  detachHeldObject();
+  setCurrentGoalTo(firstPose);
+  if (!planStraightLineMotion(firstPose)) return false;
+  if (!executeCurrentPlan()) return false;
+
+  ros::Duration(1.0).sleep();
+  closeGripper();
+  ros::Duration(1.0).sleep();
+
+  if (!homeArm()) return false;
+
   return true;
 }
 
@@ -269,38 +427,6 @@ bool ArmController::safetyCheck() {
 
   ROS_INFO("Confusing input to safety check; cancelling execution");
   return false;
-}
-
-void ArmController::reverseCurrentPlan() {
-  moveit_msgs::RobotTrajectory reversed;
-  moveit_msgs::RobotTrajectory curTraj = currentPlan.trajectory_;
-  ROS_INFO("The original trajectory has %i points", (int)curTraj.joint_trajectory.points.size());
-
-  std::vector<trajectory_msgs::JointTrajectoryPoint> rps;
-  for (std::vector<trajectory_msgs::JointTrajectoryPoint>::reverse_iterator i =
-         curTraj.joint_trajectory.points.rbegin();
-       i!= curTraj.joint_trajectory.points.rend(); i++) {
-    rps.push_back(*i);
-  }
-  reversed.joint_trajectory.points = rps;
-
-  std::vector<trajectory_msgs::MultiDOFJointTrajectoryPoint> mdrps;
-  for (std::vector<trajectory_msgs::MultiDOFJointTrajectoryPoint>::reverse_iterator i =
-         curTraj.multi_dof_joint_trajectory.points.rbegin();
-       i!= curTraj.multi_dof_joint_trajectory.points.rend(); i++) {
-    mdrps.push_back(*i);
-  }
-  reversed.multi_dof_joint_trajectory.points = mdrps;
-
-  reversed.joint_trajectory.header = curTraj.joint_trajectory.header;
-  reversed.multi_dof_joint_trajectory.header = curTraj.multi_dof_joint_trajectory.header;
-
-  reversed.joint_trajectory.joint_names = curTraj.joint_trajectory.joint_names;
-  reversed.multi_dof_joint_trajectory.joint_names = curTraj.multi_dof_joint_trajectory.joint_names;
-
-  ROS_INFO("The new trajectory has %i points", (int)reversed.joint_trajectory.points.size());
-
-  currentPlan.trajectory_ = reversed;
 }
 
 void ArmController::publishCurrentGoal(const ros::TimerEvent& e) {

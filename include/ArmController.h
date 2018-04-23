@@ -25,15 +25,18 @@ public:
   void setHumanChecks(bool on) { checkPlans = on; }
 
   std::string armPlanningFrame();
-  std::string getHeld() { return grabbedObject; }
+  std::string getHeld() { return grabbedObject.id; }
 
   void updateCollisionScene(std::vector<moveit_msgs::CollisionObject> cos);
+  void attachToGripper(std::string objName);
+  void detachHeldObject();
 
   void closeGripper();
   void openGripper();
 
   bool pickUp(tf2::Transform objXform,
-              std::vector<GraspPair> graspList);
+              std::vector<GraspPair> graspList,
+              std::string objName);
   bool putDownHeldObj(std::vector<tf2::Transform> targets);
   bool homeArm();
 
@@ -43,14 +46,13 @@ private:
   double planStraightLineMotion(tf2::Transform target);
   bool executeCurrentPlan();
   bool safetyCheck();
-  void reverseCurrentPlan();
   void publishCurrentGoal(const ros::TimerEvent& e);
   void setCurrentGoalTo(tf2::Transform t);
 
   moveit::planning_interface::MoveGroupInterface::Plan currentPlan;
   int numRetries;
-  std::string grabbedObject;
-  std::vector<float> grabbedObjSize;
+  moveit_msgs::CollisionObject grabbedObject;
+  GraspPair usedGrasp;
   actionlib::SimpleActionClient<control_msgs::GripperCommandAction> gripper;
   bool checkPlans;
 
