@@ -34,7 +34,7 @@ void ArmController::updateCollisionScene(std::vector<moveit_msgs::CollisionObjec
 
   getRequest.components.components = getRequest.components.WORLD_OBJECT_GEOMETRY;
   if (!getPSClient.call(getRequest, getResponse)) {
-    ROS_INFO("Requesting the current collision scene failed!!");
+    ROS_WARN("Requesting the current collision scene failed!!");
     return;
   }
 
@@ -45,8 +45,9 @@ void ArmController::updateCollisionScene(std::vector<moveit_msgs::CollisionObjec
   // Check if scene objects need to be updated or removed
   for (std::size_t i = 0; i < getResponse.scene.world.collision_objects.size(); i++) {
     // Don't change anything about the held object
-    if (grabbedObject.id.compare(getResponse.scene.world.collision_objects[i].id) == 0)
+    if (grabbedObject.id.compare(getResponse.scene.world.collision_objects[i].id) == 0) {
       continue;
+    }
 
     // See if object in the world matches object in requested list
     bool matched = false;
@@ -79,6 +80,10 @@ void ArmController::updateCollisionScene(std::vector<moveit_msgs::CollisionObjec
   // Check if vector contains entirely new objects
   for (std::vector<moveit_msgs::CollisionObject>::iterator j = cos.begin();
        j != cos.end(); j++) {
+    if (grabbedObject.id.compare(j->id) == 0) {
+      continue;
+    }
+
     bool isNewObj = true;
     for (std::size_t i = 0; i < getResponse.scene.world.collision_objects.size();
          i++) {
@@ -99,7 +104,7 @@ void ArmController::updateCollisionScene(std::vector<moveit_msgs::CollisionObjec
 
   psDiffClient.call(applyRequest, applyResponse);
   if (!applyResponse.success) {
-    ROS_INFO("Updating the collision scene failed!!");
+    ROS_WARN("Updating the collision scene failed!!");
   }
 }
 
@@ -109,7 +114,7 @@ void ArmController::attachToGripper(std::string objName) {
 
   getRequest.components.components = getRequest.components.WORLD_OBJECT_GEOMETRY;
   if (!getPSClient.call(getRequest, getResponse)) {
-    ROS_INFO("Requesting the current collision scene failed!!");
+    ROS_WARN("Requesting the current collision scene failed!!");
     return;
   }
 
@@ -128,11 +133,6 @@ void ArmController::attachToGripper(std::string objName) {
   applyRequest.scene.world.collision_objects.clear();
   applyRequest.scene.robot_state.attached_collision_objects.clear();
 
-  moveit_msgs::CollisionObject removal;
-  removal.header.frame_id = armPlanningFrame();
-  removal.id = co.id;
-  removal.operation = removal.REMOVE;
-  applyRequest.scene.world.collision_objects.push_back(removal);
   moveit_msgs::AttachedCollisionObject toAttach;
   toAttach.link_name = "wrist_roll_link";
   toAttach.touch_links.push_back("l_gripper_finger_link");
@@ -145,7 +145,7 @@ void ArmController::attachToGripper(std::string objName) {
 
   psDiffClient.call(applyRequest, applyResponse);
   if (!applyResponse.success) {
-    ROS_INFO("Updating the collision scene with attached object failed!!");
+    ROS_WARN("Updating the collision scene with attached object failed!!");
   }
   else {
     grabbedObject = co;
@@ -153,28 +153,6 @@ void ArmController::attachToGripper(std::string objName) {
 }
 
 void ArmController::detachHeldObject() {
-  ROS_INFO("Detaching the object from robot");
-  moveit_msgs::GetPlanningScene::Request getRequest;
-  moveit_msgs::GetPlanningScene::Response getResponse;
-
-  getRequest.components.components = getRequest.components.WORLD_OBJECT_GEOMETRY;
-  if (!getPSClient.call(getRequest, getResponse)) {
-    ROS_INFO("Requesting the current collision scene failed!!");
-    return;
-  }
-
-  ROS_INFO("Finding which object needs to be added back...");
-  moveit_msgs::CollisionObject addBack;
-  for (std::size_t i = 0;
-       i < getResponse.scene.robot_state.attached_collision_objects.size();
-       i++) {
-    if (grabbedObject.id.compare(getResponse.scene.robot_state.attached_collision_objects[i].object.id) == 0) {
-      addBack = getResponse.scene.robot_state.attached_collision_objects[i].object;
-      break;
-    }
-  }
-
-  ROS_INFO("Setting up the scene diff... ");
   moveit_msgs::ApplyPlanningScene::Request applyRequest;
   moveit_msgs::ApplyPlanningScene::Response applyResponse;
   applyRequest.scene.is_diff = true;
@@ -188,12 +166,9 @@ void ArmController::detachHeldObject() {
   toDetach.object.operation = toDetach.object.REMOVE;
   applyRequest.scene.robot_state.attached_collision_objects.push_back(toDetach);
 
-  addBack.operation = addBack.ADD;
-  applyRequest.scene.world.collision_objects.push_back(addBack);
-
   psDiffClient.call(applyRequest, applyResponse);
   if (!applyResponse.success) {
-    ROS_INFO("Updating the collision scene with attached object failed!!");
+    ROS_WARN("Updating the collision scene with attached object failed!!");
   }
   else {
     grabbedObject = moveit_msgs::CollisionObject();
@@ -224,13 +199,6 @@ bool ArmController::pickUp(tf2::Transform objXform,
                            std::string objName) {
   tf2::Transform firstPose = objXform*graspList.at(0).first;
   setCurrentGoalTo(firstPose);
-
-  //std::vector<std::string> known = scene.getKnownObjectNames();
-  // ROS_INFO("There are %i objects in the collision scene", (int)known.size());
-  // for (std::vector<std::string>::iterator it = known.begin();
-  //      it != known.end(); it++) {
-  //   ROS_INFO("OBJ NAME: %s", it->c_str());
-  // }
 
   if (!planToXform(firstPose)) return false;
   if (!executeCurrentPlan()) return false;
@@ -278,15 +246,15 @@ bool ArmController::putDownHeldObj(std::vector<tf2::Transform> targets) {
     ROS_WARN("Trying to put down an object with no object in hand!!");
   }
 
+  // Targets refer to tabletop height, we want object height, and also
+  // you want to always drop off at a little higher than you picked up...
   float zAdjust = 0.5;
   shape_msgs::SolidPrimitive sp = grabbedObject.primitives[0];
   if (grabbedObject.primitives[0].type == grabbedObject.primitives[0].BOX) {
-    zAdjust *= (sp.dimensions[2] + 0.02);
-    ROS_INFO("Adding %f to z because it's a BOX", zAdjust);
+    zAdjust *= (sp.dimensions[2] + 0.05);
   }
   else if (grabbedObject.primitives[0].type == grabbedObject.primitives[0].CYLINDER) {
-    zAdjust *= (sp.dimensions[0] + 0.02);
-    ROS_INFO("Adding %f to z because it's a CYLINDER", zAdjust);
+    zAdjust *= (sp.dimensions[0] + 0.05);
   }
 
   for(std::vector<tf2::Transform>::iterator i = targets.begin();
@@ -296,7 +264,6 @@ bool ArmController::putDownHeldObj(std::vector<tf2::Transform> targets) {
     i->setOrigin(v);
   }
 
-  ROS_INFO("The z value of the target is %f", targets.at(0).getOrigin().z());
   tf2::Transform firstPose = targets.at(0)*usedGrasp.first;
   setCurrentGoalTo(firstPose);
 
@@ -401,7 +368,7 @@ bool ArmController::executeCurrentPlan() {
 
   moveit::planning_interface::MoveItErrorCode moveSuccess = group.execute(currentPlan);
   if (!moveSuccess) {
-    ROS_INFO("Execution failed with error code %d", moveSuccess.val);
+    ROS_WARN("Execution failed with error code %d", moveSuccess.val);
     return false;
   }
   return true;
