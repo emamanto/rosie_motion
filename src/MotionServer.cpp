@@ -647,7 +647,7 @@ public:
 
   void handlePointCommand(std::string id)
   {
-    if (world.isInScene(id)) {
+    if (!world.isInScene(id)) {
       ROS_INFO("Object ID %s is not being perceived", id.c_str());
       return;
     }
@@ -655,36 +655,29 @@ public:
 
     // Find the grasp information for this object
     std::string databaseName = "";
-    if (objData.dbHasGrasps(id)) {
+    if (objData.dbHasModel(id)) {
       databaseName = objData.findDatabaseName(objID);
     }
     else {
-      ROS_INFO("We do not have a grasp list for %s", id.c_str());
+      ROS_INFO("We do not have a collision model for %s", id.c_str());
       state = FAILURE;
       failureReason = "planning";
       return;
     }
 
-    // int a = planToGraspPosition(objID, databaseName);
+    float shapeHeight = 0.f;
+    shape_msgs::SolidPrimitive cm = objData.getCollisionModel(databaseName);
+    if (cm.type == cm.BOX) {
+      shapeHeight = cm.dimensions[2];
+    }
+    else if (cm.type == cm.CYLINDER) {
+      shapeHeight = cm.dimensions[0];
+    }
+    else {
+      ROS_INFO("What king of object are you?!");
+    }
 
-    // if (a == -1) {
-    //   ROS_INFO("Arm not pointing because planning failed");
-    //   failureReason = "planning";
-    //   state = FAILURE;
-    //   return;
-    // }
-
-    // armHomeState = false;
-    // if (!executeCurrentPlan()) {
-    //   ROS_INFO("Arm returning home because execution failed");
-    //   homeArm(true);
-    //   failureReason = "execution";
-    //   state = FAILURE;
-    //   return;
-    // }
-
-    // ros::Duration(1.0).sleep();
-    // homeArm(true);
+    arm.pointTo(world.getXformOf(objID), shapeHeight);
 
     if (state == POINT) state = WAIT;
     ROS_INFO("Arm status is now WAIT");

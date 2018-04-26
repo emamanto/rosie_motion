@@ -293,6 +293,27 @@ bool ArmController::putDownHeldObj(std::vector<tf2::Transform> targets) {
   return true;
 }
 
+bool ArmController::pointTo(tf2::Transform objXform, float objHeight) {
+  tf2::Quaternion downRot;
+  downRot.setRPY(0, M_PI/2, 0);
+  tf2::Transform pointXform = tf2::Transform(downRot,
+                                             tf2::Vector3(0.0,
+                                                          0.0,
+                                                          objHeight + 0.18));
+
+  tf2::Transform firstPose = objXform*pointXform;
+  setCurrentGoalTo(firstPose);
+
+  if (!planToXform(firstPose)) return false;
+  if (!executeCurrentPlan()) return false;
+
+  ros::Duration(1.0).sleep();
+
+  if (!homeArm()) return false;
+
+  return true;
+}
+
 bool ArmController::homeArm() {
   std::vector<double> joints = std::vector<double>();
   joints.push_back(1.32);

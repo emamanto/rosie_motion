@@ -38,6 +38,8 @@ public:
               std::vector<GraspPair> graspList,
               std::string objName);
   bool putDownHeldObj(std::vector<tf2::Transform> targets);
+  bool pointTo(tf2::Transform objXform,
+               float objHeight);
   bool homeArm();
 
 private:
