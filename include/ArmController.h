@@ -33,6 +33,7 @@ public:
 
   void closeGripper();
   void openGripper();
+  void setGripperClosed(bool isClosed);
 
   bool pickUp(tf2::Transform objXform,
               std::vector<GraspPair> graspList,
@@ -58,6 +59,7 @@ private:
   GraspPair usedGrasp;
   actionlib::SimpleActionClient<control_msgs::GripperCommandAction> gripper;
   bool checkPlans;
+  bool gripperClosed;
 
   geometry_msgs::PoseStamped currentGoal;
   ros::Publisher goalPublisher;

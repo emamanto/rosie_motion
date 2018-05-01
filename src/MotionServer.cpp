@@ -149,10 +149,10 @@ public:
     }
     if (pos1 == -1 || pos2 == -1) return;
 
-    if (msg->position[pos1] < 0.005 && msg->position[pos2] < 0.005) {
-      gripperClosed = true;
+    if (msg->position[pos1] < 0.009 && msg->position[pos2] < 0.009) {
+      arm.setGripperClosed(true);
     } else {
-      gripperClosed = false;
+      arm.setGripperClosed(false);
     }
   }
 
@@ -818,7 +818,6 @@ private:
   WorldObjects world;
   ObjectDatabase objData;
   ArmController arm;
-  bool gripperClosed;
 };
 
 int main(int argc, char** argv)

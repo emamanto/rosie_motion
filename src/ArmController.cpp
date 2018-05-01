@@ -8,6 +8,7 @@ ArmController::ArmController(ros::NodeHandle& nh) : numRetries(2),
   group.setMaxVelocityScalingFactor(0.4);
   gripper.waitForServer();
   closeGripper();
+  grabbedObject.id = "NONE";
 
   currentGoal.pose.position.x = 0;
   currentGoal.pose.position.y = 0;
@@ -26,6 +27,16 @@ ArmController::ArmController(ros::NodeHandle& nh) : numRetries(2),
 
 std::string ArmController::armPlanningFrame() {
   return group.getPlanningFrame();
+}
+
+void ArmController::setGripperClosed(bool isClosed) {
+  if (!gripperClosed && isClosed) {
+    ROS_INFO("Gripper now CLOSED");
+  }
+  if (gripperClosed && !isClosed) {
+    ROS_INFO("Gripper now OPEN");
+  }
+  gripperClosed = isClosed;
 }
 
 void ArmController::updateCollisionScene(std::vector<moveit_msgs::CollisionObject> cos) {
@@ -215,19 +226,13 @@ bool ArmController::pickUp(tf2::Transform objXform,
   closeGripper();
   ros::Duration(1.0).sleep();
 
-  // if (gripperClosed) {
-  //   ROS_INFO("Robot seems to have missed block %s", id.c_str());
-  //   std::stringstream ss;
-  //   ss << id;
-  //   std::vector<std::string> missed;
-  //   missed.push_back(ss.str());
-  //   //scene.removeCollisionObjects(missed);
-  //   ros::Duration(0.5).sleep();
-
-  //   ROS_INFO("Arm will return home because grabbing failed");
-  //   failureReason = "grasping";
-  //   state = FAILURE;
-  // }
+  if (gripperClosed) {
+    ROS_INFO("Arm will return home because grasping the object failed.");
+    if (!homeArm()) {
+      ROS_INFO("Arm failed to return home.");
+    }
+    return false;
+  }
 
   attachToGripper(objName);
   usedGrasp = graspList.at(0);
@@ -238,12 +243,21 @@ bool ArmController::pickUp(tf2::Transform objXform,
 
   if (!homeArm()) return false;
 
+  if (gripperClosed) {
+    ROS_INFO("Arm seems to have dropped the object it was holding.");
+    detachHeldObject();
+    grabbedObject = moveit_msgs::CollisionObject();
+    grabbedObject.id = "NONE";
+    return false;
+  }
+
   return true;
 }
 
 bool ArmController::putDownHeldObj(std::vector<tf2::Transform> targets) {
   if (grabbedObject.id == "NONE") {
     ROS_WARN("Trying to put down an object with no object in hand!!");
+    return false;
   }
 
   // Targets refer to tabletop height, we want object height, and also
