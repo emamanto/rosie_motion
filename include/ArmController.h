@@ -45,6 +45,7 @@ public:
 private:
   void setGripperTo(float m);
   bool planToXform(tf2::Transform t);
+  bool planToXform(tf2::Transform t, int n);
   double planStraightLineMotion(tf2::Transform target);
   bool executeCurrentPlan();
   bool safetyCheck();

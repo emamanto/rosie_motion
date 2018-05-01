@@ -1,6 +1,6 @@
 #include "ArmController.h"
 
-ArmController::ArmController(ros::NodeHandle& nh) : numRetries(3),
+ArmController::ArmController(ros::NodeHandle& nh) : numRetries(2),
                                                     checkPlans(true),
                                                     group("arm"),
                                                     gripper("gripper_controller/gripper_action", true)
@@ -200,7 +200,7 @@ bool ArmController::pickUp(tf2::Transform objXform,
   tf2::Transform firstPose = objXform*graspList.at(0).first;
   setCurrentGoalTo(firstPose);
 
-  if (!planToXform(firstPose)) return false;
+  if (!planToXform(firstPose, numRetries)) return false;
   if (!executeCurrentPlan()) return false;
 
   ros::Duration(1.0).sleep();
@@ -267,7 +267,7 @@ bool ArmController::putDownHeldObj(std::vector<tf2::Transform> targets) {
   tf2::Transform firstPose = targets.at(0)*usedGrasp.first;
   setCurrentGoalTo(firstPose);
 
-  if (!planToXform(firstPose)) return false;
+  if (!planToXform(firstPose, numRetries)) return false;
   if (!executeCurrentPlan()) return false;
 
   tf2::Transform secondPose = targets.at(0)*usedGrasp.second;
@@ -304,7 +304,7 @@ bool ArmController::pointTo(tf2::Transform objXform, float objHeight) {
   tf2::Transform firstPose = objXform*pointXform;
   setCurrentGoalTo(firstPose);
 
-  if (!planToXform(firstPose)) return false;
+  if (!planToXform(firstPose, numRetries)) return false;
   if (!executeCurrentPlan()) return false;
 
   ros::Duration(1.0).sleep();
@@ -333,6 +333,15 @@ bool ArmController::homeArm() {
   currentPlan = homePlan;
 
   if (!executeCurrentPlan()) return false;
+  return true;
+}
+
+bool ArmController::planToXform(tf2::Transform t, int n) {
+  int numTries = 0;
+  while (!planToXform(t) && numTries < n) {
+    numTries++;
+    if (numTries == n) return false;
+  }
   return true;
 }
 
