@@ -2,10 +2,12 @@
 
 #include <string>
 #include <map>
+#include <fstream>
 #include <ros/ros.h>
 #include <tf2_geometry_msgs/tf2_geometry_msgs.h>
 #include <tf2/utils.h>
 #include <shape_msgs/SolidPrimitive.h>
+#include "rapidjson/document.h"
 
 typedef std::pair<tf2::Transform, tf2::Transform> GraspPair;
 
