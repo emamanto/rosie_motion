@@ -23,13 +23,13 @@
       <pose>0.500197613602 -0.118745901376 0.75 0 0 -2.78397345778</pose>
     </include>
     <include>
-      <uri>model://blue_cube11cm</uri>
-      <name>blue_cube11cm1</name>
+      <uri>model://blue_cube5cm</uri>
+      <name>blue_cube5cm1</name>
       <pose>0.723948475973 -0.0937514904264 0.75 0 0 -2.47457378201</pose>
     </include>
     <include>
-      <uri>model://red_cube9cm</uri>
-      <name>red_cube9cm1</name>
+      <uri>model://red_cube3cm</uri>
+      <name>red_cube3cm1</name>
       <pose>0.510371905182 0.15048219073 0.75 0 0 1.27214950142</pose>
     </include>
   </world>

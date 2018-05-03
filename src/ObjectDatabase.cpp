@@ -82,8 +82,11 @@ void ObjectDatabase::init() {
 
   char* buf = new char[length];
   jsonfile.read(buf, length);
-  ROS_INFO("%s", buf);
-
+  // Make sure there is nothing else after the json object
+  for (int i = length-1; i > 0; i--) {
+    if (buf[i] != '}') buf[i] = 0;
+    else break;
+  }
   rapidjson::Document d;
   d.Parse(buf);
   delete[] buf;
@@ -95,80 +98,85 @@ void ObjectDatabase::init() {
   }
 
   if (d.HasMember("objects")) {
-    ROS_INFO("Successfully read object database json file!");
+    ROS_INFO("ObjectDatabase successfully read object database json file!");
   }
 
   const rapidjson::Value& objs = d["objects"];
   assert(objs.IsArray());
 
-  ROS_INFO("There are %i objects in the file.", (int)objs.Size());
-  // GLASS CUP
-  // shape_msgs::SolidPrimitive glassCup;
-  // glassCup.type = glassCup.CYLINDER;
-  // glassCup.dimensions.resize(2);
-  // glassCup.dimensions[0] = 0.09;
-  // glassCup.dimensions[1] = 0.04;
-  // collisionModels.insert(std::pair<std::string,
-  //                        shape_msgs::SolidPrimitive>("cup_glass",
-  //                                                    glassCup));
-  // tf2::Quaternion glassRot;
-  // glassRot.setRPY(0, M_PI/2, 0);
-  // GraspPair glassP = std::make_pair(tf2::Transform(glassRot,
-  //                                                  tf2::Vector3(0.0, 0.0, 0.26)),
-  //                                   tf2::Transform(glassRot,
-  //                                                  tf2::Vector3(0.0, 0.0, 0.18)));
-  // std::vector<GraspPair> glassGrasps;
-  // glassGrasps.push_back(glassP);
-  // grasps.insert(std::pair<std::string, std::vector<GraspPair> >("cup_glass",
-  //                                                               glassGrasps));
+  ROS_INFO("There are %i objects in the object_info file.", (int)objs.Size());
 
-  // // COKE CAN
-  // shape_msgs::SolidPrimitive coke;
-  // coke.type = coke.CYLINDER;
-  // coke.dimensions.resize(2);
-  // coke.dimensions[0] = 0.12;
-  // coke.dimensions[1] = 0.035;
-  // collisionModels.insert(std::pair<std::string,
-  //                        shape_msgs::SolidPrimitive>("coca_cola",
-  //                                                    coke));
-  // tf2::Quaternion cokeRot;
-  // cokeRot.setRPY(0, M_PI/2, 0);
-  // GraspPair cokeP = std::make_pair(tf2::Transform(cokeRot,
-  //                                                 tf2::Vector3(0.0, 0.0, 0.28)),
-  //                                  tf2::Transform(cokeRot,
-  //                                                 tf2::Vector3(0.0, 0.0, 0.20)));
-  // std::vector<GraspPair> cokeGrasps;
-  // cokeGrasps.push_back(cokeP);
-  // grasps.insert(std::pair<std::string, std::vector<GraspPair> >("coca_cola",
-  //                                                               cokeGrasps));
+  for (int i = 0; i < objs.Size(); i++) {
+    shape_msgs::SolidPrimitive shape;
+    if (objs[i]["shape"] == "cylinder") {
+      shape.type = shape.CYLINDER;
+    }
+    else if (objs[i]["shape"] == "box") {
+      shape.type = shape.BOX;
+    }
+    else {
+      ROS_WARN("Unknown object type %s found!", objs[i]["shape"].GetString());
+      continue;
+    }
 
-  // // ALL THE BLOCKS
-  // for (int i = 3; i <= 13; i += 2) {
-  //   shape_msgs::SolidPrimitive block;
-  //   block.type = block.BOX;
-  //   block.dimensions.resize(3);
-  //   block.dimensions[0] = (double)i/100;
-  //   block.dimensions[1] = (double)i/100;
-  //   block.dimensions[2] = (double)i/100;
-  //   std::string name = "cube" + std::to_string(i) + "cm";
-  //   collisionModels.insert(std::pair<std::string,
-  //                          shape_msgs::SolidPrimitive>(name,
-  //                                                      block));
+    assert(objs[i]["dimensions"].IsArray());
+    if (shape.type == shape.CYLINDER) {
+      if (objs[i]["dimensions"].Size() != 2) {
+        ROS_WARN("Cylinders need two elements in their dimensions.");
+        continue;
+      }
+      shape.dimensions.resize(2);
+    }
+    else if (shape.type == shape.BOX) {
+      if (objs[i]["dimensions"].Size() != 3) {
+        ROS_WARN("Boxes need three elements in their dimensions.");
+        continue;
+      }
+      shape.dimensions.resize(3);
+    }
+    for (int j = 0; j < shape.dimensions.size(); j++) {
+      shape.dimensions[j] = objs[i]["dimensions"][j].GetDouble();
+    }
 
-  //   tf2::Quaternion blockRot;
-  //   blockRot.setRPY(0, M_PI/2, 0);
-  //   GraspPair blockP = std::make_pair(tf2::Transform(blockRot,
-  //                                                    tf2::Vector3(0.0,
-  //                                                                 0.0,
-  //                                                                 block.dimensions[2] + 0.18)),
-  //                                     tf2::Transform(blockRot,
-  //                                                    tf2::Vector3(0.0,
-  //                                                                 0.0,
-  //                                                                 block.dimensions[2] + 0.12)));
-  // std::vector<GraspPair> blockGrasps;
-  // blockGrasps.push_back(blockP);
-  // grasps.insert(std::pair<std::string, std::vector<GraspPair> >(name,
-  //                                                               blockGrasps));
+    collisionModels.insert(std::pair<std::string,
+                           shape_msgs::SolidPrimitive>(objs[i]["name"].GetString(),
+                                                       shape));
 
-  // }
+    assert(objs[i]["grasps"].IsArray());
+    std::vector<GraspPair> allGrasps;
+    for (int j = 0; j < objs[i]["grasps"].Size(); j++) {
+      if (objs[i]["grasps"][j]["first"].Size() != 6) {
+        ROS_WARN("Wrong number of elements in first grasp xyzrpy.");
+      }
+      tf2::Quaternion rot1;
+      rot1.setRPY(objs[i]["grasps"][j]["first"][3].GetDouble(),
+                  objs[i]["grasps"][j]["first"][4].GetDouble(),
+                  objs[i]["grasps"][j]["first"][5].GetDouble());
+      tf2::Vector3 vec1(objs[i]["grasps"][j]["first"][0].GetDouble(),
+                        objs[i]["grasps"][j]["first"][1].GetDouble(),
+                        objs[i]["grasps"][j]["first"][2].GetDouble());
+      tf2::Transform t1(rot1, vec1);
+
+      if (objs[i]["grasps"][j]["second"].Size() != 6) {
+        ROS_WARN("Wrong number of elements in second grasp xyzrpy.");
+      }
+      tf2::Quaternion rot2;
+      rot2.setRPY(objs[i]["grasps"][j]["second"][3].GetDouble(),
+                  objs[i]["grasps"][j]["second"][4].GetDouble(),
+                  objs[i]["grasps"][j]["second"][5].GetDouble());
+      tf2::Vector3 vec2(objs[i]["grasps"][j]["second"][0].GetDouble(),
+                        objs[i]["grasps"][j]["second"][1].GetDouble(),
+                        objs[i]["grasps"][j]["second"][2].GetDouble());
+      tf2::Transform t2(rot2, vec2);
+
+      GraspPair gp = std::make_pair(t1, t2);
+      allGrasps.push_back(gp);
+    }
+    grasps.insert(std::pair<std::string, std::vector<GraspPair> >(objs[i]["name"].GetString(),
+                                                                  allGrasps));
+  }
+
+  ROS_INFO("ObjectDatabase loaded collision info for %i objects and grasp info for %i objects",
+           (int)collisionModels.size(),
+           (int)grasps.size());
 }
