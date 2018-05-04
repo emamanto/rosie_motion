@@ -17,6 +17,8 @@ public:
     init();
   }
 
+  void reload();
+
   bool isInDatabase(std::string objectID);
   bool dbHasGrasps(std::string objectID);
   bool dbHasModel(std::string objectID);

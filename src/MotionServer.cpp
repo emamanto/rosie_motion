@@ -198,6 +198,10 @@ public:
       arm.updateCollisionScene(getCollisionModels());
       state = WAIT;
     }
+    else if (msg->action.find("RELOAD")!=std::string::npos){
+      ROS_INFO("Handling reload object database command");
+      objData.reload();
+    }
     else {
       ROS_INFO("Unknown command %s received", msg->action.c_str());
       failureReason = "unknowncommand";

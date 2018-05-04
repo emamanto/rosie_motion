@@ -69,12 +69,39 @@ void ArmController::updateCollisionScene(std::vector<moveit_msgs::CollisionObjec
 
       // If so, update its position
       matched = true;
-      moveit_msgs::CollisionObject edits;
-      edits.header.frame_id = armPlanningFrame();
-      edits.id = j->id;
-      edits.operation = edits.MOVE;
-      edits.primitive_poses.push_back(j->primitive_poses[0]);
-      applyRequest.scene.world.collision_objects.push_back(edits);
+
+      // Check to see if we also need to change the size, ie has its database
+      // entry been edited
+      bool sizeChanged = false;
+      for (int k = 0; k < j->primitives[0].dimensions.size(); k++) {
+        if (j->primitives[0].dimensions[k] !=
+            getResponse.scene.world.collision_objects[i].primitives[0].dimensions[k]) {
+          sizeChanged = true;
+          break;
+        }
+      }
+
+      // To change the size, you have to remove it and add again
+      if (sizeChanged) {
+        moveit_msgs::CollisionObject removal;
+        removal.header.frame_id = armPlanningFrame();
+        removal.id = getResponse.scene.world.collision_objects[i].id;
+        removal.operation = removal.REMOVE;
+        applyRequest.scene.world.collision_objects.push_back(removal);
+        moveit_msgs::CollisionObject newObj = *j;
+        newObj.header.frame_id = armPlanningFrame();
+        newObj.operation = newObj.ADD;
+        applyRequest.scene.world.collision_objects.push_back(newObj);
+      }
+      // Otherwise you can just move it
+      else {
+        moveit_msgs::CollisionObject edits;
+        edits.header.frame_id = armPlanningFrame();
+        edits.id = j->id;
+        edits.operation = edits.MOVE;
+        edits.primitive_poses.push_back(j->primitive_poses[0]);
+        applyRequest.scene.world.collision_objects.push_back(edits);
+      }
       break;
     }
 

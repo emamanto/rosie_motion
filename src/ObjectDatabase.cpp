@@ -1,5 +1,11 @@
 #include "ObjectDatabase.h"
 
+void ObjectDatabase::reload() {
+  collisionModels.clear();
+  grasps.clear();
+  init();
+}
+
 bool ObjectDatabase::isInDatabase(std::string objectID) {
   return (dbHasGrasps(objectID) || dbHasModel(objectID));
 }
@@ -90,6 +96,7 @@ void ObjectDatabase::init() {
   rapidjson::Document d;
   d.Parse(buf);
   delete[] buf;
+  jsonfile.close();
 
   if (d.HasParseError()) {
     ROS_WARN("Failed to parse json file with error code %i at %i",
@@ -119,7 +126,12 @@ void ObjectDatabase::init() {
       continue;
     }
 
-    assert(objs[i]["dimensions"].IsArray());
+    if(!objs[i].HasMember("dimensions") || !objs[i]["dimensions"].IsArray()) {
+      ROS_WARN("Database object %s has no dimensions, will not be added.",
+               objs[i]["name"].GetString());
+      continue;
+    }
+
     if (shape.type == shape.CYLINDER) {
       if (objs[i]["dimensions"].Size() != 2) {
         ROS_WARN("Cylinders need two elements in their dimensions.");
@@ -142,7 +154,11 @@ void ObjectDatabase::init() {
                            shape_msgs::SolidPrimitive>(objs[i]["name"].GetString(),
                                                        shape));
 
-    assert(objs[i]["grasps"].IsArray());
+    if(!objs[i].HasMember("grasps") || !objs[i]["grasps"].IsArray()) {
+      ROS_WARN("Database object %s has no grasp information, only collision model.",
+               objs[i]["name"].GetString());
+      continue;
+    }
     std::vector<GraspPair> allGrasps;
     for (int j = 0; j < objs[i]["grasps"].Size(); j++) {
       if (objs[i]["grasps"][j]["first"].Size() != 6) {

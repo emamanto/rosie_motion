@@ -31,6 +31,11 @@
             ]
         },
         {
+            "name" : "plate_1",
+            "shape" : "cylinder",
+            "dimensions" : [0.03, 0.17]
+        },
+        {
             "name" : "blue_cube3cm",
             "shape" : "box",
             "dimensions" : [0.03, 0.03, 0.03],
