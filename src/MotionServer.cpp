@@ -225,7 +225,8 @@ public:
     if (objData.dbHasGrasps(id)) {
       databaseName = objData.findDatabaseName(world.nameInScene(id));
     }
-    else {
+
+    if (databaseName == "" || objData.getNumGrasps(databaseName) < 1) {
       ROS_INFO("We do not have a grasp list for %s", id.c_str());
       state = FAILURE;
       failureReason = "planning";

@@ -161,8 +161,11 @@ void ObjectDatabase::init() {
     }
     std::vector<GraspPair> allGrasps;
     for (int j = 0; j < objs[i]["grasps"].Size(); j++) {
-      if (objs[i]["grasps"][j]["first"].Size() != 6) {
-        ROS_WARN("Wrong number of elements in first grasp xyzrpy.");
+      if (objs[i]["grasps"][j]["first"].Size() != 6 ||
+          objs[i]["grasps"][j]["second"].Size() != 6) {
+        ROS_WARN("Wrong number of elements in grasp xyzrpy for object %s, grasp %i.",
+                 objs[i]["name"].GetString(), j);
+        continue;
       }
       tf2::Quaternion rot1;
       rot1.setRPY(objs[i]["grasps"][j]["first"][3].GetDouble(),
@@ -173,9 +176,6 @@ void ObjectDatabase::init() {
                         objs[i]["grasps"][j]["first"][2].GetDouble());
       tf2::Transform t1(rot1, vec1);
 
-      if (objs[i]["grasps"][j]["second"].Size() != 6) {
-        ROS_WARN("Wrong number of elements in second grasp xyzrpy.");
-      }
       tf2::Quaternion rot2;
       rot2.setRPY(objs[i]["grasps"][j]["second"][3].GetDouble(),
                   objs[i]["grasps"][j]["second"][4].GetDouble(),
