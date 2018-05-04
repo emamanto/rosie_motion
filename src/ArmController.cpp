@@ -235,23 +235,32 @@ bool ArmController::pickUp(tf2::Transform objXform,
                            std::vector<std::pair<tf2::Transform,
                            tf2::Transform> > graspList,
                            std::string objName) {
-  tf2::Transform firstPose = objXform*graspList.at(0).first;
-  setCurrentGoalTo(firstPose);
+  tf2::Transform firstPose;
+  int graspIndex = -1;
+  for (int i = 0; i < graspList.size(); i++) {
+    firstPose = objXform*graspList.at(i).first;
+    setCurrentGoalTo(firstPose);
+    if (planToXform(firstPose, numRetries)) {
+      ROS_INFO("Grasp %i succeeded!!", i);
+      graspIndex = i;
+      break;
+    }
+  }
 
-  if (!planToXform(firstPose, numRetries)) return false;
+  if (graspIndex == -1) return false;
   if (!executeCurrentPlan()) return false;
 
   ros::Duration(1.0).sleep();
   openGripper();
-  ros::Duration(1.0).sleep();
+  ros::Duration(0.5).sleep();
 
   setCurrentGoalTo(objXform*graspList.at(0).second);
-  if (!planStraightLineMotion(objXform*graspList.at(0).second)) return false;
+  if (!planStraightLineMotion(objXform*graspList.at(graspIndex).second)) return false;
   if (!executeCurrentPlan()) return false;
 
-  ros::Duration(1.0).sleep();
+  ros::Duration(0.5).sleep();
   closeGripper();
-  ros::Duration(1.0).sleep();
+  ros::Duration(0.5).sleep();
 
   if (gripperClosed) {
     ROS_INFO("Arm will return home because grasping the object failed.");
@@ -262,7 +271,7 @@ bool ArmController::pickUp(tf2::Transform objXform,
   }
 
   attachToGripper(objName);
-  usedGrasp = graspList.at(0);
+  usedGrasp = graspList.at(graspIndex);
 
   setCurrentGoalTo(firstPose);
   if (!planStraightLineMotion(firstPose)) return false;
@@ -305,29 +314,39 @@ bool ArmController::putDownHeldObj(std::vector<tf2::Transform> targets) {
     i->setOrigin(v);
   }
 
-  tf2::Transform firstPose = targets.at(0)*usedGrasp.first;
-  setCurrentGoalTo(firstPose);
+  bool success = false;
+  tf2::Transform firstPose;
+  for (std::vector<tf2::Transform>::iterator i = targets.begin();
+       i != targets.end(); i++) {
+    firstPose = (*i)*usedGrasp.first;
+    setCurrentGoalTo(firstPose);
+    if (planToXform(firstPose, numRetries)) {
+      success = true;
+      break;
+    }
+  }
 
-  if (!planToXform(firstPose, numRetries)) return false;
+  if (!success) return false;
   if (!executeCurrentPlan()) return false;
+  ros::Duration(1.0).sleep();
 
   tf2::Transform secondPose = targets.at(0)*usedGrasp.second;
   setCurrentGoalTo(secondPose);
   if (!planStraightLineMotion(secondPose)) return false;
   if (!executeCurrentPlan()) return false;
 
-  ros::Duration(1.0).sleep();
+  ros::Duration(0.5).sleep();
   openGripper();
-  ros::Duration(1.0).sleep();
+  ros::Duration(0.5).sleep();
 
   detachHeldObject();
   setCurrentGoalTo(firstPose);
   if (!planStraightLineMotion(firstPose)) return false;
   if (!executeCurrentPlan()) return false;
 
-  ros::Duration(1.0).sleep();
+  ros::Duration(0.5).sleep();
   closeGripper();
-  ros::Duration(1.0).sleep();
+  ros::Duration(0.5).sleep();
 
   if (!homeArm()) return false;
 
