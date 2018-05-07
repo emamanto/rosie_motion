@@ -57,6 +57,7 @@ private:
   int numRetries;
   moveit_msgs::CollisionObject grabbedObject;
   GraspPair usedGrasp;
+  tf2::Transform prevObjRotation;
   actionlib::SimpleActionClient<control_msgs::GripperCommandAction> gripper;
   bool checkPlans;
   bool gripperClosed;

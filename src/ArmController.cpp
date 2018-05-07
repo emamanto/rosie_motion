@@ -272,6 +272,7 @@ bool ArmController::pickUp(tf2::Transform objXform,
 
   attachToGripper(objName);
   usedGrasp = graspList.at(graspIndex);
+  prevObjRotation = tf2::Transform(objXform.getRotation());
 
   setCurrentGoalTo(firstPose);
   if (!planStraightLineMotion(firstPose)) return false;
@@ -316,21 +317,23 @@ bool ArmController::putDownHeldObj(std::vector<tf2::Transform> targets) {
 
   bool success = false;
   tf2::Transform firstPose;
+  int targetIndex = 0;
   for (std::vector<tf2::Transform>::iterator i = targets.begin();
        i != targets.end(); i++) {
-    firstPose = (*i)*usedGrasp.first;
+    firstPose = (*i)*prevObjRotation*usedGrasp.first;
     setCurrentGoalTo(firstPose);
     if (planToXform(firstPose, numRetries)) {
       success = true;
       break;
     }
+    targetIndex++;
   }
 
   if (!success) return false;
   if (!executeCurrentPlan()) return false;
   ros::Duration(1.0).sleep();
 
-  tf2::Transform secondPose = targets.at(0)*usedGrasp.second;
+  tf2::Transform secondPose = targets.at(targetIndex)*prevObjRotation*usedGrasp.second;
   setCurrentGoalTo(secondPose);
   if (!planStraightLineMotion(secondPose)) return false;
   if (!executeCurrentPlan()) return false;
