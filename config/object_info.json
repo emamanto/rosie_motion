@@ -36,6 +36,16 @@
             "dimensions" : [0.03, 0.17]
         },
         {
+            "name" : "basic_wall",
+            "shape" : "box",
+            "dimensions" : [2.0, 0.3, 2.5]
+        },
+        {
+            "name" : "basic_column",
+            "shape" : "cylinder",
+            "dimensions" : [2.5, 0.1]
+        },
+        {
             "name" : "blue_cube3cm",
             "shape" : "box",
             "dimensions" : [0.03, 0.03, 0.03],
