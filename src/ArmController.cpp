@@ -1,5 +1,21 @@
 #include "ArmController.h"
 
+double ArmController::jointLength(moveit_msgs::RobotTrajectory traj) {
+  if (traj.multi_dof_joint_trajectory.points.size() > 0) {
+    ROS_WARN("This is a multi DOF trajectory!");
+    return 0;
+  }
+
+  double jl = 0;
+  for (int i = 1; i < traj.joint_trajectory.points.size(); i++) {
+    for (int j = 0; j < traj.joint_trajectory.points[i].positions.size(); j++) {
+      jl +=  fabs(traj.joint_trajectory.points[i].positions[j] -
+                  traj.joint_trajectory.points[i-1].positions[j]);
+    }
+  }
+  return jl;
+}
+
 ArmController::ArmController(ros::NodeHandle& nh) : numRetries(2),
                                                     checkPlans(true),
                                                     group("arm"),
@@ -330,6 +346,7 @@ bool ArmController::putDownHeldObj(std::vector<tf2::Transform> targets) {
   }
 
   if (!success) return false;
+
   if (!executeCurrentPlan()) return false;
   ros::Duration(1.0).sleep();
 
@@ -394,7 +411,6 @@ bool ArmController::homeArm() {
 
   if (!safetyCheck()) return false;
   currentPlan = homePlan;
-
   if (!executeCurrentPlan()) return false;
   return true;
 }

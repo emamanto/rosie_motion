@@ -21,6 +21,8 @@ public:
   typedef std::vector<moveit::planning_interface::MoveGroupInterface::Plan> PlanVector;
   typedef std::pair<tf2::Transform, tf2::Transform> GraspPair;
 
+  static double jointLength(moveit_msgs::RobotTrajectory traj);
+
   ArmController(ros::NodeHandle& nh);
   void setHumanChecks(bool on) { checkPlans = on; }
 
