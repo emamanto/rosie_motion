@@ -1,7 +1,10 @@
 #pragma once
 
 #include <iostream>
+#include <sstream>
+#include <fstream>
 #include <vector>
+#include <ctime>
 
 #include <tf2_geometry_msgs/tf2_geometry_msgs.h>
 #include <tf2/utils.h>
@@ -51,9 +54,12 @@ private:
   bool planToXform(tf2::Transform t, int n);
   double planStraightLineMotion(tf2::Transform target);
   bool executeCurrentPlan();
+  void writeQuery(tf2::Transform t, moveit_msgs::RobotTrajectory traj);
   bool safetyCheck();
   void publishCurrentGoal(const ros::TimerEvent& e);
   void setCurrentGoalTo(tf2::Transform t);
+
+  std::string logFileName;
 
   moveit::planning_interface::MoveGroupInterface::Plan currentPlan;
   int numRetries;

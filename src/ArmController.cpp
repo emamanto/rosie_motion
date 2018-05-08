@@ -21,6 +21,20 @@ ArmController::ArmController(ros::NodeHandle& nh) : numRetries(2),
                                                     group("arm"),
                                                     gripper("gripper_controller/gripper_action", true)
 {
+  std::time_t t;
+  std::time(&t);
+  struct std::tm* lt = std::localtime(&t);
+  std::stringstream ss;
+  ss << "logfile" << lt->tm_mon + 1 << lt->tm_mday << lt->tm_hour
+     << lt->tm_min << lt->tm_sec << ".txt";
+  logFileName = ss.str();
+  std::ofstream ofs;
+  ofs.open(logFileName);
+  ofs << "TIME " << lt->tm_mon + 1 << "/" << lt->tm_mday << ", "
+      << lt->tm_hour << ":" << lt->tm_min << ":" << lt->tm_sec << std::endl;
+  ofs.close();
+  ROS_INFO("Logging motion history to %s", logFileName.c_str());
+
   group.setMaxVelocityScalingFactor(0.4);
   gripper.waitForServer();
   closeGripper();
@@ -442,6 +456,8 @@ bool ArmController::planToXform(tf2::Transform t) {
     success = false;
   }
 
+  writeQuery(t, mp.trajectory_);
+
   currentPlan = mp;
   return (bool)success;
 }
@@ -481,6 +497,31 @@ bool ArmController::executeCurrentPlan() {
     return false;
   }
   return true;
+}
+
+void ArmController::writeQuery(tf2::Transform t, moveit_msgs::RobotTrajectory traj) {
+  std::ofstream ofs;
+  ofs.open(logFileName, std::ofstream::out | std::ofstream::app);
+
+  ofs << "TO "
+      << t.getOrigin().x() << " "
+      << t.getOrigin().y() << " "
+      << t.getOrigin().z();
+  ofs << " TR "
+      << t.getRotation().x() << " "
+      << t.getRotation().y() << " "
+      << t.getRotation().z() << " "
+      << t.getRotation().w();
+  ofs << " SUCC ";
+  if (traj.joint_trajectory.points.size() > 0) {
+    ofs << "Y";
+  } else {
+    ofs << "N";
+  }
+  ofs << " JL " << jointLength(traj);
+  ofs << std::endl;
+
+  ofs.close();
 }
 
 bool ArmController::safetyCheck() {
