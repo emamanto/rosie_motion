@@ -24,7 +24,12 @@ public:
   typedef std::vector<moveit::planning_interface::MoveGroupInterface::Plan> PlanVector;
   typedef std::pair<tf2::Transform, tf2::Transform> GraspPair;
 
+  // Independent of the specific setup
   static double jointLength(moveit_msgs::RobotTrajectory traj);
+  static double execTime(moveit_msgs::RobotTrajectory traj);
+
+  // Dependent on the specific setup
+  double handLength(moveit_msgs::RobotTrajectory traj);
 
   ArmController(ros::NodeHandle& nh);
   void setHumanChecks(bool on) { checkPlans = on; }
@@ -55,6 +60,8 @@ private:
   double planStraightLineMotion(tf2::Transform target);
   bool executeCurrentPlan();
   void writeQuery(tf2::Transform t, moveit_msgs::RobotTrajectory traj);
+  void writeHomeQuery(moveit_msgs::RobotTrajectory traj);
+  void writeTrajectoryInfo(std::ofstream& ofs, moveit_msgs::RobotTrajectory& traj);
   bool safetyCheck();
   void publishCurrentGoal(const ros::TimerEvent& e);
   void setCurrentGoalTo(tf2::Transform t);

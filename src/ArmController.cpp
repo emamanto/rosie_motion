@@ -16,6 +16,48 @@ double ArmController::jointLength(moveit_msgs::RobotTrajectory traj) {
   return jl;
 }
 
+double ArmController::execTime(moveit_msgs::RobotTrajectory traj) {
+  if (traj.multi_dof_joint_trajectory.points.size() > 0) {
+    ROS_WARN("This is a multi DOF trajectory!");
+    return 0;
+  }
+
+  int lastPose = traj.joint_trajectory.points.size() - 1;
+  return traj.joint_trajectory.points[lastPose].time_from_start.toSec();
+}
+
+double ArmController::handLength(moveit_msgs::RobotTrajectory traj) {
+  if (traj.multi_dof_joint_trajectory.points.size() > 0) {
+    ROS_WARN("This is a multi DOF trajectory!");
+    return 0;
+  }
+
+  robot_model::RobotModelConstPtr rm = group.getRobotModel();
+  double approxHandDist = 0;
+
+  for (int i = 1; i < traj.joint_trajectory.points.size(); i++) {
+    moveit::core::RobotState rs1(rm);
+    rs1.setVariablePositions(traj.joint_trajectory.joint_names,
+                             traj.joint_trajectory.points[i-1].positions);
+    rs1.update();
+    Eigen::Affine3d xform1 = rs1.getGlobalLinkTransform(group.getEndEffectorLink());
+    Eigen::Vector3d pos3d1(xform1.translation());
+
+    moveit::core::RobotState rs2(rm);
+    rs2.setVariablePositions(traj.joint_trajectory.joint_names,
+                             traj.joint_trajectory.points[i].positions);
+    rs2.update();
+    Eigen::Affine3d xform2 = rs2.getGlobalLinkTransform(group.getEndEffectorLink());
+    Eigen::Vector3d pos3d2(xform2.translation());
+
+    approxHandDist += sqrt(pow(pos3d2[0] - pos3d1[0], 2) +
+                           pow(pos3d2[1] - pos3d1[1], 2) +
+                           pow(pos3d2[2] - pos3d1[2], 2));
+  }
+
+  return approxHandDist;
+}
+
 ArmController::ArmController(ros::NodeHandle& nh) : numRetries(2),
                                                     checkPlans(true),
                                                     group("arm"),
@@ -424,6 +466,7 @@ bool ArmController::homeArm() {
   if (!group.plan(homePlan)) return false;
 
   if (!safetyCheck()) return false;
+  writeHomeQuery(homePlan.trajectory_);
   currentPlan = homePlan;
   if (!executeCurrentPlan()) return false;
   return true;
@@ -512,6 +555,25 @@ void ArmController::writeQuery(tf2::Transform t, moveit_msgs::RobotTrajectory tr
       << t.getRotation().y() << " "
       << t.getRotation().z() << " "
       << t.getRotation().w();
+  writeTrajectoryInfo(ofs, traj);
+  ofs << std::endl;
+
+  ofs.close();
+}
+
+void ArmController::writeHomeQuery(moveit_msgs::RobotTrajectory traj) {
+  std::ofstream ofs;
+  ofs.open(logFileName, std::ofstream::out | std::ofstream::app);
+
+  ofs << "HOME POS ";
+  writeTrajectoryInfo(ofs, traj);
+  ofs << std::endl;
+
+  ofs.close();
+}
+
+void ArmController::writeTrajectoryInfo(std::ofstream& ofs,
+                                        moveit_msgs::RobotTrajectory& traj) {
   ofs << " SUCC ";
   if (traj.joint_trajectory.points.size() > 0) {
     ofs << "Y";
@@ -519,9 +581,8 @@ void ArmController::writeQuery(tf2::Transform t, moveit_msgs::RobotTrajectory tr
     ofs << "N";
   }
   ofs << " JL " << jointLength(traj);
-  ofs << std::endl;
-
-  ofs.close();
+  ofs << " ET " << execTime(traj);
+  ofs << " HL " << handLength(traj);
 }
 
 bool ArmController::safetyCheck() {
