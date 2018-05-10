@@ -6,6 +6,8 @@ double ArmController::jointLength(moveit_msgs::RobotTrajectory traj) {
     return 0;
   }
 
+  if (traj.joint_trajectory.points.size() == 0) return 0;
+
   double jl = 0;
   for (int i = 1; i < traj.joint_trajectory.points.size(); i++) {
     for (int j = 0; j < traj.joint_trajectory.points[i].positions.size(); j++) {
@@ -22,6 +24,8 @@ double ArmController::execTime(moveit_msgs::RobotTrajectory traj) {
     return 0;
   }
 
+  if (traj.joint_trajectory.points.size() == 0) return 0;
+
   int lastPose = traj.joint_trajectory.points.size() - 1;
   return traj.joint_trajectory.points[lastPose].time_from_start.toSec();
 }
@@ -31,6 +35,8 @@ double ArmController::handLength(moveit_msgs::RobotTrajectory traj) {
     ROS_WARN("This is a multi DOF trajectory!");
     return 0;
   }
+
+  if (traj.joint_trajectory.points.size() == 0) return 0;
 
   robot_model::RobotModelConstPtr rm = group.getRobotModel();
   double approxHandDist = 0;
