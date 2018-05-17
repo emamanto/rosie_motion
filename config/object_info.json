@@ -5,7 +5,11 @@
             "shapes" : [
                 {
                     "shape" : "cylinder",
-                    "dimensions" : [0.09, 0.04]
+                    "dimensions" : [0.09, 0.04],
+                    "transform" : {
+                        "translation" : [0, 0, 0],
+                        "rotation" : [0, 0, 0, 1]
+                    }
                 }
             ],
             "grasps" : [

@@ -398,20 +398,22 @@ public:
 
       moveit_msgs::CollisionObject co;
       co.id = *i;
-
-      geometry_msgs::Pose box_pose;
-      box_pose.position.x = fetchCentered.x();
-      box_pose.position.y = fetchCentered.y();
-      box_pose.position.z = fetchCentered.z();
-
-      geometry_msgs::Quaternion q = tf2::toMsg(world.worldXformTimesRot(*i));
-      box_pose.orientation = q;
+      tf2::Quaternion q = world.worldXformTimesRot(*i);
 
       if (objData.isInDatabase(*i)) {
         std::vector<SubShape> shapeVec =
           objData.getCollisionModel(objData.findDatabaseName(*i));
-        co.primitives.push_back(shapeVec[0].second);
-        co.primitive_poses.push_back(box_pose);
+        for (int j = 0; j < shapeVec.size(); j++) {
+          tf2::Vector3 oVec = shapeVec[j].first.getOrigin();
+          geometry_msgs::Pose shape_pose;
+          shape_pose.position.x = fetchCentered.x() + oVec.x();
+          shape_pose.position.y = fetchCentered.y() + oVec.y();
+          shape_pose.position.z = fetchCentered.z() + oVec.z();
+          shape_pose.orientation = tf2::toMsg(q*shapeVec[j].first.getRotation());
+
+          co.primitives.push_back(shapeVec[j].second);
+          co.primitive_poses.push_back(shape_pose);
+        }
         co.operation = co.ADD;
         coList.push_back(co);
       }
