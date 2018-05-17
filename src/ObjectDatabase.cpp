@@ -163,7 +163,23 @@ void ObjectDatabase::init() {
       if (!objs[i]["shapes"][j].HasMember("transform")) {
         xform.setIdentity();
       } else {
-        ROS_INFO("Can't read xforms yet...");
+        if (!objs[i]["shapes"][j]["transform"].HasMember("translation") ||
+            !objs[i]["shapes"][j]["transform"]["translation"].IsArray() ||
+            !objs[i]["shapes"][j]["transform"].HasMember("rotation") ||
+            !objs[i]["shapes"][j]["transform"]["rotation"].IsArray()) {
+          ROS_WARN("Shape transform info is not correct.");
+          continue;
+        }
+        tf2::Vector3 trans(objs[i]["shapes"][j]["transform"]["translation"][0].GetDouble(),
+                           objs[i]["shapes"][j]["transform"]["translation"][1].GetDouble(),
+                           objs[i]["shapes"][j]["transform"]["translation"][2].GetDouble());
+
+        tf2::Quaternion rot(objs[i]["shapes"][j]["transform"]["rotation"][0].GetDouble(),
+                            objs[i]["shapes"][j]["transform"]["rotation"][1].GetDouble(),
+                            objs[i]["shapes"][j]["transform"]["rotation"][2].GetDouble(),
+                            objs[i]["shapes"][j]["transform"]["rotation"][3].GetDouble());
+        xform.setOrigin(trans);
+        xform.setRotation(rot);
       }
 
       SubShape ss = std::make_pair(xform, shape);
