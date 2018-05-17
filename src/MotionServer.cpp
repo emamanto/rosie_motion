@@ -289,7 +289,9 @@ public:
     }
 
     float shapeHeight = 0.f;
-    shape_msgs::SolidPrimitive cm = objData.getCollisionModel(databaseName);
+    std::vector<SubShape> shapeVec =
+      objData.getCollisionModel(databaseName);
+    shape_msgs::SolidPrimitive cm = shapeVec[0].second;
     if (cm.type == cm.BOX) {
       shapeHeight = cm.dimensions[2];
     }
@@ -297,7 +299,7 @@ public:
       shapeHeight = cm.dimensions[0];
     }
     else {
-      ROS_INFO("What king of object are you?!");
+      ROS_INFO("What kind of object are you?!");
     }
 
     arm.updateCollisionScene(getCollisionModels());
@@ -406,8 +408,9 @@ public:
       box_pose.orientation = q;
 
       if (objData.isInDatabase(*i)) {
-        shape_msgs::SolidPrimitive primitive = objData.getCollisionModel(objData.findDatabaseName(*i));
-        co.primitives.push_back(primitive);
+        std::vector<SubShape> shapeVec =
+          objData.getCollisionModel(objData.findDatabaseName(*i));
+        co.primitives.push_back(shapeVec[0].second);
         co.primitive_poses.push_back(box_pose);
         co.operation = co.ADD;
         coList.push_back(co);

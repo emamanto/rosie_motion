@@ -2,8 +2,12 @@
     "objects" : [
         {
             "name" : "cup_glass",
-            "shape" : "cylinder",
-            "dimensions" : [0.09, 0.04],
+            "shapes" : [
+                {
+                    "shape" : "cylinder",
+                    "dimensions" : [0.09, 0.04]
+                }
+            ],
             "grasps" : [
                 {
                     "first" : [0.0, 0.0, 0.26, 0.0, 1.5708, 0.0],
@@ -17,8 +21,12 @@
         },
         {
             "name" : "coca_cola",
-            "shape" : "cylinder",
-            "dimensions" : [0.12, 0.035],
+            "shapes" : [
+                {
+                    "shape" : "cylinder",
+                    "dimensions" : [0.12, 0.035]
+                }
+            ],
             "grasps" : [
                 {
                     "first" : [0.0, 0.0, 0.28, 0.0, 1.5708, 0.0],
@@ -32,23 +40,39 @@
         },
         {
             "name" : "plate_1",
-            "shape" : "cylinder",
-            "dimensions" : [0.03, 0.17]
+            "shapes" : [
+                {
+                    "shape" : "cylinder",
+                    "dimensions" : [0.03, 0.17]
+                }
+            ]
         },
         {
             "name" : "basic_wall",
-            "shape" : "box",
-            "dimensions" : [2.0, 0.3, 2.5]
+            "shapes" : [
+                {
+                    "shape" : "box",
+                    "dimensions" : [2.0, 0.3, 2.5]
+                }
+            ]
         },
         {
             "name" : "basic_column",
-            "shape" : "cylinder",
-            "dimensions" : [2.5, 0.1]
+            "shapes" : [
+                {
+                    "shape" : "cylinder",
+                    "dimensions" : [2.5, 0.1]
+                }
+            ]
         },
         {
             "name" : "blue_cube3cm",
-            "shape" : "box",
-            "dimensions" : [0.03, 0.03, 0.03],
+            "shapes" : [
+                {
+                    "shape" : "box",
+                    "dimensions" : [0.03, 0.03, 0.03]
+                }
+            ],
             "grasps" : [
                 {
                     "first" : [0.0, 0.0, 0.23, 0.0, 1.5708, 0.0],
@@ -78,8 +102,12 @@
         },
         {
             "name" : "red_cube3cm",
-            "shape" : "box",
-            "dimensions" : [0.03, 0.03, 0.03],
+            "shapes" : [
+                {
+                    "shape" : "box",
+                    "dimensions" : [0.03, 0.03, 0.03]
+                }
+            ],
             "grasps" : [
                 {
                     "first" : [0.0, 0.0, 0.23, 0.0, 1.5708, 0.0],
@@ -109,8 +137,12 @@
         },
         {
             "name" : "blue_cube5cm",
-            "shape" : "box",
-            "dimensions" : [0.05, 0.05, 0.05],
+            "shapes" : [
+                {
+                    "shape" : "box",
+                    "dimensions" : [0.05, 0.05, 0.05]
+                }
+            ],
             "grasps" : [
                 {
                     "first" : [0.0, 0.0, 0.23, 0.0, 1.5708, 0.0],
@@ -124,8 +156,12 @@
         },
         {
             "name" : "red_cube5cm",
-            "shape" : "box",
-            "dimensions" : [0.05, 0.05, 0.05],
+            "shapes" : [
+                {
+                    "shape" : "box",
+                    "dimensions" : [0.05, 0.05, 0.05]
+                }
+            ],
             "grasps" : [
                 {
                     "first" : [0.0, 0.0, 0.23, 0.0, 1.5708, 0.0],
@@ -139,8 +175,12 @@
         },
         {
             "name" : "blue_cube7cm",
-            "shape" : "box",
-            "dimensions" : [0.07, 0.07, 0.07],
+            "shapes" : [
+                {
+                    "shape" : "box",
+                    "dimensions" : [0.07, 0.07, 0.07]
+                }
+            ],
             "grasps" : [
                 {
                     "first" : [0.0, 0.0, 0.24, 0.0, 1.5708, 0.0],
@@ -154,8 +194,12 @@
         },
         {
             "name" : "red_cube7cm",
-            "shape" : "box",
-            "dimensions" : [0.07, 0.07, 0.07],
+            "shapes" : [
+                {
+                    "shape" : "box",
+                    "dimensions" : [0.07, 0.07, 0.07]
+                }
+            ],
             "grasps" : [
                 {
                     "first" : [0.0, 0.0, 0.24, 0.0, 1.5708, 0.0],
@@ -169,8 +213,12 @@
         },
         {
             "name" : "blue_cube9cm",
-            "shape" : "box",
-            "dimensions" : [0.09, 0.09, 0.09],
+            "shapes" : [
+                {
+                    "shape" : "box",
+                    "dimensions" : [0.09, 0.09, 0.09]
+                }
+            ],
             "grasps" : [
                 {
                     "first" : [0.0, 0.0, 0.26, 0.0, 1.5708, 0.0],
@@ -184,8 +232,12 @@
         },
         {
             "name" : "red_cube9cm",
-            "shape" : "box",
-            "dimensions" : [0.09, 0.09, 0.09],
+            "shapes" : [
+                {
+                    "shape" : "box",
+                    "dimensions" : [0.09, 0.09, 0.09]
+                }
+            ],
             "grasps" : [
                 {
                     "first" : [0.0, 0.0, 0.26, 0.0, 1.5708, 0.0],
@@ -199,8 +251,12 @@
         },
         {
             "name" : "blue_cube11cm",
-            "shape" : "box",
-            "dimensions" : [0.11, 0.11, 0.11],
+            "shapes" : [
+                {
+                    "shape" : "box",
+                    "dimensions" : [0.11, 0.11, 0.11]
+                }
+            ],
             "grasps" : [
                 {
                     "first" : [0.0, 0.0, 0.28, 0.0, 1.5708, 0.0],
@@ -214,8 +270,12 @@
         },
         {
             "name" : "red_cube11cm",
-            "shape" : "box",
-            "dimensions" : [0.11, 0.11, 0.11],
+            "shapes" : [
+                {
+                    "shape" : "box",
+                    "dimensions" : [0.11, 0.11, 0.11]
+                }
+            ],
             "grasps" : [
                 {
                     "first" : [0.0, 0.0, 0.28, 0.0, 1.5708, 0.0],
@@ -229,8 +289,12 @@
         },
         {
             "name" : "blue_cube13cm",
-            "shape" : "box",
-            "dimensions" : [0.13, 0.13, 0.13],
+            "shapes" : [
+                {
+                    "shape" : "box",
+                    "dimensions" : [0.13, 0.13, 0.13]
+                }
+            ],
             "grasps" : [
                 {
                     "first" : [0.0, 0.0, 0.30, 0.0, 1.5708, 0.0],
@@ -244,8 +308,12 @@
         },
         {
             "name" : "red_cube13cm",
-            "shape" : "box",
-            "dimensions" : [0.13, 0.13, 0.13],
+            "shapes" : [
+                {
+                    "shape" : "box",
+                    "dimensions" : [0.13, 0.13, 0.13]
+                }
+            ],
             "grasps" : [
                 {
                     "first" : [0.0, 0.0, 0.30, 0.0, 1.5708, 0.0],
@@ -259,8 +327,12 @@
         },
         {
             "name" : "blue_cube15cm",
-            "shape" : "box",
-            "dimensions" : [0.15, 0.15, 0.15],
+            "shapes" : [
+                {
+                    "shape" : "box",
+                    "dimensions" : [0.15, 0.15, 0.15]
+                }
+            ],
             "grasps" : [
                 {
                     "first" : [0.0, 0.0, 0.32, 0.0, 1.5708, 0.0],
@@ -274,8 +346,12 @@
         },
         {
             "name" : "red_cube15cm",
-            "shape" : "box",
-            "dimensions" : [0.15, 0.15, 0.15],
+            "shapes" : [
+                {
+                    "shape" : "box",
+                    "dimensions" : [0.15, 0.15, 0.15]
+                }
+            ],
             "grasps" : [
                 {
                     "first" : [0.0, 0.0, 0.32, 0.0, 1.5708, 0.0],

@@ -10,6 +10,7 @@
 #include "rapidjson/document.h"
 
 typedef std::pair<tf2::Transform, tf2::Transform> GraspPair;
+typedef std::pair<tf2::Transform, shape_msgs::SolidPrimitive> SubShape;
 
 class ObjectDatabase {
 public:
@@ -24,7 +25,7 @@ public:
   bool dbHasModel(std::string objectID);
   std::string findDatabaseName(std::string objectID);
 
-  shape_msgs::SolidPrimitive getCollisionModel(std::string dbName);
+  std::vector<SubShape> getCollisionModel(std::string dbName);
   int getNumGrasps(std::string dbName);
   std::vector<GraspPair> getAllGrasps(std::string dbName);
   GraspPair getGraspAtIndex(std::string dbName, int index);
@@ -32,6 +33,6 @@ public:
 private:
   void init();
 
-  std::map<std::string, shape_msgs::SolidPrimitive> collisionModels;
+  std::map<std::string, std::vector<SubShape> > collisionModels;
   std::map<std::string, std::vector<GraspPair> > grasps;
 };

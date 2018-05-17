@@ -22,7 +22,7 @@ bool ObjectDatabase::dbHasGrasps(std::string objectID) {
 }
 
 bool ObjectDatabase::dbHasModel(std::string objectID) {
-  for (std::map<std::string, shape_msgs::SolidPrimitive>::iterator p =
+  for (std::map<std::string, std::vector<SubShape> >::iterator p =
          collisionModels.begin(); p != collisionModels.end(); p++) {
     if (p->first.find(objectID) != std::string::npos ||
         objectID.find(p->first) != std::string::npos) {
@@ -43,7 +43,7 @@ std::string ObjectDatabase::findDatabaseName(std::string objectID) {
     }
   }
 
-  for (std::map<std::string, shape_msgs::SolidPrimitive>::iterator p =
+  for (std::map<std::string, std::vector<SubShape> >::iterator p =
          collisionModels.begin(); p != collisionModels.end(); p++) {
     if (p->first.find(objectID) != std::string::npos ||
         objectID.find(p->first) != std::string::npos) {
@@ -57,7 +57,7 @@ std::string ObjectDatabase::findDatabaseName(std::string objectID) {
   return "";
 }
 
-shape_msgs::SolidPrimitive ObjectDatabase::getCollisionModel(std::string dbName) {
+std::vector<SubShape> ObjectDatabase::getCollisionModel(std::string dbName) {
   return collisionModels[dbName];
 }
 
@@ -74,6 +74,7 @@ GraspPair ObjectDatabase::getGraspAtIndex(std::string dbName, int index) {
 
 // Reads in json specifying data about the objects the robot may find
 void ObjectDatabase::init() {
+  // OPEN FILE
   std::ifstream jsonfile("/home/mamantov/catkin_ws/src/rosie_motion/config/object_info.json");
   int length = 0;
   if (jsonfile) {
@@ -86,6 +87,7 @@ void ObjectDatabase::init() {
     return;
   }
 
+  // READ FILE
   char* buf = new char[length];
   jsonfile.read(buf, length);
   // Make sure there is nothing else after the json object
@@ -93,6 +95,8 @@ void ObjectDatabase::init() {
     if (buf[i] != '}') buf[i] = 0;
     else break;
   }
+
+  // CONVERT TO JSON
   rapidjson::Document d;
   d.Parse(buf);
   delete[] buf;
@@ -104,6 +108,7 @@ void ObjectDatabase::init() {
              (int)d.GetErrorOffset());
   }
 
+  // CHECK THAT THERE IS A LIST OF OBJECTS
   if (d.HasMember("objects")) {
     ROS_INFO("ObjectDatabase successfully read object database json file!");
   }
@@ -113,46 +118,61 @@ void ObjectDatabase::init() {
 
   ROS_INFO("There are %i objects in the object_info file.", (int)objs.Size());
 
+  // GO THROUGH ALL THE OBJECTS
   for (int i = 0; i < objs.Size(); i++) {
-    shape_msgs::SolidPrimitive shape;
-    if (objs[i]["shape"] == "cylinder") {
-      shape.type = shape.CYLINDER;
-    }
-    else if (objs[i]["shape"] == "box") {
-      shape.type = shape.BOX;
-    }
-    else {
-      ROS_WARN("Unknown object type %s found!", objs[i]["shape"].GetString());
-      continue;
-    }
-
-    if(!objs[i].HasMember("dimensions") || !objs[i]["dimensions"].IsArray()) {
-      ROS_WARN("Database object %s has no dimensions, will not be added.",
+    if(!objs[i].HasMember("shapes") || !objs[i]["shapes"].IsArray()) {
+      ROS_WARN("Database object %s has no shapes, will not be added.",
                objs[i]["name"].GetString());
       continue;
     }
 
-    if (shape.type == shape.CYLINDER) {
-      if (objs[i]["dimensions"].Size() != 2) {
-        ROS_WARN("Cylinders need two elements in their dimensions.");
+    std::vector<SubShape> shapeVec;
+    for (int j = 0; j < objs[i]["shapes"].Size(); j++) {
+      shape_msgs::SolidPrimitive shape;
+      if (objs[i]["shapes"][j]["shape"] == "cylinder") {
+        shape.type = shape.CYLINDER;
+      }
+      else if (objs[i]["shapes"][j]["shape"] == "box") {
+        shape.type = shape.BOX;
+      }
+      else {
+        ROS_WARN("Unknown object type %s found!", objs[i]["shape"].GetString());
         continue;
       }
-      shape.dimensions.resize(2);
-    }
-    else if (shape.type == shape.BOX) {
-      if (objs[i]["dimensions"].Size() != 3) {
-        ROS_WARN("Boxes need three elements in their dimensions.");
-        continue;
+
+      if (shape.type == shape.CYLINDER) {
+        if (objs[i]["shapes"][j]["dimensions"].Size() != 2) {
+          ROS_WARN("Cylinders need two elements in their dimensions.");
+          continue;
+        }
+        shape.dimensions.resize(2);
       }
-      shape.dimensions.resize(3);
-    }
-    for (int j = 0; j < shape.dimensions.size(); j++) {
-      shape.dimensions[j] = objs[i]["dimensions"][j].GetDouble();
+      else if (shape.type == shape.BOX) {
+        if (objs[i]["shapes"][j]["dimensions"].Size() != 3) {
+          ROS_WARN("Boxes need three elements in their dimensions.");
+          continue;
+        }
+        shape.dimensions.resize(3);
+      }
+
+      for (int k = 0; k < shape.dimensions.size(); k++) {
+        shape.dimensions[k] = objs[i]["shapes"][j]["dimensions"][k].GetDouble();
+      }
+
+      tf2::Transform xform;
+      if (!objs[i]["shapes"][j].HasMember("transform")) {
+        xform.setIdentity();
+      } else {
+        ROS_INFO("Can't read xforms yet...");
+      }
+
+      SubShape ss = std::make_pair(xform, shape);
+      shapeVec.push_back(ss);
     }
 
     collisionModels.insert(std::pair<std::string,
-                           shape_msgs::SolidPrimitive>(objs[i]["name"].GetString(),
-                                                       shape));
+                           std::vector<SubShape> >(objs[i]["name"].GetString(),
+                                                   shapeVec));
 
     if(!objs[i].HasMember("grasps") || !objs[i]["grasps"].IsArray()) {
       ROS_WARN("Database object %s has no grasp information, only collision model.",
