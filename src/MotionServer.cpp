@@ -398,18 +398,19 @@ public:
 
       moveit_msgs::CollisionObject co;
       co.id = *i;
-      tf2::Quaternion q = world.worldXformTimesRot(*i);
+      tf2::Transform xf = world.worldXformTimesTrans(*i);
 
       if (objData.isInDatabase(*i)) {
         std::vector<SubShape> shapeVec =
           objData.getCollisionModel(objData.findDatabaseName(*i));
         for (int j = 0; j < shapeVec.size(); j++) {
-          tf2::Vector3 oVec = shapeVec[j].first.getOrigin();
+          xf *= shapeVec[j].first;
+
           geometry_msgs::Pose shape_pose;
-          shape_pose.position.x = fetchCentered.x() + oVec.x();
-          shape_pose.position.y = fetchCentered.y() + oVec.y();
-          shape_pose.position.z = fetchCentered.z() + oVec.z();
-          shape_pose.orientation = tf2::toMsg(q*shapeVec[j].first.getRotation());
+          shape_pose.position.x = xf.getOrigin().x();
+          shape_pose.position.y = xf.getOrigin().y();
+          shape_pose.position.z = xf.getOrigin().z();
+          shape_pose.orientation = tf2::toMsg(xf.getRotation());
 
           co.primitives.push_back(shapeVec[j].second);
           co.primitive_poses.push_back(shape_pose);
