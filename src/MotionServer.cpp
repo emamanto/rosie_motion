@@ -339,23 +339,18 @@ public:
     std::vector<std::string> objectIDs = world.allObjectNames();
     for (std::vector<std::string>::iterator i = objectIDs.begin();
          i != objectIDs.end(); i++) {
-      // Check if the fetch could actually hit this
-      float dist = tf2::tf2Distance(world.getWorldXform().getOrigin(),
-                                    world.getPositionOf(*i));
-
-      if (dist > 2) {
-        ROS_INFO("Object %s is out of reasonable range", i->c_str());
-        continue;
-      }
-
       tf2::Vector3 fetchCentered = world.worldXformTimesPos(*i);
+      // Check if the fetch could actually hit this
+      float dist = tf2::tf2Distance(tf2::Vector3(0, 0, 0),
+                                    fetchCentered);
+
       if (i->find("ground_plane") != std::string::npos) {
         moveit_msgs::CollisionObject planeobj;
         planeobj.id = "ground";
 
         geometry_msgs::Pose planep;
-        planep.position.x = fetchCentered.x();
-        planep.position.y = fetchCentered.y();
+        planep.position.x = 0;
+        planep.position.y = 0;
         planep.position.z = -0.025;
 
         planep.orientation = tf2::toMsg(world.worldXformTimesRot(*i));
@@ -372,7 +367,13 @@ public:
         coList.push_back(planeobj);
         continue;
       }
-      else if (i->find("table") != std::string::npos) {
+
+      if (dist > 2) {
+        ROS_INFO("Object %s is out of reasonable range", i->c_str());
+        continue;
+      }
+
+      if (i->find("table") != std::string::npos) {
         moveit_msgs::CollisionObject planeobj;
         planeobj.id = "table";
 
