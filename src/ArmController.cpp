@@ -150,11 +150,13 @@ void ArmController::updateCollisionScene(std::vector<moveit_msgs::CollisionObjec
       // Check to see if we also need to change the size, ie has its database
       // entry been edited
       bool sizeChanged = false;
-      for (int k = 0; k < j->primitives[0].dimensions.size(); k++) {
-        if (j->primitives[0].dimensions[k] !=
-            getResponse.scene.world.collision_objects[i].primitives[0].dimensions[k]) {
-          sizeChanged = true;
-          break;
+      for (int p = 0; p < j->primitives.size(); p++) {
+        for (int k = 0; k < j->primitives[p].dimensions.size(); k++) {
+          if (j->primitives[p].dimensions[k] !=
+              getResponse.scene.world.collision_objects[i].primitives[p].dimensions[k]) {
+            sizeChanged = true;
+            break;
+          }
         }
       }
 
@@ -176,7 +178,9 @@ void ArmController::updateCollisionScene(std::vector<moveit_msgs::CollisionObjec
         edits.header.frame_id = armPlanningFrame();
         edits.id = j->id;
         edits.operation = edits.MOVE;
-        edits.primitive_poses.push_back(j->primitive_poses[0]);
+        for (int p = 0; p < j->primitive_poses.size(); p++) {
+          edits.primitive_poses.push_back(j->primitive_poses[p]);
+        }
         applyRequest.scene.world.collision_objects.push_back(edits);
       }
       break;
@@ -374,6 +378,7 @@ bool ArmController::putDownHeldObj(std::vector<tf2::Transform> targets) {
     return false;
   }
 
+  // NEEDS FIXING
   // Targets refer to tabletop height, we want object height, and also
   // you want to always drop off at a little higher than you picked up...
   float zAdjust = 0.5;
@@ -471,7 +476,7 @@ bool ArmController::homeArm() {
   if (!group.plan(homePlan)) return false;
 
   if (!safetyCheck()) return false;
-  writeHomeQuery(homePlan.trajectory_);
+  writeHomeQuery(homePlan);
   currentPlan = homePlan;
   if (!executeCurrentPlan()) return false;
   return true;
@@ -504,7 +509,7 @@ bool ArmController::planToXform(tf2::Transform t) {
     success = false;
   }
 
-  writeQuery(t, mp.trajectory_);
+  writeQuery(t, mp);
 
   currentPlan = mp;
   return (bool)success;
@@ -547,7 +552,8 @@ bool ArmController::executeCurrentPlan() {
   return true;
 }
 
-void ArmController::writeQuery(tf2::Transform t, moveit_msgs::RobotTrajectory traj) {
+void ArmController::writeQuery(tf2::Transform t,
+                               moveit::planning_interface::MoveGroupInterface::Plan p) {
   std::ofstream ofs;
   ofs.open(logFileName, std::ofstream::out | std::ofstream::app);
 
@@ -560,18 +566,20 @@ void ArmController::writeQuery(tf2::Transform t, moveit_msgs::RobotTrajectory tr
       << t.getRotation().y() << " "
       << t.getRotation().z() << " "
       << t.getRotation().w();
-  writeTrajectoryInfo(ofs, traj);
+  ofs << " TI " << p.planning_time_ << " ";
+  writeTrajectoryInfo(ofs, p.trajectory_);
   ofs << std::endl;
 
   ofs.close();
 }
 
-void ArmController::writeHomeQuery(moveit_msgs::RobotTrajectory traj) {
+void ArmController::writeHomeQuery(moveit::planning_interface::MoveGroupInterface::Plan p) {
   std::ofstream ofs;
   ofs.open(logFileName, std::ofstream::out | std::ofstream::app);
 
   ofs << "HOME POS ";
-  writeTrajectoryInfo(ofs, traj);
+  ofs << " TI " << p.planning_time_ << " ";
+  writeTrajectoryInfo(ofs, p.trajectory_);
   ofs << std::endl;
 
   ofs.close();

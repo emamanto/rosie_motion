@@ -59,8 +59,9 @@ private:
   bool planToXform(tf2::Transform t, int n);
   double planStraightLineMotion(tf2::Transform target);
   bool executeCurrentPlan();
-  void writeQuery(tf2::Transform t, moveit_msgs::RobotTrajectory traj);
-  void writeHomeQuery(moveit_msgs::RobotTrajectory traj);
+  void writeQuery(tf2::Transform t,
+                  moveit::planning_interface::MoveGroupInterface::Plan p);
+  void writeHomeQuery(moveit::planning_interface::MoveGroupInterface::Plan p);
   void writeTrajectoryInfo(std::ofstream& ofs, moveit_msgs::RobotTrajectory& traj);
   bool safetyCheck();
   void publishCurrentGoal(const ros::TimerEvent& e);
