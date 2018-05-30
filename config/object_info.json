@@ -70,6 +70,67 @@
             ]
         },
         {
+            "name" : "lamp_large",
+            "shapes" : [
+                {
+                    "shape" : "cylinder",
+                    "dimensions" : [0.04, 0.15],
+                    "transform" : {
+                        "translation" : [0, 0, 0.02],
+                        "rotation" : [0, 0, 0, 1]
+                    }
+                },
+                {
+                    "shape" : "cylinder",
+                    "dimensions" : [1.55, 0.02],
+                    "transform" : {
+                        "translation" : [0, 0, 0.7925],
+                        "rotation" : [0, 0, 0, 1]
+                    }
+                },
+                {
+                    "shape" : "cylinder",
+                    "dimensions" : [0.04, 0.24],
+                    "transform" : {
+                        "translation" : [0, 0, 0.78],
+                        "rotation" : [0, 0, 0, 1]
+                    }
+                },
+                {
+                    "shape" : "cylinder",
+                    "dimensions" : [0.04, 0.205],
+                    "transform" : {
+                        "translation" : [0, 0, 0.04],
+                        "rotation" : [0, 0, 0, 1]
+                    }
+                },
+                {
+                    "shape" : "cylinder",
+                    "dimensions" : [0.04, 0.17],
+                    "transform" : {
+                        "translation" : [0, 0, 0.04],
+                        "rotation" : [0, 0, 0, 1]
+                    }
+                },
+                                {
+                    "shape" : "cylinder",
+                    "dimensions" : [0.04, 0.135],
+                    "transform" : {
+                        "translation" : [0, 0, 0.04],
+                        "rotation" : [0, 0, 0, 1]
+                    }
+                },
+                {
+                    "shape" : "cylinder",
+                    "dimensions" : [0.04, 0.1],
+                    "transform" : {
+                        "translation" : [0, 0, 0.04],
+                        "rotation" : [0, 0, 0, 1]
+                    }
+                }
+            ]
+        },
+        {
             "name" : "blue_cube3cm",
             "shapes" : [
                 {
