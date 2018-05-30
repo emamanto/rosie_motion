@@ -373,7 +373,7 @@ public:
         continue;
       }
 
-      if (i->find("table") != std::string::npos) {
+      if (i->find("cafe_table") != std::string::npos) {
         moveit_msgs::CollisionObject planeobj;
         planeobj.id = "table";
 
@@ -402,6 +402,7 @@ public:
       tf2::Transform xf = world.worldXformTimesTrans(*i);
 
       if (objData.isInDatabase(*i)) {
+        ROS_INFO("Adding %s to collision scene", i->c_str());
         std::vector<SubShape> shapeVec =
           objData.getCollisionModel(objData.findDatabaseName(*i));
         for (int j = 0; j < shapeVec.size(); j++) {

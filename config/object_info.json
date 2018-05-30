@@ -131,6 +131,35 @@
             ]
         },
         {
+            "name" : "lamp_table_metal",
+            "shapes" : [
+                {
+                    "shape" : "cylinder",
+                    "dimensions" : [0.04, 0.07],
+                    "transform" : {
+                        "translation" : [0, 0, 0.02],
+                        "rotation" : [0, 0, 0, 1]
+                    }
+                },
+                {
+                    "shape" : "cylinder",
+                    "dimensions" : [0.22, 0.01],
+                    "transform" : {
+                        "translation" : [0, 0, 0.13],
+                        "rotation" : [0, 0, 0, 1]
+                    }
+                },
+                {
+                    "shape" : "cylinder",
+                    "dimensions" : [0.16, 0.17],
+                    "transform" : {
+                        "translation" : [0, 0, 0.18],
+                        "rotation" : [0, 0, 0, 1]
+                    }
+                }
+            ]
+        },
+        {
             "name" : "blue_cube3cm",
             "shapes" : [
                 {
