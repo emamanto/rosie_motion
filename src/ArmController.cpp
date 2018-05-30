@@ -460,6 +460,26 @@ bool ArmController::pointTo(tf2::Transform objXform, float objHeight) {
   return true;
 }
 
+bool ArmController::planToTargetList(std::vector<tf2::Transform> targets,
+                                     int numTrials) {
+  std::ofstream ofs;
+  ofs.open(logFileName, std::ofstream::out | std::ofstream::app);
+  ofs << std::endl << "BEGIN LIST " << std::endl;
+  ofs.close();
+
+  bool success = false;
+  for (std::vector<tf2::Transform>::iterator i = targets.begin();
+       i != targets.end(); i++) {
+    setCurrentGoalTo(*i);
+    for (int j = 0; j < numTrials; j++) {
+      if (planToXform(*i, 1)) {
+        success = true;
+      }
+    }
+  }
+  return success;
+}
+
 bool ArmController::homeArm() {
   std::vector<double> joints = std::vector<double>();
   joints.push_back(1.32);

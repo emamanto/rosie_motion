@@ -42,7 +42,8 @@ public:
                     DROP,
                     PUSH,
                     FAILURE,
-                    SCENE};
+                    SCENE,
+                    LIST};
 
   static std::string asToString(ActionState a)
   {
@@ -56,6 +57,7 @@ public:
       case PUSH: return "PUSH";
       case FAILURE: return "FAILURE";
       case SCENE: return "SCENE";
+      case LIST: return "LIST";
       default: return "WTF";
       }
   }
@@ -201,6 +203,18 @@ public:
     else if (msg->action.find("RELOAD")!=std::string::npos){
       ROS_INFO("Handling reload object database command");
       objData.reload();
+    }
+    else if (msg->action.find("LIST")!=std::string::npos){
+      ROS_INFO("Handling a list of targets!!");
+      state = LIST;
+      std::vector<tf2::Transform> targs;
+      for (int i = 0; i < 5; i++) {
+        tf2::Transform t = tf2::Transform::getIdentity();
+        t.setOrigin(tf2::Vector3(0.6, (i*0.08), 0.9));
+        targs.push_back(t);
+      }
+      arm.planToTargetList(targs, 2);
+      state = WAIT;
     }
     else {
       ROS_INFO("Unknown command %s received", msg->action.c_str());

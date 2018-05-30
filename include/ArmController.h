@@ -51,6 +51,7 @@ public:
   bool putDownHeldObj(std::vector<tf2::Transform> targets);
   bool pointTo(tf2::Transform objXform,
                float objHeight);
+  bool planToTargetList(std::vector<tf2::Transform> targets, int numTrials);
   bool homeArm();
 
 private:
