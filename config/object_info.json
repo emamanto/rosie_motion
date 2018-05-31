@@ -160,6 +160,40 @@
             ]
         },
         {
+            "name" : "bottle_red_wine",
+            "shapes" : [
+                {
+                    "shape" : "cylinder",
+                    "dimensions" : [0.25, 0.045],
+                    "transform" : {
+                        "translation" : [0, 0, 0.1],
+                        "rotation" : [0, 0, 0, 1]
+                    }
+                },
+                {
+                    "shape" : "cylinder",
+                    "dimensions" : [0.09, 0.02],
+                    "transform" : {
+                        "translation" : [0, 0, 0.17],
+                        "rotation" : [0, 0, 0, 1]
+                    }
+                }
+            ]
+        },
+        {
+            "name" : "clock_digital",
+            "shapes" : [
+                {
+                    "shape" : "box",
+                    "dimensions" : [0.2, 0.08, 0.1],
+                    "transform" : {
+                        "translation" : [0, 0, 0.05],
+                        "rotation" : [0, 0, 0, 1]
+                    }
+                }
+            ]
+        },
+        {
             "name" : "blue_cube3cm",
             "shapes" : [
                 {
