@@ -185,9 +185,9 @@
             "shapes" : [
                 {
                     "shape" : "box",
-                    "dimensions" : [0.2, 0.08, 0.1],
+                    "dimensions" : [0.21, 0.08, 0.11],
                     "transform" : {
-                        "translation" : [0, 0, 0.05],
+                        "translation" : [0, 0, 0.055],
                         "rotation" : [0, 0, 0, 1]
                     }
                 }
