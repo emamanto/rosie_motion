@@ -480,6 +480,18 @@ bool ArmController::planToTargetList(std::vector<tf2::Transform> targets,
   return success;
 }
 
+bool ArmController::checkIKPose(tf2::Transform eeXform) {
+  setCurrentGoalTo(eeXform);
+  geometry_msgs::Pose eePose;
+  tf2::Vector3 t = eeXform.getOrigin();
+  eePose.position.x = t.x();
+  eePose.position.y = t.y();
+  eePose.position.z = t.z();
+  tf2::Quaternion q = eeXform.getRotation();
+  eePose.orientation = tf2::toMsg(q);
+  return group.setJointValueTarget(eePose);
+}
+
 bool ArmController::homeArm() {
   std::vector<double> joints = std::vector<double>();
   joints.push_back(1.32);

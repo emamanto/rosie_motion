@@ -43,7 +43,8 @@ public:
                     PUSH,
                     FAILURE,
                     SCENE,
-                    LIST};
+                    LIST,
+                    TEST};
 
   static std::string asToString(ActionState a)
   {
@@ -58,6 +59,7 @@ public:
       case FAILURE: return "FAILURE";
       case SCENE: return "SCENE";
       case LIST: return "LIST";
+      case TEST: return "TEST";
       default: return "WTF";
       }
   }
@@ -216,6 +218,21 @@ public:
       arm.planToTargetList(targs, 2);
       state = WAIT;
     }
+    else if (msg->action.find("TEST")!=std::string::npos) {
+      state = TEST;
+      targetID = msg->action.substr(msg->action.find("=")+1);
+      ROS_INFO("TEST of IK target %s", targetID.c_str());
+      arm.updateCollisionScene(getCollisionModels());
+      tf2::Transform xf;
+      tf2::fromMsg(msg->dest, xf);
+      if (arm.checkIKPose(xf)) {
+        ROS_INFO("IK solution found!");
+        state = WAIT;
+      } else {
+        ROS_INFO("No IK solution found.");
+        state = FAILURE;
+      }
+    }
     else {
       ROS_INFO("Unknown command %s received", msg->action.c_str());
       failureReason = "unknowncommand";
@@ -334,7 +351,7 @@ public:
     msg.action = asToString(state).c_str();
     msg.armHome = armHomeState;
     msg.failure_reason = failureReason;
-    msg.obj_id = arm.getHeld();
+    msg.obj_id = targetID;
     statusPublisher.publish(msg);
 
     try {
@@ -463,6 +480,7 @@ private:
 
   ActionState state;
   std::string failureReason;
+  std::string targetID;
   bool armHomeState;
 
   WorldObjects world;

@@ -52,6 +52,7 @@ public:
   bool pointTo(tf2::Transform objXform,
                float objHeight);
   bool planToTargetList(std::vector<tf2::Transform> targets, int numTrials);
+  bool checkIKPose(tf2::Transform eeXform);
   bool homeArm();
 
 private:
