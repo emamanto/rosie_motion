@@ -22,6 +22,7 @@
 #include "rosie_msgs/RobotAction.h"
 #include "gazebo_msgs/ModelStates.h"
 #include "moveit_msgs/CollisionObject.h"
+#include "geometry_msgs/PoseArray.h"
 
 #include "ObjectDatabase.h"
 #include "WorldObjects.h"
@@ -69,6 +70,7 @@ public:
                    tfBuf(),
                    tfListener(tfBuf),
                    lastCommandTime(0),
+                   lastHandled(0),
                    state(WAIT),
                    arm(n)
   {
@@ -122,6 +124,14 @@ public:
                                                                           this, _1),
                                                               ros::VoidPtr(), &armQueue);
     commSubscriber = n.subscribe(optionsArm);
+
+    ros::SubscribeOptions optionsList =
+      ros::SubscribeOptions::create<geometry_msgs::PoseArray>("rosie_test_list",
+                                                              1,
+                                                              boost::bind(&MotionServer::listCB,
+                                                                          this, _1),
+                                                              ros::VoidPtr(), &armQueue);
+    listSubscriber = n.subscribe(optionsList);
 
     statusPublisher = n.advertise<rosie_msgs::RobotAction>("rosie_arm_status", 10);
     camXPublisher = n.advertise<geometry_msgs::TransformStamped>("rosie_camera", 10);
@@ -207,16 +217,7 @@ public:
       objData.reload();
     }
     else if (msg->action.find("LIST")!=std::string::npos){
-      ROS_INFO("Handling a list of targets!!");
-      state = LIST;
-      std::vector<tf2::Transform> targs;
-      for (int i = 0; i < 5; i++) {
-        tf2::Transform t = tf2::Transform::getIdentity();
-        t.setOrigin(tf2::Vector3(0.6, (i*0.08), 0.9));
-        targs.push_back(t);
-      }
-      arm.planToTargetList(targs, 2);
-      state = WAIT;
+      ROS_INFO("Use the /rosie_test_list topic for this!");
     }
     else if (msg->action.find("TEST")!=std::string::npos) {
       state = TEST;
@@ -238,6 +239,30 @@ public:
       failureReason = "unknowncommand";
       state = FAILURE;
     }
+  }
+
+  void listCB(const geometry_msgs::PoseArray::ConstPtr& msg) {
+    if (state == LIST) return;
+    if (msg->header.seq < lastHandled + 5 && lastHandled != 0) return;
+
+    lastHandled = msg->header.seq;
+
+    ROS_INFO("Handling a list of targets!!");
+    state = LIST;
+    std::vector<tf2::Transform> targs;
+    for (int i = 0; i < msg->poses.size(); i++) {
+      tf2::Transform t = tf2::Transform::getIdentity();
+      t.setOrigin(tf2::Vector3(msg->poses[i].position.x,
+                               msg->poses[i].position.y,
+                               msg->poses[i].position.z));
+      tf2::Quaternion q;
+      tf2::fromMsg(msg->poses[i].orientation, q);
+      t.setRotation(q);
+      targs.push_back(t);
+    }
+    std::string num = msg->header.frame_id.substr(msg->header.frame_id.find("=")+1);
+    arm.planToTargetList(targs, std::stoi(num));
+    state = WAIT;
   }
 
   // ID needs to be a substring of the object's model name
@@ -467,6 +492,8 @@ private:
   ros::CallbackQueue inputQueue;
   ros::Subscriber obsSubscriber;
   ros::Subscriber commSubscriber;
+  ros::Subscriber listSubscriber;
+  int lastHandled;
   long lastCommandTime;
   ros::Subscriber jointsSubscriber;
 
