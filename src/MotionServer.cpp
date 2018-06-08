@@ -227,10 +227,8 @@ public:
       tf2::Transform xf;
       tf2::fromMsg(msg->dest, xf);
       if (arm.checkIKPose(xf)) {
-        ROS_INFO("IK solution found!");
         state = WAIT;
       } else {
-        ROS_INFO("No IK solution found.");
         state = FAILURE;
       }
     }

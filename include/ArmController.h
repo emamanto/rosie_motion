@@ -12,6 +12,7 @@
 #include <ros/ros.h>
 #include <moveit/move_group/capability_names.h>
 #include <moveit/move_group_interface/move_group_interface.h>
+#include <moveit/planning_scene/planning_scene.h>
 #include <actionlib/client/simple_action_client.h>
 
 #include "control_msgs/GripperCommandAction.h"

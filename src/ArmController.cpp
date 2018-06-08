@@ -489,7 +489,40 @@ bool ArmController::checkIKPose(tf2::Transform eeXform) {
   eePose.position.z = t.z();
   tf2::Quaternion q = eeXform.getRotation();
   eePose.orientation = tf2::toMsg(q);
-  return group.setJointValueTarget(eePose);
+  if (!group.setJointValueTarget(eePose)) {
+    ROS_INFO("No IK solution.");
+    return false;
+  }
+
+  ROS_INFO("IK solution found! Checking collision...");
+  ros::Duration(0.1).sleep();
+
+  // planning_scene::PlanningScene ps(group.getJointValueTarget().getRobotModel());
+  // moveit_msgs::GetPlanningScene::Request getRequest;
+  // moveit_msgs::GetPlanningScene::Response getResponse;
+
+  // getRequest.components.components = getRequest.components.WORLD_OBJECT_GEOMETRY;
+  // if (!getPSClient.call(getRequest, getResponse)) {
+  //   ROS_WARN("Requesting the current collision scene failed!!");
+  //   return false;
+  // }
+
+  // ps.setPlanningSceneMsg(getResponse.scene);
+  // ps.setCurrentState(group.getJointValueTarget());
+
+  // collision_detection::CollisionRequest creq;
+  // creq.group_name = "arm";
+  // creq.verbose = true;
+  // collision_detection::CollisionResult cres;
+  // ps.checkCollision(creq, cres);
+
+  if (planToXform(eeXform)) {
+    ROS_INFO("IK solution good!");
+    return true;
+  } else {
+    ROS_INFO("IK solution is bad.");
+    return false;
+  }
 }
 
 bool ArmController::homeArm() {
