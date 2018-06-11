@@ -7,6 +7,7 @@
   <arg name="debug" default="false"/>
   <arg name="gui" default="true"/>
   <arg name="headless" default="false"/>
+  <arg name="worldfile" default="obj_table.sdf"/>
 
   <!-- Start Gazebo with a blank world -->
   <include file="$(find gazebo_ros)/launch/empty_world.launch">
@@ -15,7 +16,7 @@
     <arg name="paused" value="false"/>
     <arg name="use_sim_time" value="true"/>
     <arg name="headless" value="$(arg headless)"/>
-    <arg name="world_name" value="$(find rosie_motion)/worlds/obj_table.sdf"/>
+    <arg name="world_name" value="$(find rosie_motion)/worlds/$(arg worldfile)"/>
   </include>
 
   <!-- Oh, you wanted a robot? -->

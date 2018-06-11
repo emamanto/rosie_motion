@@ -83,6 +83,7 @@ ArmController::ArmController(ros::NodeHandle& nh) : numRetries(2),
   ROS_INFO("Logging motion history to %s", logFileName.c_str());
 
   group.setMaxVelocityScalingFactor(0.4);
+  group.setPlanningTime(20.0);
   gripper.waitForServer();
   closeGripper();
   grabbedObject.id = "NONE";
