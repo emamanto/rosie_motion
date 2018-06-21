@@ -247,6 +247,7 @@ public:
 
     ROS_INFO("Handling a list of targets!!");
     state = LIST;
+    arm.updateCollisionScene(getCollisionModels());
     std::vector<tf2::Transform> targs;
     for (int i = 0; i < msg->poses.size(); i++) {
       tf2::Transform t = tf2::Transform::getIdentity();
