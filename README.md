@@ -1,5 +1,7 @@
 # rosie_motion
-Motion control ROS node for rosie
+Motion control ROS node to allow Rosie to run on the Fetch. You will need a simulated Fetch
+and all related dependencies to see this working! The packaged Fetch software is only for
+ROS indigo as of this writing, so instructions to compile from source are below.
 
 ## Installation requirements
 
