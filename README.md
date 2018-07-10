@@ -15,12 +15,12 @@ ros-kinetic-moveit-python ros-kinetic-control-toolbox python-catkin-tools`
 
 5. Add line to `~/.bashrc`: `source ~/catkin_ws/devel/setup.bash`
 
-6. Clone these repos into `~/catkin_ws/src`:
-  [fetchrobotics/fetch_ros](https://github.com/fetchrobotics/fetch_ros)
-  [fetchrobotics/fetch_gazebo](https://github.com/fetchrobotics/fetch_gazebo) - then check out the gazebo7 branch
-  [fetchrobotics/robot_controllers](https://github.com/fetchrobotics/robot_controllers)
-  [wg-perception/opencv_candidate](https://github.com/wg-perception/opencv_candidate)
-  [emamanto/rosie_msgs](https://github.com/emamanto/rosie_msgs)
+6. Clone these repos into `~/catkin_ws/src`:  
+  [fetchrobotics/fetch_ros](https://github.com/fetchrobotics/fetch_ros)  
+  [fetchrobotics/fetch_gazebo](https://github.com/fetchrobotics/fetch_gazebo) - then check out the gazebo7 branch  
+  [fetchrobotics/robot_controllers](https://github.com/fetchrobotics/robot_controllers)  
+  [wg-perception/opencv_candidate](https://github.com/wg-perception/opencv_candidate)  
+  [emamanto/rosie_msgs](https://github.com/emamanto/rosie_msgs)  
   ...and this repo, of course
   
 7. Download the [rapidjson](https://github.com/Tencent/rapidjson/) header files and put them in `~/catkin_ws/src/rosie_motion/include`, and
