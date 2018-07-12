@@ -83,7 +83,7 @@ ArmController::ArmController(ros::NodeHandle& nh) : numRetries(2),
   ROS_INFO("Logging motion history to %s", logFileName.c_str());
 
   group.setMaxVelocityScalingFactor(0.4);
-  group.setPlanningTime(20.0);
+  group.setPlanningTime(10.0);
   gripper.waitForServer();
   closeGripper();
   grabbedObject.id = "NONE";
@@ -481,48 +481,19 @@ bool ArmController::planToTargetList(std::vector<tf2::Transform> targets,
   return success;
 }
 
+// This is no longer really checking IK, but oh well
 bool ArmController::checkIKPose(tf2::Transform eeXform) {
-  setCurrentGoalTo(eeXform);
-  geometry_msgs::Pose eePose;
-  tf2::Vector3 t = eeXform.getOrigin();
-  eePose.position.x = t.x();
-  eePose.position.y = t.y();
-  eePose.position.z = t.z();
-  tf2::Quaternion q = eeXform.getRotation();
-  eePose.orientation = tf2::toMsg(q);
-  if (!group.setJointValueTarget(eePose)) {
-    ROS_INFO("No IK solution.");
-    return false;
-  }
-
-  ROS_INFO("IK solution found! Checking collision...");
   ros::Duration(0.1).sleep();
 
-  // planning_scene::PlanningScene ps(group.getJointValueTarget().getRobotModel());
-  // moveit_msgs::GetPlanningScene::Request getRequest;
-  // moveit_msgs::GetPlanningScene::Response getResponse;
+  setCurrentGoalTo(eeXform);
 
-  // getRequest.components.components = getRequest.components.WORLD_OBJECT_GEOMETRY;
-  // if (!getPSClient.call(getRequest, getResponse)) {
-  //   ROS_WARN("Requesting the current collision scene failed!!");
-  //   return false;
-  // }
-
-  // ps.setPlanningSceneMsg(getResponse.scene);
-  // ps.setCurrentState(group.getJointValueTarget());
-
-  // collision_detection::CollisionRequest creq;
-  // creq.group_name = "arm";
-  // creq.verbose = true;
-  // collision_detection::CollisionResult cres;
-  // ps.checkCollision(creq, cres);
-
-  if (planToXform(eeXform)) {
-    ROS_INFO("IK solution good!");
-    return true;
-  } else {
-    ROS_INFO("IK solution is bad.");
+  if (!planToXform(eeXform)) {
+    ROS_INFO("No solution found.");
     return false;
+  }
+  else {
+    ROS_INFO("Successful planning!");
+    return true;
   }
 }
 
