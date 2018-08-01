@@ -35,6 +35,7 @@ public:
     ArmController(ros::NodeHandle& nh);
     void setHumanChecks(bool on) { checkPlans = on; }
     void setStomp(bool isStomp) { stomp = isStomp; }
+    void setPlannerName(std::string n);
 
     std::string armPlanningFrame();
     std::string getHeld() { return grabbedObject.id; }
@@ -82,6 +83,7 @@ private:
     bool checkPlans;
     bool gripperClosed;
     bool stomp;
+    std::string plannerName;
 
     geometry_msgs::PoseStamped currentGoal;
     ros::Publisher goalPublisher;

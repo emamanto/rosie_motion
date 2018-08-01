@@ -104,6 +104,31 @@ ArmController::ArmController(ros::NodeHandle& nh) : numRetries(2),
     getPSClient.waitForExistence();
 }
 
+void ArmController::setPlannerName(std::string n) {
+    plannerName = n;
+    if (plannerName == "stomp") {
+        if (!stomp) {
+            ROS_INFO("Attempting to set STOMP as planner when using OMPL!");
+            plannerName = "rrtc";
+            group.setPlannerId("RRTConnectkConfigDefault");
+        }
+    } else if (plannerName == "rrtc") {
+        if (stomp) {
+            ROS_INFO("Attempting to set RRTConnect as planner when using STOMP!");
+            plannerName = "stomp";
+        } else {
+            group.setPlannerId("RRTConnectkConfigDefault");
+        }
+    } else if (plannerName == "rrtstar") {
+        if (stomp) {
+            ROS_INFO("Attempting to set RRT* as planner when using STOMP!");
+            plannerName = "stomp";
+        } else {
+            group.setPlannerId("RRTstarkConfigDefault");
+        }
+    }
+}
+
 std::string ArmController::armPlanningFrame() {
     return group.getPlanningFrame();
 }
@@ -608,7 +633,8 @@ void ArmController::writeQuery(tf2::Transform t,
     std::ofstream ofs;
     ofs.open(logFileName, std::ofstream::out | std::ofstream::app);
 
-    ofs << "TO "
+    ofs << "AL " << plannerName;
+    ofs << " TO "
         << t.getOrigin().x() << " "
         << t.getOrigin().y() << " "
         << t.getOrigin().z();
@@ -629,6 +655,7 @@ void ArmController::writeHomeQuery(moveit::planning_interface::MoveGroupInterfac
     ofs.open(logFileName, std::ofstream::out | std::ofstream::app);
 
     ofs << "HOME POS ";
+    ofs << "AL " << plannerName;
     ofs << " TI " << p.planning_time_ << " ";
     writeTrajectoryInfo(ofs, p.trajectory_);
     ofs << std::endl;

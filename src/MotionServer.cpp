@@ -113,6 +113,22 @@ public:
     }
     arm.setStomp(plannerIsStomp);
 
+    std::string plannerName;
+    if (!n.getParam("/rosie_motion_server/planner_name", plannerName)) {
+      ROS_INFO("RosieMotionServer is missing planner_name param, will use RRTConnect or STOMP.");
+      if (planningLibName == "stomp") plannerName = "stomp";
+      else plannerName = "rrtc";
+    }
+    else if (planningLibName == "stomp" && plannerName != "stomp") {
+      ROS_INFO("RosieMotionServer is using STOMP library; must use STOMP planner.");
+      plannerName = "stomp";
+    }
+    else if (planningLibName == "ompl" && plannerName == "stomp") {
+      ROS_INFO("RosieMotionServer is using OMPL library; cannot use STOMP planner.");
+      plannerName = "rrtc";
+    }
+    arm.setPlannerName(plannerName);
+
     ros::param::set("/move_group/trajectory_execution/allowed_start_tolerance", 0.0);
 
     ros::SubscribeOptions optionsObs =
