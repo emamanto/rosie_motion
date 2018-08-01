@@ -99,6 +99,20 @@ public:
     }
     arm.setHumanChecks(checkPlans);
 
+    std::string planningLibName;
+    bool plannerIsStomp = false;
+    if (!n.getParam("/rosie_motion_server/planning_library", planningLibName)) {
+      ROS_INFO("RosieMotionServer is missing planning_library param, assuming OMPL.");
+    }
+    else if (planningLibName == "stomp") {
+      ROS_INFO("RosieMotionServer is using the STOMP plugin.");
+      plannerIsStomp = true;
+    }
+    else {
+      ROS_INFO("RosieMotionServer is using the OMPL plugin.");
+    }
+    arm.setStomp(plannerIsStomp);
+
     ros::param::set("/move_group/trajectory_execution/allowed_start_tolerance", 0.0);
 
     ros::SubscribeOptions optionsObs =

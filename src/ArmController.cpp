@@ -65,7 +65,7 @@ double ArmController::handLength(moveit_msgs::RobotTrajectory traj) {
 
 ArmController::ArmController(ros::NodeHandle& nh) : numRetries(2),
                                                     checkPlans(true),
-                                                    stomp(true),
+                                                    stomp(false),
                                                     group("arm"),
                                                     gripper("gripper_controller/gripper_action", true)
 {

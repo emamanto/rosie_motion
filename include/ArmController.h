@@ -34,6 +34,7 @@ public:
 
     ArmController(ros::NodeHandle& nh);
     void setHumanChecks(bool on) { checkPlans = on; }
+    void setStomp(bool isStomp) { stomp = isStomp; }
 
     std::string armPlanningFrame();
     std::string getHeld() { return grabbedObject.id; }
