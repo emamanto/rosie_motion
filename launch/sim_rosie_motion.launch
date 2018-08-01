@@ -1,6 +1,7 @@
 <launch>
 
 <arg name="worldname" default="obj_table" />
+<arg name="planning_library" default="ompl" />
 
 <include file="$(find rosbridge_server)/launch/rosbridge_websocket.launch" >
 </include>
@@ -10,11 +11,13 @@
 </include>
 
 <include file="$(find fetch_moveit_config)/launch/move_group.launch" >
+<arg name="pipeline" value="$(arg planning_library)" />
 </include>
 
 <node name="rosie_motion_server" pkg="rosie_motion" type="motionserver" output="screen">
 <param name="human_check" type="bool" value="false"/>
 <param name="rosie_is_sim" type="bool" value="true"/>
+<param name="planning_library" type="string" value="$(arg planning_library)"/>
 </node>
 
 </launch>
