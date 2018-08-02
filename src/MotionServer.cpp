@@ -114,11 +114,16 @@ public:
     arm.setStomp(plannerIsStomp);
 
     std::string plannerName;
-    if (!n.getParam("/rosie_motion_server/planner_name", plannerName)) {
-      ROS_INFO("RosieMotionServer is missing planner_name param, will use RRTConnect or STOMP.");
-      if (planningLibName == "stomp") plannerName = "stomp";
-      else plannerName = "rrtc";
-    }
+    if (!n.getParam("/rosie_motion_server/planner_name", plannerName) ||
+        (plannerName != "stomp" &&
+         plannerName != "rrtc" &&
+         plannerName != "rrt*" &&
+         plannerName != "rrtstar"))
+      {
+        ROS_INFO("RosieMotionServer has invalid planner_name param, will use RRTConnect or STOMP.");
+        if (planningLibName == "stomp") plannerName = "stomp";
+        else plannerName = "rrtc";
+      }
     else if (planningLibName == "stomp" && plannerName != "stomp") {
       ROS_INFO("RosieMotionServer is using STOMP library; must use STOMP planner.");
       plannerName = "stomp";
@@ -126,6 +131,8 @@ public:
     else if (planningLibName == "ompl" && plannerName == "stomp") {
       ROS_INFO("RosieMotionServer is using OMPL library; cannot use STOMP planner.");
       plannerName = "rrtc";
+    } else if (plannerName == "rrt*") {
+      plannerName = "rrtstar";
     }
     arm.setPlannerName(plannerName);
 

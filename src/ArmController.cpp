@@ -127,6 +127,7 @@ void ArmController::setPlannerName(std::string n) {
             group.setPlannerId("RRTstarkConfigDefault");
         }
     }
+    ROS_INFO("ArmController set up to use %s planner", plannerName.c_str());
 }
 
 std::string ArmController::armPlanningFrame() {
