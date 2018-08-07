@@ -425,7 +425,7 @@ bool ArmController::putDownHeldObj(std::vector<tf2::Transform> targets) {
         i->setOrigin(v);
     }
 
-    bool success = false;
+    bool ok = false;
     tf2::Transform firstPose;
     int targetIndex = 0;
     for (std::vector<tf2::Transform>::iterator i = targets.begin();
@@ -433,13 +433,13 @@ bool ArmController::putDownHeldObj(std::vector<tf2::Transform> targets) {
         firstPose = (*i)*prevObjRotation*usedGrasp.first;
         setCurrentGoalTo(firstPose);
         if (planToXform(firstPose, numRetries)) {
-            success = true;
+            ok = true;
             break;
         }
         targetIndex++;
     }
 
-    if (!success) return false;
+    if (!ok) return false;
 
     if (!executeCurrentPlan()) return false;
     ros::Duration(1.0).sleep();
@@ -495,17 +495,17 @@ bool ArmController::planToTargetList(std::vector<tf2::Transform> targets,
     ofs << std::endl << "BEGIN LIST " << std::endl;
     ofs.close();
 
-    bool success = false;
+    bool ok = false;
     for (std::vector<tf2::Transform>::iterator i = targets.begin();
          i != targets.end(); i++) {
         setCurrentGoalTo(*i);
         for (int j = 0; j < numTrials; j++) {
             if (planToXform(*i, 1)) {
-                success = true;
+                ok = true;
             }
         }
     }
-    return success;
+    return ok;
 }
 
 // This is no longer really checking IK, but oh well
@@ -514,7 +514,7 @@ bool ArmController::checkIKPose(tf2::Transform eeXform) {
 
     setCurrentGoalTo(eeXform);
 
-    if (!planToXform(eeXform)) {
+    if (!planToXform(eeXform, 1)) {
         ROS_INFO("No solution found.");
         return false;
     }
@@ -536,35 +536,36 @@ bool ArmController::homeArm() {
     group.setJointValueTarget(joints);
 
     moveit::planning_interface::MoveGroupInterface::Plan homePlan;
+    bool ok = true;
+
     if (stomp) {
         group.setStartState(*group.getCurrentState());
     } else {
         group.setStartStateToCurrentState();
     }
-    if (!group.plan(homePlan)) return false;
+    if (!group.plan(homePlan)) ok = false;
+
+    // To stop it thinking it's successful if null plan
+    if (jointLength(homePlan.trajectory_)  == 0 ) {
+        homePlan = moveit::planning_interface::MoveGroupInterface::Plan();
+        ok = false;
+    }
+    writeHomeQuery(homePlan);
+    if (!ok) return false;
 
     if (!safetyCheck()) return false;
-    writeHomeQuery(homePlan);
     currentPlan = homePlan;
     if (!executeCurrentPlan()) return false;
     return true;
 }
 
 bool ArmController::planToXform(tf2::Transform t, int n) {
-    int numTries = 0;
-    while (!planToXform(t) && numTries < n) {
-        numTries++;
-        if (numTries == n) return false;
-    }
-    return true;
-}
-
-bool ArmController::planToXform(tf2::Transform t) {
     if (stomp) {
         group.setStartState(*group.getCurrentState());
     } else {
         group.setStartStateToCurrentState();
     }
+
     geometry_msgs::Pose target;
     target.orientation = tf2::toMsg(t.getRotation());
     target.position.x = t.getOrigin().x();
@@ -578,18 +579,27 @@ bool ArmController::planToXform(tf2::Transform t) {
     }
     ros::Duration(0.1).sleep();
 
+    int numTries = 0;
+    while (numTries < n && !planToXformInner(t)) {
+        numTries++;
+    }
+
+    if (numTries == n) return false;
+    return true;
+}
+
+bool ArmController::planToXformInner(tf2::Transform t) {
     moveit::planning_interface::MoveGroupInterface::Plan mp;
-    moveit::planning_interface::MoveItErrorCode success = group.plan(mp);
-    // To stop it thinking it's successful if postprocessing is the problem
-    if (mp.trajectory_.joint_trajectory.points.empty() &&
-        mp.trajectory_.multi_dof_joint_trajectory.points.empty()) {
-        success = false;
+    moveit::planning_interface::MoveItErrorCode ok = group.plan(mp);
+    // To stop it thinking it's successful if null plan
+    if (jointLength(mp.trajectory_)  == 0 ) {
+        ok = false;
     }
 
     writeQuery(t, mp);
 
     currentPlan = mp;
-    return (bool)success;
+    return (bool)ok;
 }
 
 double ArmController::planStraightLineMotion(tf2::Transform target) {
@@ -644,7 +654,12 @@ void ArmController::writeQuery(tf2::Transform t,
         << t.getRotation().y() << " "
         << t.getRotation().z() << " "
         << t.getRotation().w();
-    ofs << " TI " << p.planning_time_ << " ";
+    ofs << " TI ";
+    if (jointLength(p.trajectory_) > 0) {
+         ofs << p.planning_time_ << " ";
+    } else {
+        ofs << "-1 ";
+    }
     writeTrajectoryInfo(ofs, p.trajectory_);
     ofs << std::endl;
 
@@ -657,7 +672,12 @@ void ArmController::writeHomeQuery(moveit::planning_interface::MoveGroupInterfac
 
     ofs << "HOME POS ";
     ofs << "AL " << plannerName;
-    ofs << " TI " << p.planning_time_ << " ";
+    ofs << " TI ";
+    if (jointLength(p.trajectory_) > 0) {
+         ofs << p.planning_time_ << " ";
+    } else {
+        ofs << "-1 ";
+    }
     writeTrajectoryInfo(ofs, p.trajectory_);
     ofs << std::endl;
 
@@ -667,7 +687,7 @@ void ArmController::writeHomeQuery(moveit::planning_interface::MoveGroupInterfac
 void ArmController::writeTrajectoryInfo(std::ofstream& ofs,
                                         moveit_msgs::RobotTrajectory& traj) {
     ofs << " SUCC ";
-    if (traj.joint_trajectory.points.size() > 0) {
+    if (jointLength(traj) > 0) {
         ofs << "Y";
     } else {
         ofs << "N";
