@@ -656,9 +656,9 @@ void ArmController::writeQuery(tf2::Transform t,
         << t.getRotation().w();
     ofs << " TI ";
     if (jointLength(p.trajectory_) > 0) {
-         ofs << p.planning_time_ << " ";
+         ofs << p.planning_time_;
     } else {
-        ofs << "-1 ";
+        ofs << "-1";
     }
     writeTrajectoryInfo(ofs, p.trajectory_);
     ofs << std::endl;
@@ -674,9 +674,9 @@ void ArmController::writeHomeQuery(moveit::planning_interface::MoveGroupInterfac
     ofs << "AL " << plannerName;
     ofs << " TI ";
     if (jointLength(p.trajectory_) > 0) {
-         ofs << p.planning_time_ << " ";
+         ofs << p.planning_time_;
     } else {
-        ofs << "-1 ";
+        ofs << "-1";
     }
     writeTrajectoryInfo(ofs, p.trajectory_);
     ofs << std::endl;
