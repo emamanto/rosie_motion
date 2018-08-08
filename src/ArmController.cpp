@@ -546,7 +546,7 @@ bool ArmController::homeArm() {
     if (!group.plan(homePlan)) ok = false;
 
     // To stop it thinking it's successful if null plan
-    if (jointLength(homePlan.trajectory_)  == 0 ) {
+    if (jointLength(homePlan.trajectory_) < 0.0001 ) {
         homePlan = moveit::planning_interface::MoveGroupInterface::Plan();
         ok = false;
     }
@@ -592,8 +592,9 @@ bool ArmController::planToXformInner(tf2::Transform t) {
     moveit::planning_interface::MoveGroupInterface::Plan mp;
     moveit::planning_interface::MoveItErrorCode ok = group.plan(mp);
     // To stop it thinking it's successful if null plan
-    if (jointLength(mp.trajectory_)  == 0 ) {
-        ok = false;
+    if (jointLength(mp.trajectory_) < 0.0001 ) {
+      mp = moveit::planning_interface::MoveGroupInterface::Plan();
+      ok = false;
     }
 
     writeQuery(t, mp);
