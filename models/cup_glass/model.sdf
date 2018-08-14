@@ -1,7 +1,7 @@
 <?xml version='1.0'?>
 <sdf version='1.6'>
   <model name='cup_glass'>
-    <static>0</static>
+    <static>1</static>
     <link name='link_16'>
       <self_collide>0</self_collide>
       <kinematic>0</kinematic>
