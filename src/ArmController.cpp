@@ -85,6 +85,7 @@ ArmController::ArmController(ros::NodeHandle& nh) : numRetries(2),
 
     group.setMaxVelocityScalingFactor(0.4);
     group.setPlanningTime(10.0);
+    group.setEndEffectorLink("gripper_link");
     gripper.waitForServer();
     closeGripper();
     grabbedObject.id = "NONE";
@@ -348,7 +349,6 @@ bool ArmController::pickUp(tf2::Transform objXform,
     int graspIndex = -1;
     for (int i = 0; i < graspList.size(); i++) {
         firstPose = objXform*graspList.at(i).first;
-        setCurrentGoalTo(firstPose);
         if (planToXform(firstPose, numRetries)) {
             ROS_INFO("Grasp %i succeeded!!", i);
             graspIndex = i;
@@ -509,12 +509,51 @@ bool ArmController::planToTargetList(std::vector<tf2::Transform> targets,
 }
 
 // This is no longer really checking IK, but oh well
-bool ArmController::checkIKPose(tf2::Transform eeXform) {
+bool ArmController::checkIKPose(tf2::Transform blockXform) {
     ros::Duration(0.1).sleep();
 
-    setCurrentGoalTo(eeXform);
+    geometry_msgs::Pose bp;
+    bp.orientation = tf2::toMsg(blockXform.getRotation());
+    bp.position.x = blockXform.getOrigin().x();
+    bp.position.y = blockXform.getOrigin().y();
+    bp.position.z = blockXform.getOrigin().z();
 
-    if (!planToXform(eeXform, 1)) {
+    if (!group.setJointValueTarget(bp)) {
+      ROS_INFO("No IK solution!");
+      return false;
+    }
+
+    // This isn't as good as full collision checking, check if any of the
+    // arm parts are obviously in the table.
+    robot_state::RobotState goalCopy(group.getJointValueTarget());
+    goalCopy.updateLinkTransforms();
+    Eigen::Vector3d wrl = goalCopy.getGlobalLinkTransform("wrist_roll_link").translation();
+    if (wrl(2) < 0.76) {
+      ROS_INFO("Wrist roll probably in contact with table!");
+      return false;
+    }
+    Eigen::Vector3d wfl = goalCopy.getGlobalLinkTransform("wrist_flex_link").translation();
+    if (wfl(2) < 0.76) {
+      ROS_INFO("Wrist flex probably in contact with table!");
+      return false;
+    }
+    Eigen::Vector3d efl = goalCopy.getGlobalLinkTransform("elbow_flex_link").translation();
+    if (efl(2) < 0.76) {
+      ROS_INFO("Elbow flex probably in contact with table!");
+      return false;
+    }
+    Eigen::Vector3d frl = goalCopy.getGlobalLinkTransform("forearm_roll_link").translation();
+    if (frl(2) < 0.76) {
+      ROS_INFO("Forearm roll probably in contact with table!");
+      return false;
+    }
+    Eigen::Vector3d url = goalCopy.getGlobalLinkTransform("upperarm_roll_link").translation();
+    if (url(2) < 0.76) {
+      ROS_INFO("Upperarm roll probably in contact with table!");
+      return false;
+    }
+
+    if (!planToXform(blockXform, 1)) {
         ROS_INFO("No solution found.");
         return false;
     }
@@ -573,9 +612,9 @@ bool ArmController::planToXform(tf2::Transform t, int n) {
     target.position.z = t.getOrigin().z();
 
     if (stomp) {
-        group.setJointValueTarget(target);
+      group.setJointValueTarget(target);
     } else {
-        group.setPoseTarget(target);
+      group.setPoseTarget(target);
     }
     ros::Duration(0.1).sleep();
 
@@ -589,18 +628,20 @@ bool ArmController::planToXform(tf2::Transform t, int n) {
 }
 
 bool ArmController::planToXformInner(tf2::Transform t) {
-    moveit::planning_interface::MoveGroupInterface::Plan mp;
-    moveit::planning_interface::MoveItErrorCode ok = group.plan(mp);
-    // To stop it thinking it's successful if null plan
-    if (jointLength(mp.trajectory_) < 0.0001 ) {
-      mp = moveit::planning_interface::MoveGroupInterface::Plan();
-      ok = false;
-    }
+  setCurrentGoalTo(t);
 
-    writeQuery(t, mp);
+  moveit::planning_interface::MoveGroupInterface::Plan mp;
+  moveit::planning_interface::MoveItErrorCode ok = group.plan(mp);
+  // To stop it thinking it's successful if null plan
+  if (jointLength(mp.trajectory_) < 0.0001 ) {
+    mp = moveit::planning_interface::MoveGroupInterface::Plan();
+    ok = false;
+  }
 
-    currentPlan = mp;
-    return (bool)ok;
+  writeQuery(t, mp);
+
+  currentPlan = mp;
+  return (bool)ok;
 }
 
 double ArmController::planStraightLineMotion(tf2::Transform target) {
