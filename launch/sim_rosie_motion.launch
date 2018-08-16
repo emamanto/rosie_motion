@@ -1,6 +1,6 @@
 <launch>
 
-<arg name="world_name" default="obj_table" />
+<arg name="world_name" default="empty_world" />
 <arg name="planning_library" default="ompl" />
 <arg name="planner_name" default="rrtc" />
 

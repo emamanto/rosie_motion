@@ -260,9 +260,11 @@ public:
       state = TEST;
       targetID = msg->action.substr(msg->action.find("=")+1);
       ROS_INFO("TEST of IK target %s", targetID.c_str());
-      arm.updateCollisionScene(getCollisionModels());
+
       tf2::Transform xf;
       tf2::fromMsg(msg->dest, xf);
+
+      //arm.updateCollisionScene(getCollisionModels());
       if (arm.checkIKPose(xf)) {
         state = WAIT;
       } else {

@@ -5,14 +5,15 @@
 
   <arg name="robot" default="fetch"/>
   <arg name="debug" default="false"/>
-  <arg name="gui" default="true"/>
+  <arg name="gui" default="false"/>
   <arg name="headless" default="false"/>
-  <arg name="worldfile" default="obj_table.sdf"/>
+  <arg name="worldfile" default="empty_world.sdf"/>
 
   <!-- Start Gazebo with a blank world -->
   <include file="$(find gazebo_ros)/launch/empty_world.launch">
     <arg name="debug" value="$(arg debug)" />
     <arg name="gui" value="$(arg gui)" />
+    <arg name="verbose" value="true" />
     <arg name="paused" value="false"/>
     <arg name="use_sim_time" value="true"/>
     <arg name="headless" value="$(arg headless)"/>
