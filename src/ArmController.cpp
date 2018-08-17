@@ -598,32 +598,6 @@ bool ArmController::checkIKPose(tf2::Transform blockXform) {
         return false;
     }
 
-    // Eigen::Vector3d wrl = goalCopy.getGlobalLinkTransform("wrist_roll_link").translation();
-    // if (wrl(2) < 0.76) {
-    //   ROS_INFO("Wrist roll probably in contact with table!");
-    //   return false;
-    // }
-    // Eigen::Vector3d wfl = goalCopy.getGlobalLinkTransform("wrist_flex_link").translation();
-    // if (wfl(2) < 0.76) {
-    //   ROS_INFO("Wrist flex probably in contact with table!");
-    //   return false;
-    // }
-    // Eigen::Vector3d efl = goalCopy.getGlobalLinkTransform("elbow_flex_link").translation();
-    // if (efl(2) < 0.76) {
-    //   ROS_INFO("Elbow flex probably in contact with table!");
-    //   return false;
-    // }
-    // Eigen::Vector3d frl = goalCopy.getGlobalLinkTransform("forearm_roll_link").translation();
-    // if (frl(2) < 0.76) {
-    //   ROS_INFO("Forearm roll probably in contact with table!");
-    //   return false;
-    // }
-    // Eigen::Vector3d url = goalCopy.getGlobalLinkTransform("upperarm_roll_link").translation();
-    // if (url(2) < 0.76) {
-    //   ROS_INFO("Upperarm roll probably in contact with table!");
-    //   return false;
-    // }
-
     if (!planToXform(blockXform, 1)) {
         ROS_INFO("No solution found.");
         return false;
