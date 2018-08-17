@@ -63,6 +63,60 @@ double ArmController::handLength(moveit_msgs::RobotTrajectory traj) {
     return approxHandDist;
 }
 
+double ArmController::obstacleClearance(moveit_msgs::RobotTrajectory traj) {
+    if (traj.multi_dof_joint_trajectory.points.size() > 0) {
+        ROS_WARN("This is a multi DOF trajectory!");
+        return 0;
+    }
+
+    if (traj.joint_trajectory.points.size() == 0) return 0.0;
+
+    double MAX_DIST = 0.02;
+
+    planning_scene_monitor::PlanningSceneMonitorPtr planning_scene_monitor_ptr =
+        std::make_shared<planning_scene_monitor::PlanningSceneMonitor>("robot_description");
+    planning_scene_monitor_ptr->requestPlanningSceneState();
+    planning_scene_monitor::LockedPlanningSceneRO ps(planning_scene_monitor_ptr);
+
+    collision_detection::CollisionRequest req;
+    req.group_name = "arm";
+    req.distance = true;
+    req.verbose = true;
+    collision_detection::CollisionResult res;
+    robot_state::RobotState rs(ps->getRobotModel());
+    // This is what I set the value to in the setup script
+    // Change this to get the real value at some point
+    rs.setVariablePosition("torso_lift_joint", 0.2);
+
+    collision_detection::AllowedCollisionMatrix acm;
+    acm.clear();
+    acm.setDefaultEntry("ground", true);
+    acm.setEntry(rs.getRobotModel()->getLinkModelNames(),
+                 rs.getRobotModel()->getLinkModelNames(), true);
+
+    double distSum = 0;
+    for (int i = 0; i < traj.joint_trajectory.points.size(); i++) {
+        rs.setVariablePositions(traj.joint_trajectory.joint_names,
+                                traj.joint_trajectory.points[i].positions);
+        rs.update();
+        double dtc = ps->distanceToCollisionUnpadded(rs, acm);
+        //ROS_INFO("Distance at step %i is %f", i, dtc);
+        if (dtc > MAX_DIST) continue;
+        else distSum += dtc;
+    }
+
+    return distSum / traj.joint_trajectory.points.size();
+}
+
+double ArmController::minClearance(moveit_msgs::RobotTrajectory traj) {
+    if (traj.multi_dof_joint_trajectory.points.size() > 0) {
+        ROS_WARN("This is a multi DOF trajectory!");
+        return 0;
+    }
+
+    return 0.0;
+}
+
 ArmController::ArmController(ros::NodeHandle& nh) : numRetries(2),
                                                     checkPlans(true),
                                                     stomp(false),

@@ -13,6 +13,7 @@
 #include <moveit/move_group/capability_names.h>
 #include <moveit/move_group_interface/move_group_interface.h>
 #include <moveit/planning_scene/planning_scene.h>
+#include <moveit/planning_scene_monitor/planning_scene_monitor.h>
 #include <actionlib/client/simple_action_client.h>
 
 #include "control_msgs/GripperCommandAction.h"
@@ -31,6 +32,8 @@ public:
 
     // Dependent on the specific setup
     double handLength(moveit_msgs::RobotTrajectory traj);
+    double obstacleClearance(moveit_msgs::RobotTrajectory traj);
+    double minClearance(moveit_msgs::RobotTrajectory traj);
 
     ArmController(ros::NodeHandle& nh);
     void setHumanChecks(bool on) { checkPlans = on; }
