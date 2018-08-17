@@ -95,4 +95,5 @@ private:
     moveit::planning_interface::MoveGroupInterface group;
     ros::ServiceClient psDiffClient;
     ros::ServiceClient getPSClient;
+    planning_scene_monitor::PlanningSceneMonitorPtr psm;
 };

@@ -73,16 +73,9 @@ double ArmController::obstacleClearance(moveit_msgs::RobotTrajectory traj) {
 
     double MAX_DIST = 0.02;
 
-    planning_scene_monitor::PlanningSceneMonitorPtr planning_scene_monitor_ptr =
-        std::make_shared<planning_scene_monitor::PlanningSceneMonitor>("robot_description");
-    planning_scene_monitor_ptr->requestPlanningSceneState();
-    planning_scene_monitor::LockedPlanningSceneRO ps(planning_scene_monitor_ptr);
+    psm->requestPlanningSceneState();
+    planning_scene_monitor::LockedPlanningSceneRO ps(psm);
 
-    collision_detection::CollisionRequest req;
-    req.group_name = "arm";
-    req.distance = true;
-    req.verbose = true;
-    collision_detection::CollisionResult res;
     robot_state::RobotState rs(ps->getRobotModel());
     // This is what I set the value to in the setup script
     // Change this to get the real value at some point
@@ -157,6 +150,8 @@ ArmController::ArmController(ros::NodeHandle& nh) : numRetries(2),
     psDiffClient.waitForExistence();
     getPSClient = nh.serviceClient<moveit_msgs::GetPlanningScene>(move_group::GET_PLANNING_SCENE_SERVICE_NAME);
     getPSClient.waitForExistence();
+
+    psm = std::make_shared<planning_scene_monitor::PlanningSceneMonitor>("robot_description");
 }
 
 void ArmController::setPlannerName(std::string n) {
@@ -580,32 +575,54 @@ bool ArmController::checkIKPose(tf2::Transform blockXform) {
     // This isn't as good as full collision checking, check if any of the
     // arm parts are obviously in the table.
     robot_state::RobotState goalCopy(group.getJointValueTarget());
-    goalCopy.updateLinkTransforms();
-    Eigen::Vector3d wrl = goalCopy.getGlobalLinkTransform("wrist_roll_link").translation();
-    if (wrl(2) < 0.76) {
-      ROS_INFO("Wrist roll probably in contact with table!");
-      return false;
+    goalCopy.update();
+
+    psm->requestPlanningSceneState();
+    planning_scene_monitor::LockedPlanningSceneRO ps(psm);
+
+    collision_detection::CollisionRequest req;
+    req.group_name = "arm";
+    req.distance = true;
+    req.verbose = true;
+    collision_detection::CollisionResult res;
+    collision_detection::AllowedCollisionMatrix acm;
+    acm.clear();
+    acm.setDefaultEntry("ground", true);
+    acm.setEntry(goalCopy.getRobotModel()->getLinkModelNames(),
+                 goalCopy.getRobotModel()->getLinkModelNames(), true);
+
+    ps->checkCollision(req, res, goalCopy, acm);
+
+    if (res.collision) {
+        ROS_INFO("IK solution in collision!");
+        return false;
     }
-    Eigen::Vector3d wfl = goalCopy.getGlobalLinkTransform("wrist_flex_link").translation();
-    if (wfl(2) < 0.76) {
-      ROS_INFO("Wrist flex probably in contact with table!");
-      return false;
-    }
-    Eigen::Vector3d efl = goalCopy.getGlobalLinkTransform("elbow_flex_link").translation();
-    if (efl(2) < 0.76) {
-      ROS_INFO("Elbow flex probably in contact with table!");
-      return false;
-    }
-    Eigen::Vector3d frl = goalCopy.getGlobalLinkTransform("forearm_roll_link").translation();
-    if (frl(2) < 0.76) {
-      ROS_INFO("Forearm roll probably in contact with table!");
-      return false;
-    }
-    Eigen::Vector3d url = goalCopy.getGlobalLinkTransform("upperarm_roll_link").translation();
-    if (url(2) < 0.76) {
-      ROS_INFO("Upperarm roll probably in contact with table!");
-      return false;
-    }
+
+    // Eigen::Vector3d wrl = goalCopy.getGlobalLinkTransform("wrist_roll_link").translation();
+    // if (wrl(2) < 0.76) {
+    //   ROS_INFO("Wrist roll probably in contact with table!");
+    //   return false;
+    // }
+    // Eigen::Vector3d wfl = goalCopy.getGlobalLinkTransform("wrist_flex_link").translation();
+    // if (wfl(2) < 0.76) {
+    //   ROS_INFO("Wrist flex probably in contact with table!");
+    //   return false;
+    // }
+    // Eigen::Vector3d efl = goalCopy.getGlobalLinkTransform("elbow_flex_link").translation();
+    // if (efl(2) < 0.76) {
+    //   ROS_INFO("Elbow flex probably in contact with table!");
+    //   return false;
+    // }
+    // Eigen::Vector3d frl = goalCopy.getGlobalLinkTransform("forearm_roll_link").translation();
+    // if (frl(2) < 0.76) {
+    //   ROS_INFO("Forearm roll probably in contact with table!");
+    //   return false;
+    // }
+    // Eigen::Vector3d url = goalCopy.getGlobalLinkTransform("upperarm_roll_link").translation();
+    // if (url(2) < 0.76) {
+    //   ROS_INFO("Upperarm roll probably in contact with table!");
+    //   return false;
+    // }
 
     if (!planToXform(blockXform, 1)) {
         ROS_INFO("No solution found.");
