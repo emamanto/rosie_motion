@@ -626,30 +626,30 @@ bool ArmController::checkIKPose(tf2::Transform blockXform) {
       ROS_INFO("No IK solution!");
       return false;
     }
+    else {
+        robot_state::RobotState goalCopy(group.getJointValueTarget());
+        goalCopy.setVariablePosition("torso_lift_joint", 0.2);
+        goalCopy.update();
 
-    // This isn't as good as full collision checking, check if any of the
-    // arm parts are obviously in the table.
-    robot_state::RobotState goalCopy(group.getJointValueTarget());
-    goalCopy.update();
+        psm->requestPlanningSceneState();
+        planning_scene_monitor::LockedPlanningSceneRO ps(psm);
 
-    psm->requestPlanningSceneState();
-    planning_scene_monitor::LockedPlanningSceneRO ps(psm);
+        collision_detection::CollisionRequest req;
+        req.group_name = "arm";
+        req.verbose = true;
+        collision_detection::CollisionResult res;
+        collision_detection::AllowedCollisionMatrix acm;
+        acm.clear();
+        acm.setDefaultEntry("ground", true);
+        acm.setEntry(goalCopy.getRobotModel()->getLinkModelNames(),
+                     goalCopy.getRobotModel()->getLinkModelNames(), true);
 
-    collision_detection::CollisionRequest req;
-    req.group_name = "arm";
-    req.verbose = true;
-    collision_detection::CollisionResult res;
-    collision_detection::AllowedCollisionMatrix acm;
-    acm.clear();
-    acm.setDefaultEntry("ground", true);
-    acm.setEntry(goalCopy.getRobotModel()->getLinkModelNames(),
-                 goalCopy.getRobotModel()->getLinkModelNames(), true);
+        ps->checkCollision(req, res, goalCopy, acm);
 
-    ps->checkCollision(req, res, goalCopy, acm);
-
-    if (res.collision) {
-        ROS_INFO("IK solution in collision!");
-        return false;
+        if (res.collision) {
+            ROS_INFO("IK solution in collision!");
+            return false;
+        }
     }
 
     if (!planToXform(blockXform, 1)) {
