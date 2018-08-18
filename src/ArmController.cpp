@@ -71,31 +71,46 @@ double ArmController::obstacleClearance(moveit_msgs::RobotTrajectory traj) {
 
     if (traj.joint_trajectory.points.size() == 0) return 0.0;
 
-    double MAX_DIST = 0.02;
+    // Only care about clearance if we get within 5cm of something
+    double MAX_DIST = 0.05;
 
     psm->requestPlanningSceneState();
     planning_scene_monitor::LockedPlanningSceneRO ps(psm);
 
-    robot_state::RobotState rs(ps->getRobotModel());
+    robot_state::RobotState rs1(ps->getRobotModel());
+    robot_state::RobotState rs2(ps->getRobotModel());
+
     // This is what I set the value to in the setup script
     // Change this to get the real value at some point
-    rs.setVariablePosition("torso_lift_joint", 0.2);
+    rs1.setVariablePosition("torso_lift_joint", 0.2);
+    rs2.setVariablePosition("torso_lift_joint", 0.2);
 
     collision_detection::AllowedCollisionMatrix acm;
     acm.clear();
     acm.setDefaultEntry("ground", true);
-    acm.setEntry(rs.getRobotModel()->getLinkModelNames(),
-                 rs.getRobotModel()->getLinkModelNames(), true);
+    acm.setEntry(rs1.getRobotModel()->getLinkModelNames(),
+                 rs1.getRobotModel()->getLinkModelNames(), true);
 
     double distSum = 0;
-    for (int i = 0; i < traj.joint_trajectory.points.size(); i++) {
-        rs.setVariablePositions(traj.joint_trajectory.joint_names,
+    for (int i = 1; i < traj.joint_trajectory.points.size(); i++) {
+        rs1.setVariablePositions(traj.joint_trajectory.joint_names,
+                                traj.joint_trajectory.points[i-1].positions);
+        rs1.update();
+        rs2.setVariablePositions(traj.joint_trajectory.joint_names,
                                 traj.joint_trajectory.points[i].positions);
-        rs.update();
-        double dtc = ps->distanceToCollisionUnpadded(rs, acm);
-        //ROS_INFO("Distance at step %i is %f", i, dtc);
-        if (dtc > MAX_DIST) continue;
-        else distSum += dtc;
+        rs2.update();
+
+        collision_detection::CollisionRequest req;
+        req.group_name = "arm";
+        req.distance = true;
+        req.verbose = true;
+        collision_detection::CollisionResult res;
+        ps->getCollisionWorld()->checkRobotCollision(req, res,
+                                                     *(ps->getCollisionRobotUnpadded()),
+                                                     rs2, acm);
+
+        if (res.distance > MAX_DIST) continue;
+        else distSum += (MAX_DIST - res.distance)/MAX_DIST;
     }
 
     return distSum / traj.joint_trajectory.points.size();
@@ -106,8 +121,48 @@ double ArmController::minClearance(moveit_msgs::RobotTrajectory traj) {
         ROS_WARN("This is a multi DOF trajectory!");
         return 0;
     }
+    if (traj.joint_trajectory.points.size() == 0) return 0.0;
 
-    return 0.0;
+    psm->requestPlanningSceneState();
+    planning_scene_monitor::LockedPlanningSceneRO ps(psm);
+
+    robot_state::RobotState rs1(ps->getRobotModel());
+    robot_state::RobotState rs2(ps->getRobotModel());
+
+    // This is what I set the value to in the setup script
+    // Change this to get the real value at some point
+    rs1.setVariablePosition("torso_lift_joint", 0.2);
+    rs2.setVariablePosition("torso_lift_joint", 0.2);
+
+    collision_detection::AllowedCollisionMatrix acm;
+    acm.clear();
+    acm.setDefaultEntry("ground", true);
+    acm.setEntry(rs1.getRobotModel()->getLinkModelNames(),
+                 rs1.getRobotModel()->getLinkModelNames(), true);
+
+    double distMin = 1000;
+    for (int i = 1; i < traj.joint_trajectory.points.size(); i++) {
+        rs1.setVariablePositions(traj.joint_trajectory.joint_names,
+                                traj.joint_trajectory.points[i-1].positions);
+        rs1.update();
+        rs2.setVariablePositions(traj.joint_trajectory.joint_names,
+                                traj.joint_trajectory.points[i].positions);
+        rs2.update();
+
+        collision_detection::CollisionRequest req;
+        req.group_name = "arm";
+        req.distance = true;
+        req.verbose = true;
+        collision_detection::CollisionResult res;
+        ps->getCollisionWorld()->checkRobotCollision(req, res,
+                                                     *(ps->getCollisionRobotUnpadded()),
+                                                     rs2, acm);
+
+        if (res.distance > distMin) continue;
+        else distMin = res.distance;
+    }
+
+    return distMin;
 }
 
 ArmController::ArmController(ros::NodeHandle& nh) : numRetries(2),
@@ -582,7 +637,6 @@ bool ArmController::checkIKPose(tf2::Transform blockXform) {
 
     collision_detection::CollisionRequest req;
     req.group_name = "arm";
-    req.distance = true;
     req.verbose = true;
     collision_detection::CollisionResult res;
     collision_detection::AllowedCollisionMatrix acm;
@@ -669,6 +723,7 @@ bool ArmController::planToXform(tf2::Transform t, int n) {
     }
 
     if (numTries == n) return false;
+
     return true;
 }
 
@@ -782,6 +837,8 @@ void ArmController::writeTrajectoryInfo(std::ofstream& ofs,
     ofs << " JL " << jointLength(traj);
     ofs << " ET " << execTime(traj);
     ofs << " HL " << handLength(traj);
+    ofs << " MC " << minClearance(traj);
+    ofs << " CA " << obstacleClearance(traj);
 }
 
 bool ArmController::safetyCheck() {
