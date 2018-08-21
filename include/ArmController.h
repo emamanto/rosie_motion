@@ -20,6 +20,7 @@
 #include "control_msgs/GripperCommandGoal.h"
 #include "moveit_msgs/ApplyPlanningScene.h"
 #include "moveit_msgs/GetPlanningScene.h"
+#include "moveit_msgs/GetMotionPlan.h"
 
 class ArmController {
 public:
@@ -96,4 +97,5 @@ private:
     ros::ServiceClient psDiffClient;
     ros::ServiceClient getPSClient;
     planning_scene_monitor::PlanningSceneMonitorPtr psm;
+    ros::ServiceClient planRequestClient;
 };

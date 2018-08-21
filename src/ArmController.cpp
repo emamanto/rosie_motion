@@ -205,6 +205,8 @@ ArmController::ArmController(ros::NodeHandle& nh) : numRetries(2),
     psDiffClient.waitForExistence();
     getPSClient = nh.serviceClient<moveit_msgs::GetPlanningScene>(move_group::GET_PLANNING_SCENE_SERVICE_NAME);
     getPSClient.waitForExistence();
+    planRequestClient = nh.serviceClient<moveit_msgs::GetMotionPlan>("motion_plan_request");
+    planRequestClient.waitForExistence();
 
     psm = std::make_shared<planning_scene_monitor::PlanningSceneMonitor>("robot_description");
 }
