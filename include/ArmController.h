@@ -59,6 +59,7 @@ public:
     bool pointTo(tf2::Transform objXform,
                  float objHeight);
     bool planToTargetList(std::vector<tf2::Transform> targets, int numTrials);
+    bool planToRegion(float xD, float yD, float zD, geometry_msgs::Pose p);
     bool checkIKPose(tf2::Transform blockXform);
     bool homeArm();
 

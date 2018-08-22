@@ -186,7 +186,7 @@ ArmController::ArmController(ros::NodeHandle& nh) : numRetries(2),
     ROS_INFO("Logging motion history to %s", logFileName.c_str());
 
     group.setMaxVelocityScalingFactor(0.4);
-    group.setPlanningTime(10.0);
+    group.setPlanningTime(12.0);
     group.setEndEffectorLink("gripper_link");
     gripper.waitForServer();
     closeGripper();
@@ -205,7 +205,7 @@ ArmController::ArmController(ros::NodeHandle& nh) : numRetries(2),
     psDiffClient.waitForExistence();
     getPSClient = nh.serviceClient<moveit_msgs::GetPlanningScene>(move_group::GET_PLANNING_SCENE_SERVICE_NAME);
     getPSClient.waitForExistence();
-    planRequestClient = nh.serviceClient<moveit_msgs::GetMotionPlan>("motion_plan_request");
+    planRequestClient = nh.serviceClient<moveit_msgs::GetMotionPlan>("plan_kinematic_path");
     planRequestClient.waitForExistence();
 
     psm = std::make_shared<planning_scene_monitor::PlanningSceneMonitor>("robot_description");
@@ -744,6 +744,79 @@ bool ArmController::planToXformInner(tf2::Transform t) {
 
   currentPlan = mp;
   return (bool)ok;
+}
+
+bool ArmController::planToRegion(float xD, float yD, float zD, geometry_msgs::Pose p) {
+    moveit_msgs::GetMotionPlan::Request planRequest;
+    moveit_msgs::GetMotionPlan::Response planResponse;
+    group.setStartStateToCurrentState();
+
+    planRequest.motion_plan_request.group_name = group.getName();
+    planRequest.motion_plan_request.num_planning_attempts = 1;
+    planRequest.motion_plan_request.allowed_planning_time = 10;
+
+    planRequest.motion_plan_request.goal_constraints.clear();
+
+    moveit_msgs::Constraints cm;
+    cm.name = "goalregion";
+    cm.joint_constraints.clear();
+    cm.position_constraints.clear();
+    cm.orientation_constraints.clear();
+    cm.visibility_constraints.clear();
+
+    tf2::Quaternion q;
+    tf2::fromMsg(p.orientation, q);
+    tf2::Transform cg(q,
+                      tf2::Vector3(p.position.x, p.position.y, p.position.z));
+    setCurrentGoalTo(cg);
+    ros::Duration(2.0).sleep();
+
+    moveit_msgs::PositionConstraint pc;
+    pc.header.frame_id = group.getPlanningFrame();
+    pc.link_name = group.getEndEffectorLink();
+    pc.target_point_offset.x = 0;
+    pc.target_point_offset.y = 0;
+    pc.target_point_offset.z = 0;
+    pc.constraint_region.primitives.clear();
+    pc.constraint_region.primitive_poses.clear();
+    pc.weight = 1.0;
+
+    shape_msgs::SolidPrimitive box;
+    box.type = box.BOX;
+    box.dimensions.push_back(xD);
+    box.dimensions.push_back(yD);
+    box.dimensions.push_back(zD);
+
+    pc.constraint_region.primitives.push_back(box);
+    pc.constraint_region.primitive_poses.push_back(p);
+    cm.position_constraints.push_back(pc);
+
+    planRequest.motion_plan_request.goal_constraints.push_back(cm);
+
+    if (!planRequestClient.call(planRequest, planResponse)) {
+        ROS_WARN("Requesting the current collision scene failed!!");
+        return false;
+    }
+
+    currentPlan = moveit::planning_interface::MoveGroupInterface::Plan();
+    currentPlan.trajectory_ = planResponse.motion_plan_response.trajectory;
+    currentPlan.start_state_ = planResponse.motion_plan_response.trajectory_start;
+    currentPlan.planning_time_ = planResponse.motion_plan_response.planning_time;
+
+    robot_trajectory::RobotTrajectory rt(group.getRobotModel(), group.getName());
+    robot_state::RobotState curStateCopy(*group.getCurrentState());
+    curStateCopy.update();
+    rt.setRobotTrajectoryMsg(curStateCopy, currentPlan.trajectory_);
+
+    Eigen::Affine3d endEE = rt.getLastWayPoint().getGlobalLinkTransform("gripper_link");
+    Eigen::Vector3d eeXYZ = endEE.translation();
+    Eigen::Quaterniond eeQ(endEE.rotation());
+
+    tf2::Transform actualGoal;
+    actualGoal.setOrigin(tf2::Vector3(eeXYZ(0), eeXYZ(1), eeXYZ(2)));
+    actualGoal.setRotation(tf2::Quaternion(eeQ.x(), eeQ.y(), eeQ.z(), eeQ.w()));
+
+    setCurrentGoalTo(actualGoal);
 }
 
 double ArmController::planStraightLineMotion(tf2::Transform target) {
