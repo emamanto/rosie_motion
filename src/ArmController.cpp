@@ -186,7 +186,7 @@ ArmController::ArmController(ros::NodeHandle& nh) : numRetries(2),
     ROS_INFO("Logging motion history to %s", logFileName.c_str());
 
     group.setMaxVelocityScalingFactor(0.4);
-    group.setPlanningTime(10.0);
+    group.setPlanningTime(20.0);
     group.setEndEffectorLink("gripper_link");
     gripper.waitForServer();
     closeGripper();
@@ -205,8 +205,8 @@ ArmController::ArmController(ros::NodeHandle& nh) : numRetries(2),
     psDiffClient.waitForExistence();
     getPSClient = nh.serviceClient<moveit_msgs::GetPlanningScene>(move_group::GET_PLANNING_SCENE_SERVICE_NAME);
     getPSClient.waitForExistence();
-    planRequestClient = nh.serviceClient<moveit_msgs::GetMotionPlan>("motion_plan_request");
-    planRequestClient.waitForExistence();
+    //planRequestClient = nh.serviceClient<moveit_msgs::GetMotionPlan>("motion_plan_request");
+    //planRequestClient.waitForExistence();
 
     psm = std::make_shared<planning_scene_monitor::PlanningSceneMonitor>("robot_description");
 }
