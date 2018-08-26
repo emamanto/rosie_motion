@@ -75,7 +75,7 @@ GraspPair ObjectDatabase::getGraspAtIndex(std::string dbName, int index) {
 // Reads in json specifying data about the objects the robot may find
 void ObjectDatabase::init() {
   // OPEN FILE
-  std::ifstream jsonfile("/home/mamantov/catkin_ws/src/rosie_motion/config/object_info_no_pad.json");
+  std::ifstream jsonfile("/home/mamantov/catkin_ws/src/rosie_motion/config/object_info.json");
   int length = 0;
   if (jsonfile) {
     jsonfile.seekg(0, jsonfile.end);

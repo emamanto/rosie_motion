@@ -82,6 +82,7 @@ std::vector<double> ArmController::clearanceData(moveit_msgs::RobotTrajectory tr
     psm->requestPlanningSceneState();
     planning_scene_monitor::LockedPlanningSceneRO ps(psm);
     robot_state::RobotState rs(*group.getCurrentState(0.1));
+    collision_detection::CollisionRobotConstPtr cr = ps->getCollisionRobotUnpadded();
 
     collision_detection::AllowedCollisionMatrix acm;
     acm.clear();
@@ -100,8 +101,7 @@ std::vector<double> ArmController::clearanceData(moveit_msgs::RobotTrajectory tr
         req.verbose = true;
         collision_detection::CollisionResult res;
         ps->getCollisionWorld()->checkRobotCollision(req, res,
-                                                     *(ps->getCollisionRobotUnpadded()),
-                                                     rs, acm);
+                                                     *cr, rs, acm);
         double resultDist = (res.distance < 0 ? 0 : res.distance);
 
         if (resultDist < MAX_DIST_FOR_AVG) {
@@ -137,7 +137,7 @@ ArmController::ArmController(ros::NodeHandle& nh) : numRetries(2),
     ROS_INFO("Logging motion history to %s", logFileName.c_str());
 
     group.setMaxVelocityScalingFactor(0.4);
-    group.setPlanningTime(20.0);
+    group.setPlanningTime(15.0);
     group.setEndEffectorLink("gripper_link");
     gripper.waitForServer();
     closeGripper();
@@ -684,6 +684,7 @@ bool ArmController::planToXformInner(tf2::Transform t) {
 
   moveit::planning_interface::MoveGroupInterface::Plan mp;
   moveit::planning_interface::MoveItErrorCode ok = group.plan(mp);
+
   // To stop it thinking it's successful if null plan
   if (jointLength(mp.trajectory_) < 0.0001 ) {
     mp = moveit::planning_interface::MoveGroupInterface::Plan();
