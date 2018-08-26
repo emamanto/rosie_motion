@@ -33,8 +33,8 @@ public:
 
     // Dependent on the specific setup
     double handLength(moveit_msgs::RobotTrajectory traj);
-    double obstacleClearance(moveit_msgs::RobotTrajectory traj);
-    double minClearance(moveit_msgs::RobotTrajectory traj);
+    // Returns min clearance, avg clearance metric
+    std::vector<double> clearanceData(moveit_msgs::RobotTrajectory traj);
 
     ArmController(ros::NodeHandle& nh);
     void setHumanChecks(bool on) { checkPlans = on; }

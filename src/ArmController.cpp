@@ -63,91 +63,36 @@ double ArmController::handLength(moveit_msgs::RobotTrajectory traj) {
     return approxHandDist;
 }
 
-double ArmController::obstacleClearance(moveit_msgs::RobotTrajectory traj) {
+std::vector<double> ArmController::clearanceData(moveit_msgs::RobotTrajectory traj) {
     if (traj.multi_dof_joint_trajectory.points.size() > 0) {
         ROS_WARN("This is a multi DOF trajectory!");
-        return 0;
+        return std::vector<double>();
     }
 
-    if (traj.joint_trajectory.points.size() == 0) return 0.0;
+    std::vector<double> dataVals;
+    if (traj.joint_trajectory.points.size() == 0) {
+        dataVals.push_back(0.0);
+        dataVals.push_back(0.0);
+        return dataVals;
+    }
 
     // Only care about clearance if we get within 5cm of something
-    double MAX_DIST = 0.05;
+    double MAX_DIST_FOR_AVG = 0.05;
 
     psm->requestPlanningSceneState();
     planning_scene_monitor::LockedPlanningSceneRO ps(psm);
-
-    robot_state::RobotState rs1(ps->getRobotModel());
-    robot_state::RobotState rs2(ps->getRobotModel());
-
-    // This is what I set the value to in the setup script
-    // Change this to get the real value at some point
-    rs1.setVariablePosition("torso_lift_joint", 0.2);
-    rs2.setVariablePosition("torso_lift_joint", 0.2);
+    robot_state::RobotState rs(*group.getCurrentState(0.1));
 
     collision_detection::AllowedCollisionMatrix acm;
     acm.clear();
     acm.setDefaultEntry("ground", true);
-    acm.setEntry(rs1.getRobotModel()->getLinkModelNames(),
-                 rs1.getRobotModel()->getLinkModelNames(), true);
 
     double distSum = 0;
-    for (int i = 1; i < traj.joint_trajectory.points.size(); i++) {
-        rs1.setVariablePositions(traj.joint_trajectory.joint_names,
-                                traj.joint_trajectory.points[i-1].positions);
-        rs1.update();
-        rs2.setVariablePositions(traj.joint_trajectory.joint_names,
-                                traj.joint_trajectory.points[i].positions);
-        rs2.update();
-
-        collision_detection::CollisionRequest req;
-        req.group_name = "arm";
-        req.distance = true;
-        req.verbose = true;
-        collision_detection::CollisionResult res;
-        ps->getCollisionWorld()->checkRobotCollision(req, res,
-                                                     *(ps->getCollisionRobotUnpadded()),
-                                                     rs2, acm);
-
-        if (res.distance > MAX_DIST) continue;
-        else distSum += (MAX_DIST - res.distance)/MAX_DIST;
-    }
-
-    return distSum / traj.joint_trajectory.points.size();
-}
-
-double ArmController::minClearance(moveit_msgs::RobotTrajectory traj) {
-    if (traj.multi_dof_joint_trajectory.points.size() > 0) {
-        ROS_WARN("This is a multi DOF trajectory!");
-        return 0;
-    }
-    if (traj.joint_trajectory.points.size() == 0) return 0.0;
-
-    psm->requestPlanningSceneState();
-    planning_scene_monitor::LockedPlanningSceneRO ps(psm);
-
-    robot_state::RobotState rs1(ps->getRobotModel());
-    robot_state::RobotState rs2(ps->getRobotModel());
-
-    // This is what I set the value to in the setup script
-    // Change this to get the real value at some point
-    rs1.setVariablePosition("torso_lift_joint", 0.2);
-    rs2.setVariablePosition("torso_lift_joint", 0.2);
-
-    collision_detection::AllowedCollisionMatrix acm;
-    acm.clear();
-    acm.setDefaultEntry("ground", true);
-    acm.setEntry(rs1.getRobotModel()->getLinkModelNames(),
-                 rs1.getRobotModel()->getLinkModelNames(), true);
-
     double distMin = 1000;
-    for (int i = 1; i < traj.joint_trajectory.points.size(); i++) {
-        rs1.setVariablePositions(traj.joint_trajectory.joint_names,
-                                traj.joint_trajectory.points[i-1].positions);
-        rs1.update();
-        rs2.setVariablePositions(traj.joint_trajectory.joint_names,
+    for (int i = 1; i < traj.joint_trajectory.points.size() - 1; i++) {
+        rs.setVariablePositions(traj.joint_trajectory.joint_names,
                                 traj.joint_trajectory.points[i].positions);
-        rs2.update();
+        rs.updateCollisionBodyTransforms();
 
         collision_detection::CollisionRequest req;
         req.group_name = "arm";
@@ -156,13 +101,19 @@ double ArmController::minClearance(moveit_msgs::RobotTrajectory traj) {
         collision_detection::CollisionResult res;
         ps->getCollisionWorld()->checkRobotCollision(req, res,
                                                      *(ps->getCollisionRobotUnpadded()),
-                                                     rs2, acm);
+                                                     rs, acm);
+        double resultDist = (res.distance < 0 ? 0 : res.distance);
 
-        if (res.distance > distMin) continue;
-        else distMin = res.distance;
+        if (resultDist < MAX_DIST_FOR_AVG) {
+            distSum += (MAX_DIST_FOR_AVG - resultDist)/MAX_DIST_FOR_AVG;
+        }
+        if (resultDist < distMin) distMin = resultDist;
     }
 
-    return distMin;
+    double finalAvg = distSum / traj.joint_trajectory.points.size();
+    dataVals.push_back(distMin);
+    dataVals.push_back(finalAvg);
+    return dataVals;
 }
 
 ArmController::ArmController(ros::NodeHandle& nh) : numRetries(2),
@@ -604,7 +555,7 @@ bool ArmController::planToTargetList(std::vector<tf2::Transform> targets,
     bool ok = false;
     for (std::vector<tf2::Transform>::iterator i = targets.begin();
          i != targets.end(); i++) {
-        setCurrentGoalTo(*i);
+        //setCurrentGoalTo(*i);
         for (int j = 0; j < numTrials; j++) {
             if (planToXform(*i, 1)) {
                 ok = true;
@@ -616,8 +567,6 @@ bool ArmController::planToTargetList(std::vector<tf2::Transform> targets,
 
 // This is no longer really checking IK, but oh well
 bool ArmController::checkIKPose(tf2::Transform blockXform) {
-    ros::Duration(0.1).sleep();
-
     geometry_msgs::Pose bp;
     bp.orientation = tf2::toMsg(blockXform.getRotation());
     bp.position.x = blockXform.getOrigin().x();
@@ -769,7 +718,6 @@ bool ArmController::planToRegion(float xD, float yD, float zD, geometry_msgs::Po
     tf2::Transform cg(q,
                       tf2::Vector3(p.position.x, p.position.y, p.position.z));
     setCurrentGoalTo(cg);
-    ros::Duration(2.0).sleep();
 
     moveit_msgs::PositionConstraint pc;
     pc.header.frame_id = group.getPlanningFrame();
@@ -912,8 +860,9 @@ void ArmController::writeTrajectoryInfo(std::ofstream& ofs,
     ofs << " JL " << jointLength(traj);
     ofs << " ET " << execTime(traj);
     ofs << " HL " << handLength(traj);
-    ofs << " MC " << minClearance(traj);
-    ofs << " CA " << obstacleClearance(traj);
+    std::vector<double> cd = clearanceData(traj);
+    ofs << " MC " << cd[0];
+    ofs << " CA " << cd[1];
 }
 
 bool ArmController::safetyCheck() {
