@@ -720,6 +720,11 @@ bool ArmController::planToRegion(float xD, float yD, float zD, geometry_msgs::Po
     planRequest.motion_plan_request.num_planning_attempts = 1;
     planRequest.motion_plan_request.allowed_planning_time = 15;
 
+    if (plannerName == "rrtc") {
+        planRequest.motion_plan_request.planner_id = "RRTConnectkConfigDefault";
+    } else if (plannerName == "rrtstar") {
+        planRequest.motion_plan_request.planner_id = "RRTstarkConfigDefault";
+    }
     planRequest.motion_plan_request.goal_constraints.clear();
 
     moveit_msgs::Constraints cm;
