@@ -697,6 +697,20 @@ bool ArmController::planToXformInner(tf2::Transform t) {
   return (bool)ok;
 }
 
+bool ArmController::planToRegionAsList(float xD, float yD, float zD,
+                                       geometry_msgs::Pose p, int numTrials) {
+    std::ofstream ofs;
+    ofs.open(logFileName, std::ofstream::out | std::ofstream::app);
+    ofs << std::endl << "BEGIN LIST REG" << std::endl;
+    ofs.close();
+
+    for (int i = 0; i < numTrials; i++) {
+        planToRegion(xD, yD, zD, p);
+    }
+
+    return true;
+}
+
 bool ArmController::planToRegion(float xD, float yD, float zD, geometry_msgs::Pose p) {
     moveit_msgs::GetMotionPlan::Request planRequest;
     moveit_msgs::GetMotionPlan::Response planResponse;
@@ -704,7 +718,7 @@ bool ArmController::planToRegion(float xD, float yD, float zD, geometry_msgs::Po
 
     planRequest.motion_plan_request.group_name = group.getName();
     planRequest.motion_plan_request.num_planning_attempts = 1;
-    planRequest.motion_plan_request.allowed_planning_time = 10;
+    planRequest.motion_plan_request.allowed_planning_time = 15;
 
     planRequest.motion_plan_request.goal_constraints.clear();
 
@@ -714,12 +728,6 @@ bool ArmController::planToRegion(float xD, float yD, float zD, geometry_msgs::Po
     cm.position_constraints.clear();
     cm.orientation_constraints.clear();
     cm.visibility_constraints.clear();
-
-    tf2::Quaternion q;
-    tf2::fromMsg(p.orientation, q);
-    tf2::Transform cg(q,
-                      tf2::Vector3(p.position.x, p.position.y, p.position.z));
-    setCurrentGoalTo(cg);
 
     moveit_msgs::PositionConstraint pc;
     pc.header.frame_id = group.getPlanningFrame();
@@ -765,8 +773,8 @@ bool ArmController::planToRegion(float xD, float yD, float zD, geometry_msgs::Po
     tf2::Transform actualGoal;
     actualGoal.setOrigin(tf2::Vector3(eeXYZ(0), eeXYZ(1), eeXYZ(2)));
     actualGoal.setRotation(tf2::Quaternion(eeQ.x(), eeQ.y(), eeQ.z(), eeQ.w()));
-
-    setCurrentGoalTo(actualGoal);
+    writeQuery(actualGoal, currentPlan);
+    //setCurrentGoalTo(actualGoal);
 }
 
 double ArmController::planStraightLineMotion(tf2::Transform target) {

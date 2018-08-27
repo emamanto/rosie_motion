@@ -284,22 +284,41 @@ public:
 
     lastHandled = msg->header.seq;
 
-    ROS_INFO("Handling a list of targets!!");
-    state = LIST;
-    //arm.updateCollisionScene(getCollisionModels());
-    std::vector<tf2::Transform> targs;
-    for (int i = 0; i < msg->poses.size(); i++) {
-      tf2::Transform t = tf2::Transform::getIdentity();
-      t.setOrigin(tf2::Vector3(msg->poses[i].position.x,
-                               msg->poses[i].position.y,
-                               msg->poses[i].position.z));
-      tf2::Quaternion q;
-      tf2::fromMsg(msg->poses[i].orientation, q);
-      t.setRotation(q);
-      targs.push_back(t);
+    if (msg->poses.size() > 1) {
+        ROS_INFO("Handling a list of targets!!");
+        state = LIST;
+
+        std::vector<tf2::Transform> targs;
+        for (int i = 0; i < msg->poses.size(); i++) {
+            tf2::Transform t = tf2::Transform::getIdentity();
+            t.setOrigin(tf2::Vector3(msg->poses[i].position.x,
+                                     msg->poses[i].position.y,
+                                     msg->poses[i].position.z));
+            tf2::Quaternion q;
+            tf2::fromMsg(msg->poses[i].orientation, q);
+            t.setRotation(q);
+            targs.push_back(t);
+        }
+        std::string num = msg->header.frame_id.substr(msg->header.frame_id.find("=")+1);
+        arm.planToTargetList(targs, std::stoi(num));
+    } else {
+        ROS_INFO("Handling a region-style planning request!!");
+        state = LIST;
+
+        std::string num = msg->header.frame_id.substr(msg->header.frame_id.find("=")+1);
+        geometry_msgs::Pose regPose = msg->poses[0];
+        geometry_msgs::Pose hackPose;
+        hackPose.position = regPose.position;
+        hackPose.orientation.w = 1.0;
+        hackPose.orientation.x = 0.0;
+        hackPose.orientation.y = 0.0;
+        hackPose.orientation.z = 0.0;
+        bool success = arm.planToRegionAsList(regPose.orientation.x,
+                                              regPose.orientation.y,
+                                              0.005,
+                                              hackPose,
+                                              std::stoi(num));
     }
-    std::string num = msg->header.frame_id.substr(msg->header.frame_id.find("=")+1);
-    arm.planToTargetList(targs, std::stoi(num));
     state = WAIT;
   }
 
