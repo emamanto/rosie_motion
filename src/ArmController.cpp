@@ -762,22 +762,30 @@ bool ArmController::planToRegion(float xD, float yD, float zD, geometry_msgs::Po
     }
 
     currentPlan = moveit::planning_interface::MoveGroupInterface::Plan();
-    currentPlan.trajectory_ = planResponse.motion_plan_response.trajectory;
-    currentPlan.start_state_ = planResponse.motion_plan_response.trajectory_start;
-    currentPlan.planning_time_ = planResponse.motion_plan_response.planning_time;
-
-    robot_trajectory::RobotTrajectory rt(group.getRobotModel(), group.getName());
-    robot_state::RobotState curStateCopy(*group.getCurrentState());
-    curStateCopy.update();
-    rt.setRobotTrajectoryMsg(curStateCopy, currentPlan.trajectory_);
-
-    Eigen::Affine3d endEE = rt.getLastWayPoint().getGlobalLinkTransform("gripper_link");
-    Eigen::Vector3d eeXYZ = endEE.translation();
-    Eigen::Quaterniond eeQ(endEE.rotation());
-
     tf2::Transform actualGoal;
-    actualGoal.setOrigin(tf2::Vector3(eeXYZ(0), eeXYZ(1), eeXYZ(2)));
-    actualGoal.setRotation(tf2::Quaternion(eeQ.x(), eeQ.y(), eeQ.z(), eeQ.w()));
+
+    // success
+    if (planResponse.motion_plan_response.error_code.val == moveit_msgs::MoveItErrorCodes::SUCCESS) {
+        currentPlan.trajectory_ = planResponse.motion_plan_response.trajectory;
+        currentPlan.start_state_ = planResponse.motion_plan_response.trajectory_start;
+        currentPlan.planning_time_ = planResponse.motion_plan_response.planning_time;
+
+        robot_trajectory::RobotTrajectory rt(group.getRobotModel(), group.getName());
+        robot_state::RobotState curStateCopy(*group.getCurrentState());
+        curStateCopy.update();
+        rt.setRobotTrajectoryMsg(curStateCopy, currentPlan.trajectory_);
+
+        Eigen::Affine3d endEE = rt.getLastWayPoint().getGlobalLinkTransform("gripper_link");
+        Eigen::Vector3d eeXYZ = endEE.translation();
+        Eigen::Quaterniond eeQ(endEE.rotation());
+
+        actualGoal.setOrigin(tf2::Vector3(eeXYZ(0), eeXYZ(1), eeXYZ(2)));
+        actualGoal.setRotation(tf2::Quaternion(eeQ.x(), eeQ.y(), eeQ.z(), eeQ.w()));
+    } else {
+        actualGoal.setOrigin(tf2::Vector3(xD, yD, zD));
+        actualGoal.setRotation(tf2::Quaternion::getIdentity());
+    }
+
     writeQuery(actualGoal, currentPlan);
     //setCurrentGoalTo(actualGoal);
 }
