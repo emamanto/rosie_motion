@@ -1,5 +1,0 @@
-    <include>
-      <uri>model://cafe_table</uri>
-      <name>tableNUM</name>
-      <pose>POSEX 0 -0.08 0 0 0</pose>
-    </include>

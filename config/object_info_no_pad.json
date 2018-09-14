@@ -5,7 +5,7 @@
             "shapes" : [
                 {
                     "shape" : "cylinder",
-                    "dimensions" : [0.09, 0.04],
+                    "dimensions" : [0.085, 0.035],
                     "transform" : {
                         "translation" : [0, 0, 0],
                         "rotation" : [0, 0, 0, 1]
@@ -28,7 +28,7 @@
             "shapes" : [
                 {
                     "shape" : "cylinder",
-                    "dimensions" : [0.12, 0.035]
+                    "dimensions" : [0.115, 0.03]
                 }
             ],
             "grasps" : [
@@ -47,7 +47,7 @@
             "shapes" : [
                 {
                     "shape" : "cylinder",
-                    "dimensions" : [0.03, 0.17]
+                    "dimensions" : [0.025, 0.165]
                 }
             ]
         },
@@ -56,7 +56,7 @@
             "shapes" : [
                 {
                     "shape" : "box",
-                    "dimensions" : [2.0, 0.3, 2.5]
+                    "dimensions" : [1.995, 0.295, 2.45]
                 }
             ]
         },
@@ -65,7 +65,7 @@
             "shapes" : [
                 {
                     "shape" : "cylinder",
-                    "dimensions" : [2.5, 0.1]
+                    "dimensions" : [2.45, 0.095]
                 }
             ]
         },
@@ -74,7 +74,7 @@
             "shapes" : [
                 {
                     "shape" : "cylinder",
-                    "dimensions" : [0.04, 0.15],
+                    "dimensions" : [0.04, 0.145],
                     "transform" : {
                         "translation" : [0, 0, 0.02],
                         "rotation" : [0, 0, 0, 1]
@@ -82,7 +82,7 @@
                 },
                 {
                     "shape" : "cylinder",
-                    "dimensions" : [1.55, 0.02],
+                    "dimensions" : [1.55, 0.015],
                     "transform" : {
                         "translation" : [0, 0, 0.7925],
                         "rotation" : [0, 0, 0, 1]
@@ -90,7 +90,7 @@
                 },
                 {
                     "shape" : "cylinder",
-                    "dimensions" : [0.04, 0.24],
+                    "dimensions" : [0.04, 0.235],
                     "transform" : {
                         "translation" : [0, 0, 0.78],
                         "rotation" : [0, 0, 0, 1]
@@ -98,7 +98,7 @@
                 },
                 {
                     "shape" : "cylinder",
-                    "dimensions" : [0.04, 0.205],
+                    "dimensions" : [0.04, 0.20],
                     "transform" : {
                         "translation" : [0, 0, 0.04],
                         "rotation" : [0, 0, 0, 1]
@@ -106,7 +106,7 @@
                 },
                 {
                     "shape" : "cylinder",
-                    "dimensions" : [0.04, 0.17],
+                    "dimensions" : [0.04, 0.165],
                     "transform" : {
                         "translation" : [0, 0, 0.04],
                         "rotation" : [0, 0, 0, 1]
@@ -114,7 +114,7 @@
                 },
                                 {
                     "shape" : "cylinder",
-                    "dimensions" : [0.04, 0.135],
+                    "dimensions" : [0.04, 0.13],
                     "transform" : {
                         "translation" : [0, 0, 0.04],
                         "rotation" : [0, 0, 0, 1]
@@ -122,7 +122,7 @@
                 },
                 {
                     "shape" : "cylinder",
-                    "dimensions" : [0.04, 0.1],
+                    "dimensions" : [0.035, 0.095],
                     "transform" : {
                         "translation" : [0, 0, 0.04],
                         "rotation" : [0, 0, 0, 1]
@@ -135,7 +135,7 @@
             "shapes" : [
                 {
                     "shape" : "cylinder",
-                    "dimensions" : [0.04, 0.07],
+                    "dimensions" : [0.04, 0.065],
                     "transform" : {
                         "translation" : [0, 0, 0.02],
                         "rotation" : [0, 0, 0, 1]
@@ -143,7 +143,7 @@
                 },
                 {
                     "shape" : "cylinder",
-                    "dimensions" : [0.22, 0.01],
+                    "dimensions" : [0.22, 0.005],
                     "transform" : {
                         "translation" : [0, 0, 0.13],
                         "rotation" : [0, 0, 0, 1]
@@ -151,7 +151,7 @@
                 },
                 {
                     "shape" : "cylinder",
-                    "dimensions" : [0.16, 0.17],
+                    "dimensions" : [0.155, 0.165],
                     "transform" : {
                         "translation" : [0, 0, 0.18],
                         "rotation" : [0, 0, 0, 1]
@@ -164,7 +164,7 @@
             "shapes" : [
                 {
                     "shape" : "cylinder",
-                    "dimensions" : [0.25, 0.045],
+                    "dimensions" : [0.25, 0.04],
                     "transform" : {
                         "translation" : [0, 0, 0.1],
                         "rotation" : [0, 0, 0, 1]
@@ -172,7 +172,7 @@
                 },
                 {
                     "shape" : "cylinder",
-                    "dimensions" : [0.09, 0.02],
+                    "dimensions" : [0.085, 0.015],
                     "transform" : {
                         "translation" : [0, 0, 0.17],
                         "rotation" : [0, 0, 0, 1]
@@ -185,7 +185,7 @@
             "shapes" : [
                 {
                     "shape" : "box",
-                    "dimensions" : [0.21, 0.08, 0.11],
+                    "dimensions" : [0.205, 0.075, 0.105],
                     "transform" : {
                         "translation" : [0, 0, 0.055],
                         "rotation" : [0, 0, 0, 1]

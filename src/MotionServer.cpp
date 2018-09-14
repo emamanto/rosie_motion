@@ -22,6 +22,7 @@
 #include "rosie_msgs/RobotAction.h"
 #include "gazebo_msgs/ModelStates.h"
 #include "moveit_msgs/CollisionObject.h"
+#include "geometry_msgs/PoseArray.h"
 
 #include "ObjectDatabase.h"
 #include "WorldObjects.h"
@@ -42,7 +43,9 @@ public:
                     DROP,
                     PUSH,
                     FAILURE,
-                    SCENE};
+                    SCENE,
+                    LIST,
+                    TEST};
 
   static std::string asToString(ActionState a)
   {
@@ -56,6 +59,8 @@ public:
       case PUSH: return "PUSH";
       case FAILURE: return "FAILURE";
       case SCENE: return "SCENE";
+      case LIST: return "LIST";
+      case TEST: return "TEST";
       default: return "WTF";
       }
   }
@@ -65,6 +70,7 @@ public:
                    tfBuf(),
                    tfListener(tfBuf),
                    lastCommandTime(0),
+                   lastHandled(0),
                    state(WAIT),
                    arm(n)
   {
@@ -93,6 +99,43 @@ public:
     }
     arm.setHumanChecks(checkPlans);
 
+    std::string planningLibName;
+    bool plannerIsStomp = false;
+    if (!n.getParam("/rosie_motion_server/planning_library", planningLibName)) {
+      ROS_INFO("RosieMotionServer is missing planning_library param, assuming OMPL.");
+    }
+    else if (planningLibName == "stomp") {
+      ROS_INFO("RosieMotionServer is using the STOMP plugin.");
+      plannerIsStomp = true;
+    }
+    else {
+      ROS_INFO("RosieMotionServer is using the OMPL plugin.");
+    }
+    arm.setStomp(plannerIsStomp);
+
+    std::string plannerName;
+    if (!n.getParam("/rosie_motion_server/planner_name", plannerName) ||
+        (plannerName != "stomp" &&
+         plannerName != "rrtc" &&
+         plannerName != "rrt*" &&
+         plannerName != "rrtstar"))
+      {
+        ROS_INFO("RosieMotionServer has invalid planner_name param, will use RRTConnect or STOMP.");
+        if (planningLibName == "stomp") plannerName = "stomp";
+        else plannerName = "rrtc";
+      }
+    else if (planningLibName == "stomp" && plannerName != "stomp") {
+      ROS_INFO("RosieMotionServer is using STOMP library; must use STOMP planner.");
+      plannerName = "stomp";
+    }
+    else if (planningLibName == "ompl" && plannerName == "stomp") {
+      ROS_INFO("RosieMotionServer is using OMPL library; cannot use STOMP planner.");
+      plannerName = "rrtc";
+    } else if (plannerName == "rrt*") {
+      plannerName = "rrtstar";
+    }
+    arm.setPlannerName(plannerName);
+
     ros::param::set("/move_group/trajectory_execution/allowed_start_tolerance", 0.0);
 
     ros::SubscribeOptions optionsObs =
@@ -118,6 +161,14 @@ public:
                                                                           this, _1),
                                                               ros::VoidPtr(), &armQueue);
     commSubscriber = n.subscribe(optionsArm);
+
+    ros::SubscribeOptions optionsList =
+      ros::SubscribeOptions::create<geometry_msgs::PoseArray>("rosie_test_list",
+                                                              1,
+                                                              boost::bind(&MotionServer::listCB,
+                                                                          this, _1),
+                                                              ros::VoidPtr(), &armQueue);
+    listSubscriber = n.subscribe(optionsList);
 
     statusPublisher = n.advertise<rosie_msgs::RobotAction>("rosie_arm_status", 10);
     camXPublisher = n.advertise<geometry_msgs::TransformStamped>("rosie_camera", 10);
@@ -202,11 +253,73 @@ public:
       ROS_INFO("Handling reload object database command");
       objData.reload();
     }
+    else if (msg->action.find("LIST")!=std::string::npos){
+      ROS_INFO("Use the /rosie_test_list topic for this!");
+    }
+    else if (msg->action.find("TEST")!=std::string::npos) {
+      state = TEST;
+      targetID = msg->action.substr(msg->action.find("=")+1);
+      ROS_INFO("TEST of IK target %s", targetID.c_str());
+
+      tf2::Transform xf;
+      tf2::fromMsg(msg->dest, xf);
+
+      //arm.updateCollisionScene(getCollisionModels());
+      if (arm.checkIKPose(xf)) {
+        state = WAIT;
+      } else {
+        state = FAILURE;
+      }
+    }
     else {
       ROS_INFO("Unknown command %s received", msg->action.c_str());
       failureReason = "unknowncommand";
       state = FAILURE;
     }
+  }
+
+  void listCB(const geometry_msgs::PoseArray::ConstPtr& msg) {
+    if (state == LIST) return;
+    if (msg->header.seq < lastHandled + 5 && lastHandled != 0) return;
+
+    lastHandled = msg->header.seq;
+
+    if (msg->poses.size() > 1) {
+        ROS_INFO("Handling a list of targets!!");
+        state = LIST;
+
+        std::vector<tf2::Transform> targs;
+        for (int i = 0; i < msg->poses.size(); i++) {
+            tf2::Transform t = tf2::Transform::getIdentity();
+            t.setOrigin(tf2::Vector3(msg->poses[i].position.x,
+                                     msg->poses[i].position.y,
+                                     msg->poses[i].position.z));
+            tf2::Quaternion q;
+            tf2::fromMsg(msg->poses[i].orientation, q);
+            t.setRotation(q);
+            targs.push_back(t);
+        }
+        std::string num = msg->header.frame_id.substr(msg->header.frame_id.find("=")+1);
+        arm.planToTargetList(targs, std::stoi(num));
+    } else {
+        ROS_INFO("Handling a region-style planning request!!");
+        state = LIST;
+
+        std::string num = msg->header.frame_id.substr(msg->header.frame_id.find("=")+1);
+        geometry_msgs::Pose regPose = msg->poses[0];
+        geometry_msgs::Pose hackPose;
+        hackPose.position = regPose.position;
+        hackPose.orientation.w = 1.0;
+        hackPose.orientation.x = 0.0;
+        hackPose.orientation.y = 0.0;
+        hackPose.orientation.z = 0.0;
+        bool success = arm.planToRegionAsList(regPose.orientation.x,
+                                              regPose.orientation.y,
+                                              0.005,
+                                              hackPose,
+                                              std::stoi(num));
+    }
+    state = WAIT;
   }
 
   // ID needs to be a substring of the object's model name
@@ -303,7 +416,15 @@ public:
     }
 
     arm.updateCollisionScene(getCollisionModels());
-    bool success = arm.pointTo(world.getXformOf(objID), shapeHeight);
+    geometry_msgs::Pose regPose;
+    regPose.orientation = tf2::toMsg(world.getRotationOf(objID));
+    regPose.position.x = world.getPosX(objID);
+    regPose.position.y = world.getPosY(objID);
+    regPose.position.z = world.getPosZ(objID) + 0.1;
+    bool success = arm.planToRegion(0.2,
+                                    0.2,
+                                    0.02,
+                                    regPose);
     if (success) {
       state = WAIT;
       ROS_INFO("Arm status is now WAIT");
@@ -320,7 +441,7 @@ public:
     msg.action = asToString(state).c_str();
     msg.armHome = armHomeState;
     msg.failure_reason = failureReason;
-    msg.obj_id = arm.getHeld();
+    msg.obj_id = targetID;
     statusPublisher.publish(msg);
 
     try {
@@ -436,6 +557,8 @@ private:
   ros::CallbackQueue inputQueue;
   ros::Subscriber obsSubscriber;
   ros::Subscriber commSubscriber;
+  ros::Subscriber listSubscriber;
+  int lastHandled;
   long lastCommandTime;
   ros::Subscriber jointsSubscriber;
 
@@ -449,6 +572,7 @@ private:
 
   ActionState state;
   std::string failureReason;
+  std::string targetID;
   bool armHomeState;
 
   WorldObjects world;

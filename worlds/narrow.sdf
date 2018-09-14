@@ -1,6 +1,6 @@
 <?xml version="1.0" ?>
 <sdf version="1.4">
-  <world name="simple">
+  <world name="narrow">
     <include>
       <uri>model://ground_plane</uri>
     </include>
@@ -13,14 +13,14 @@
       <pose>0.8 0 -0.08 0 0 0</pose>
     </include>
     <include>
-      <uri>model://blue_cube3cm</uri>
-      <name>blue_cube3cm1</name>
-      <pose>0.7 0.1 0.75 0 0 0</pose>
+      <uri>model://basic_wall</uri>
+      <name>basic_wall1</name>
+      <pose>0.2 0.7 0.5 0 0 0</pose>
     </include>
     <include>
-      <uri>model://red_cube3cm</uri>
-      <name>red_cube3cm1</name>
-      <pose>0.6 -0.15 0.75 0 0 0</pose>
+      <uri>model://basic_wall</uri>
+      <name>basic_wall1</name>
+      <pose>0.2 -0.6 0.5 0 0 0</pose>
     </include>
   </world>
 </sdf>

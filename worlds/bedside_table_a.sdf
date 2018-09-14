@@ -1,0 +1,31 @@
+<?xml version="1.0" ?>
+<sdf version="1.4">
+  <world name="bedside_a">
+    <include>
+      <uri>model://ground_plane</uri>
+    </include>
+    <include>
+      <uri>model://sun</uri>
+    </include>
+    <include>
+      <uri>model://cafe_table</uri>
+      <name>cafe_table1</name>
+      <pose>0.8 0 -0.08 0 0 0</pose>
+    </include>
+    <include>
+      <uri>model://cup_glass</uri>
+      <name>cup_glass1</name>
+      <pose>0.64 0.16 0.745 0 0 0</pose>
+    </include>
+    <include>
+      <uri>model://lamp_table_metal</uri>
+      <name>lamp_table_metal1</name>
+      <pose>0.7 0 0.7 0 0 0</pose>
+    </include>
+    <include>
+      <uri>model://clock_digital</uri>
+      <name>clock_digital1</name>
+      <pose>0.58 -0.15 0.7 0 0 -1.7</pose>
+    </include>
+  </world>
+</sdf>

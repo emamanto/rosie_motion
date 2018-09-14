@@ -1,0 +1,36 @@
+<?xml version="1.0" ?>
+<sdf version="1.4">
+  <world name="corner_left_b">
+    <include>
+      <uri>model://ground_plane</uri>
+    </include>
+    <include>
+      <uri>model://sun</uri>
+    </include>
+    <include>
+      <uri>model://cafe_table</uri>
+      <name>cafe_table1</name>
+      <pose>0.6 0 -0.08 0 0 0</pose>
+    </include>
+    <include>
+      <uri>model://basic_wall</uri>
+      <name>basic_wall1</name>
+      <pose>-0.05 0.7 0.7 0 0 0</pose>
+    </include>
+    <include>
+      <uri>model://basic_wall</uri>
+      <name>basic_wall2</name>
+      <pose>0.82 -0.15 0.7 0 0 1.57</pose>
+    </include>
+    <include>
+      <uri>model://lamp_table_metal</uri>
+      <name>lamp_table_metal1</name>
+      <pose>0.4 0.16 0.7 0 0 0</pose>
+    </include>
+    <include>
+      <uri>model://cup_glass</uri>
+      <name>cup_glass1</name>
+      <pose>0.43 -0.09 0.745 0 0 0</pose>
+    </include>
+  </world>
+</sdf>
