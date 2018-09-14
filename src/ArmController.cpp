@@ -566,51 +566,46 @@ bool ArmController::planToTargetList(std::vector<tf2::Transform> targets,
     return ok;
 }
 
-// This is no longer really checking IK, but oh well
-bool ArmController::checkIKPose(tf2::Transform blockXform) {
-    geometry_msgs::Pose bp;
-    bp.orientation = tf2::toMsg(blockXform.getRotation());
-    bp.position.x = blockXform.getOrigin().x();
-    bp.position.y = blockXform.getOrigin().y();
-    bp.position.z = blockXform.getOrigin().z();
+bool ArmController::checkIKPose(tf2::Transform eeXform) {
+    geometry_msgs::Pose eep;
+    eep.orientation = tf2::toMsg(eeXform.getRotation());
+    eep.position.x = eeXform.getOrigin().x();
+    eep.position.y = eeXform.getOrigin().y();
+    eep.position.z = eeXform.getOrigin().z();
 
-    if (!group.setJointValueTarget(bp)) {
+    if (!group.setJointValueTarget(eep)) {
       ROS_INFO("No IK solution!");
       return false;
-    }
-    else {
-        robot_state::RobotState goalCopy(group.getJointValueTarget());
-        goalCopy.setVariablePosition("torso_lift_joint", 0.2);
-        goalCopy.update();
+    } else {
+      psm->requestPlanningSceneState();
+      planning_scene_monitor::LockedPlanningSceneRO ps(psm);
+      robot_state::RobotState rs(*group.getCurrentState(0.1));
+      collision_detection::CollisionRobotConstPtr cr = ps->getCollisionRobotUnpadded();
+      collision_detection::AllowedCollisionMatrix acm;
+      acm.clear();
+      acm.setDefaultEntry("ground", true);
 
-        psm->requestPlanningSceneState();
-        planning_scene_monitor::LockedPlanningSceneRO ps(psm);
+      std::vector<std::string> namesCopy = rs.getJointModelGroup("arm")->getJointModelNames();
+      for (std::vector<std::string>::iterator i = namesCopy.begin();
+           i != namesCopy.end(); i++) {
+        rs.setVariablePosition(*i, group.getJointValueTarget().getVariablePosition(*i));
+      }
+      rs.updateCollisionBodyTransforms();
 
-        collision_detection::CollisionRequest req;
-        req.group_name = "arm";
-        req.verbose = true;
-        collision_detection::CollisionResult res;
-        collision_detection::AllowedCollisionMatrix acm;
-        acm.clear();
-        acm.setDefaultEntry("ground", true);
-        acm.setEntry(goalCopy.getRobotModel()->getLinkModelNames(),
-                     goalCopy.getRobotModel()->getLinkModelNames(), true);
+      collision_detection::CollisionRequest req;
+      req.group_name = "arm";
+      req.verbose = true;
+      collision_detection::CollisionResult res;
+      ps->getCollisionWorld()->checkRobotCollision(req, res,
+                                                   *cr, rs, acm);
 
-        ps->checkCollision(req, res, goalCopy, acm);
-
-        if (res.collision) {
-            ROS_INFO("IK solution in collision!");
-            return false;
-        }
-    }
-
-    if (!planToXform(blockXform, 1)) {
-        ROS_INFO("No solution found.");
+      if (res.collision) {
+        ROS_INFO("IK solution in collision!");
         return false;
-    }
-    else {
-        ROS_INFO("Successful planning!");
+      } else {
+        ROS_INFO("Valid IK solution found!");
         return true;
+      }
     }
 }
 
