@@ -571,25 +571,25 @@ bool ArmController::pointTo(tf2::Transform objXform, float objHeight) {
     return true;
 }
 
-bool ArmController::planToTargetList(std::vector<tf2::Transform> targets,
-                                     int numTrials) {
-    std::ofstream ofs;
-    ofs.open(logFileName, std::ofstream::out | std::ofstream::app);
-    ofs << std::endl << "BEGIN LIST " << std::endl;
-    ofs.close();
+// bool ArmController::planToTargetList(std::vector<tf2::Transform> targets,
+//                                      int numTrials) {
+//     std::ofstream ofs;
+//     ofs.open(logFileName, std::ofstream::out | std::ofstream::app);
+//     ofs << std::endl << "BEGIN LIST " << std::endl;
+//     ofs.close();
 
-    bool ok = false;
-    for (std::vector<tf2::Transform>::iterator i = targets.begin();
-         i != targets.end(); i++) {
-        //setCurrentGoalTo(*i);
-        for (int j = 0; j < numTrials; j++) {
-            if (planToXform(*i, 1)) {
-                ok = true;
-            }
-        }
-    }
-    return ok;
-}
+//     bool ok = false;
+//     for (std::vector<tf2::Transform>::iterator i = targets.begin();
+//          i != targets.end(); i++) {
+//         //setCurrentGoalTo(*i);
+//         for (int j = 0; j < numTrials; j++) {
+//             if (planToXform(*i, 1)) {
+//                 ok = true;
+//             }
+//         }
+//     }
+//     return ok;
+// }
 
 bool ArmController::checkIKPose(tf2::Transform eeXform) {
     geometry_msgs::Pose eep;
@@ -717,19 +717,19 @@ bool ArmController::planToXformInner(tf2::Transform t) {
   return (bool)ok;
 }
 
-bool ArmController::planToRegionAsList(float xD, float yD, float zD,
-                                       geometry_msgs::Pose p, int numTrials) {
-    std::ofstream ofs;
-    ofs.open(logFileName, std::ofstream::out | std::ofstream::app);
-    ofs << std::endl << "BEGIN LIST REG" << std::endl;
-    ofs.close();
+// bool ArmController::planToRegionAsList(float xD, float yD, float zD,
+//                                        geometry_msgs::Pose p, int numTrials) {
+//     std::ofstream ofs;
+//     ofs.open(logFileName, std::ofstream::out | std::ofstream::app);
+//     ofs << std::endl << "BEGIN LIST REG" << std::endl;
+//     ofs.close();
 
-    for (int i = 0; i < numTrials; i++) {
-        planToRegion(xD, yD, zD, p);
-    }
+//     for (int i = 0; i < numTrials; i++) {
+//         planToRegion(xD, yD, zD, p);
+//     }
 
-    return true;
-}
+//     return true;
+// }
 
 bool ArmController::planToRegion(float xD, float yD, float zD, geometry_msgs::Pose p) {
     moveit_msgs::GetMotionPlan::Request planRequest;

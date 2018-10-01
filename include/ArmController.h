@@ -93,9 +93,8 @@ public:
   bool putDownHeldObj(std::vector<tf2::Transform> targets);
   bool pointTo(tf2::Transform objXform,
                float objHeight);
-  bool planToTargetList(std::vector<tf2::Transform> targets, int numTrials);
-  bool planToRegion(float xD, float yD, float zD, geometry_msgs::Pose p);
-  bool planToRegionAsList(float xD, float yD, float zD, geometry_msgs::Pose p, int numTrials);
+  //bool planToTargetList(std::vector<tf2::Transform> targets, int numTrials);
+  //bool planToRegionAsList(float xD, float yD, float zD, geometry_msgs::Pose p, int numTrials);
   bool checkIKPose(tf2::Transform eeXform);
   bool homeArm();
 
@@ -103,6 +102,7 @@ private:
   void setGripperTo(float m);
   bool planToXformInner(tf2::Transform t);
   bool planToXform(tf2::Transform t, int n);
+  bool planToRegion(float xD, float yD, float zD, geometry_msgs::Pose p);
   double planStraightLineMotion(tf2::Transform target);
   bool executeCurrentPlan();
   void writeQuery(tf2::Transform t,

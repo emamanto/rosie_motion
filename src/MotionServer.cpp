@@ -390,15 +390,9 @@ public:
     }
 
     arm.updateCollisionScene(getCollisionModels());
-    geometry_msgs::Pose regPose;
-    regPose.orientation = tf2::toMsg(world.getRotationOf(objID));
-    regPose.position.x = world.getPosX(objID);
-    regPose.position.y = world.getPosY(objID);
-    regPose.position.z = world.getPosZ(objID) + 0.1;
-    bool success = arm.planToRegion(0.2,
-                                    0.2,
-                                    0.02,
-                                    regPose);
+    bool success = arm.pointTo(world.getXformOf(objID),
+                               shapeHeight);
+
     if (success) {
       state = WAIT;
       ROS_INFO("Arm status is now WAIT");
