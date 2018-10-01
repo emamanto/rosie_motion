@@ -446,9 +446,9 @@ bool ArmController::pickUp(tf2::Transform objXform,
     openGripper();
     ros::Duration(0.5).sleep();
 
-    //setCurrentGoalTo(objXform*graspList.at(0).second);
-    //if (!planStraightLineMotion(objXform*graspList.at(graspIndex).second)) return false;
-    //if (!executeCurrentPlan()) return false;
+    setCurrentGoalTo(objXform*graspList.at(0).second);
+    if (!planStraightLineMotion(objXform*graspList.at(graspIndex).second)) return false;
+    if (!executeCurrentPlan()) return false;
 
     ros::Duration(0.5).sleep();
     closeGripper();
@@ -466,9 +466,9 @@ bool ArmController::pickUp(tf2::Transform objXform,
     usedGrasp = graspList.at(graspIndex);
     prevObjRotation = tf2::Transform(objXform.getRotation());
 
-    //setCurrentGoalTo(firstPose);
-    //if (!planStraightLineMotion(firstPose)) return false;
-    //if (!executeCurrentPlan()) return false;
+    setCurrentGoalTo(firstPose);
+    if (!planStraightLineMotion(firstPose)) return false;
+    if (!executeCurrentPlan()) return false;
 
     if (!homeArm()) return false;
 
