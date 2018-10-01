@@ -118,9 +118,10 @@ std::vector<double> ArmController::clearanceData(moveit_msgs::RobotTrajectory tr
 
 ArmController::ArmController(ros::NodeHandle& nh) : numRetries(2),
                                                     checkPlans(true),
-                                                    stomp(false),
                                                     group("arm"),
-                                                    gripper("gripper_controller/gripper_action", true)
+                                                    gripper("gripper_controller/gripper_action", true),
+                                                    plannerPlugin(UNKNOWNL),
+                                                    plannerName(UNKNOWN)
 {
     std::time_t t;
     std::time(&t);
@@ -163,30 +164,54 @@ ArmController::ArmController(ros::NodeHandle& nh) : numRetries(2),
     psm = std::make_shared<planning_scene_monitor::PlanningSceneMonitor>("robot_description");
 }
 
-void ArmController::setPlannerName(std::string n) {
-    plannerName = n;
-    if (plannerName == "stomp") {
-        if (!stomp) {
-            ROS_INFO("Attempting to set STOMP as planner when using OMPL!");
-            plannerName = "rrtc";
-            group.setPlannerId("RRTConnectkConfigDefault");
-        }
-    } else if (plannerName == "rrtc") {
-        if (stomp) {
-            ROS_INFO("Attempting to set RRTConnect as planner when using STOMP!");
-            plannerName = "stomp";
-        } else {
-            group.setPlannerId("RRTConnectkConfigDefault");
-        }
-    } else if (plannerName == "rrtstar") {
-        if (stomp) {
-            ROS_INFO("Attempting to set RRT* as planner when using STOMP!");
-            plannerName = "stomp";
-        } else {
-            group.setPlannerId("RRTstarkConfigDefault");
-        }
+void ArmController::setLibrary(std::string l) {
+  if (l == "ompl") {
+    setLibrary(OMPL);
+  } else if (l == "stomp") {
+    setLibrary(STOMPL);
+  } else {
+    ROS_WARN("Unknown library name given!!");
+  }
+}
+
+void ArmController::setLibrary(PlanLibrary l) {
+  plannerPlugin = l;
+}
+
+void ArmController::setPlanner(std::string p) {
+    if (p == "stomp") {
+      setPlanner(STOMP);
+    } else if (p == "rrtc" || p == "rrtconnect") {
+      setPlanner(RRTCONNECT);
+    } else if (p == "rrtstar" || p == "rrt*") {
+      setPlanner(RRTSTAR);
+    } else {
+      ROS_WARN("Unknown planner name given!!");
     }
-    ROS_INFO("ArmController set up to use %s planner", plannerName.c_str());
+}
+
+void ArmController::setPlanner(PlanAlgorithm p) {
+  if (plannerPlugin == UNKNOWNL) {
+    ROS_WARN("Tried to set planning algorithm before library!!");
+    return;
+  }
+
+  if (p == STOMP && plannerPlugin != STOMPL) {
+    ROS_WARN("Tried to use STOMP when OMPL is loaded!!");
+    plannerName = RRTCONNECT;
+  } else if (p != STOMP && plannerPlugin == STOMPL) {
+    ROS_WARN("Tried to use RRT when STOMP is loaded!!");
+    plannerName = STOMP;
+  } else {
+    plannerName = p;
+  }
+
+  ROS_INFO("ArmController set up to use %s planner from %s plugin",
+           paToString(plannerName).c_str(),
+           plToString(plannerPlugin).c_str());
+
+  if (plannerName == RRTCONNECT) group.setPlannerId("RRTConnectkConfigDefault");
+  if (plannerName == RRTSTAR) group.setPlannerId("RRTstarkConfigDefault");
 }
 
 std::string ArmController::armPlanningFrame() {
@@ -623,7 +648,7 @@ bool ArmController::homeArm() {
     moveit::planning_interface::MoveGroupInterface::Plan homePlan;
     bool ok = true;
 
-    if (stomp) {
+    if (plannerName == STOMP) {
         group.setStartState(*group.getCurrentState());
     } else {
         group.setStartStateToCurrentState();
@@ -645,7 +670,7 @@ bool ArmController::homeArm() {
 }
 
 bool ArmController::planToXform(tf2::Transform t, int n) {
-    if (stomp) {
+    if (plannerName == STOMP) {
         group.setStartState(*group.getCurrentState());
     } else {
         group.setStartStateToCurrentState();
@@ -657,7 +682,7 @@ bool ArmController::planToXform(tf2::Transform t, int n) {
     target.position.y = t.getOrigin().y();
     target.position.z = t.getOrigin().z();
 
-    if (stomp) {
+    if (plannerName == STOMP) {
       group.setJointValueTarget(target);
     } else {
       group.setPoseTarget(target);
@@ -715,9 +740,9 @@ bool ArmController::planToRegion(float xD, float yD, float zD, geometry_msgs::Po
     planRequest.motion_plan_request.num_planning_attempts = 1;
     planRequest.motion_plan_request.allowed_planning_time = 15;
 
-    if (plannerName == "rrtc") {
+    if (plannerName == RRTCONNECT) {
         planRequest.motion_plan_request.planner_id = "RRTConnectkConfigDefault";
-    } else if (plannerName == "rrtstar") {
+    } else if (plannerName == RRTSTAR) {
         planRequest.motion_plan_request.planner_id = "RRTstarkConfigDefault";
     }
     planRequest.motion_plan_request.goal_constraints.clear();

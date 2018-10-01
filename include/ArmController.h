@@ -24,80 +24,115 @@
 
 class ArmController {
 public:
-    typedef std::vector<moveit::planning_interface::MoveGroupInterface::Plan> PlanVector;
-    typedef std::pair<tf2::Transform, tf2::Transform> GraspPair;
+  enum PlanLibrary {
+    OMPL,
+    STOMPL,
+    UNKNOWNL
+  };
 
-    // Independent of the specific setup
-    static double jointLength(moveit_msgs::RobotTrajectory traj);
-    static double execTime(moveit_msgs::RobotTrajectory traj);
+  enum PlanAlgorithm {
+    RRTCONNECT,
+    RRTSTAR,
+    STOMP,
+    UNKNOWN
+  };
 
-    // Dependent on the specific setup
-    double handLength(moveit_msgs::RobotTrajectory traj);
-    // Returns min clearance, avg clearance metric
-    std::vector<double> clearanceData(moveit_msgs::RobotTrajectory traj);
+  static std::string plToString(PlanLibrary p)
+  {
+    switch (p)
+      {
+      case OMPL: return "OMPL";
+      case STOMPL: return "STOMP";
+      default: return "UNKNOWN";
+      }
+  }
+  static std::string paToString(PlanAlgorithm p)
+  {
+    switch (p)
+      {
+      case RRTCONNECT: return "RRT-Connect";
+      case RRTSTAR: return "RRT*";
+      case STOMP: return "STOMP";
+      default: return "UNKNOWN";
+      }
+  }
 
-    ArmController(ros::NodeHandle& nh);
-    void setHumanChecks(bool on) { checkPlans = on; }
-    void setStomp(bool isStomp) { stomp = isStomp; }
-    void setPlannerName(std::string n);
+  typedef std::vector<moveit::planning_interface::MoveGroupInterface::Plan> PlanVector;
+  typedef std::pair<tf2::Transform, tf2::Transform> GraspPair;
 
-    std::string armPlanningFrame();
-    std::string getHeld() { return grabbedObject.id; }
+  // Independent of the specific setup
+  static double jointLength(moveit_msgs::RobotTrajectory traj);
+  static double execTime(moveit_msgs::RobotTrajectory traj);
 
-    void updateCollisionScene(std::vector<moveit_msgs::CollisionObject> cos);
-    void attachToGripper(std::string objName);
-    void detachHeldObject();
+  // Dependent on the specific setup
+  double handLength(moveit_msgs::RobotTrajectory traj);
+  // Returns min clearance, avg clearance metric
+  std::vector<double> clearanceData(moveit_msgs::RobotTrajectory traj);
 
-    void closeGripper();
-    void openGripper();
-    void setGripperClosed(bool isClosed);
+  ArmController(ros::NodeHandle& nh);
+  void setHumanChecks(bool on) { checkPlans = on; }
+  void setLibrary(std::string l);
+  void setLibrary(PlanLibrary l);
+  void setPlanner(std::string p);
+  void setPlanner(PlanAlgorithm p);
 
-    bool pickUp(tf2::Transform objXform,
-                std::vector<GraspPair> graspList,
-                std::string objName);
-    bool putDownHeldObj(std::vector<tf2::Transform> targets);
-    bool pointTo(tf2::Transform objXform,
-                 float objHeight);
-    bool planToTargetList(std::vector<tf2::Transform> targets, int numTrials);
-    bool planToRegion(float xD, float yD, float zD, geometry_msgs::Pose p);
-    bool planToRegionAsList(float xD, float yD, float zD, geometry_msgs::Pose p, int numTrials);
-    bool checkIKPose(tf2::Transform eeXform);
-    bool homeArm();
+  std::string armPlanningFrame();
+  std::string getHeld() { return grabbedObject.id; }
+
+  void updateCollisionScene(std::vector<moveit_msgs::CollisionObject> cos);
+  void attachToGripper(std::string objName);
+  void detachHeldObject();
+
+  void closeGripper();
+  void openGripper();
+  void setGripperClosed(bool isClosed);
+
+  bool pickUp(tf2::Transform objXform,
+              std::vector<GraspPair> graspList,
+              std::string objName);
+  bool putDownHeldObj(std::vector<tf2::Transform> targets);
+  bool pointTo(tf2::Transform objXform,
+               float objHeight);
+  bool planToTargetList(std::vector<tf2::Transform> targets, int numTrials);
+  bool planToRegion(float xD, float yD, float zD, geometry_msgs::Pose p);
+  bool planToRegionAsList(float xD, float yD, float zD, geometry_msgs::Pose p, int numTrials);
+  bool checkIKPose(tf2::Transform eeXform);
+  bool homeArm();
 
 private:
-    void setGripperTo(float m);
-    bool planToXformInner(tf2::Transform t);
-    bool planToXform(tf2::Transform t, int n);
-    double planStraightLineMotion(tf2::Transform target);
-    bool executeCurrentPlan();
-    void writeQuery(tf2::Transform t,
-                    moveit::planning_interface::MoveGroupInterface::Plan p);
-    void writeHomeQuery(moveit::planning_interface::MoveGroupInterface::Plan p);
-    void writeTrajectoryInfo(std::ofstream& ofs, moveit_msgs::RobotTrajectory& traj);
-    bool safetyCheck();
-    void publishCurrentGoal(const ros::TimerEvent& e);
-    void setCurrentGoalTo(tf2::Transform t);
+  void setGripperTo(float m);
+  bool planToXformInner(tf2::Transform t);
+  bool planToXform(tf2::Transform t, int n);
+  double planStraightLineMotion(tf2::Transform target);
+  bool executeCurrentPlan();
+  void writeQuery(tf2::Transform t,
+                  moveit::planning_interface::MoveGroupInterface::Plan p);
+  void writeHomeQuery(moveit::planning_interface::MoveGroupInterface::Plan p);
+  void writeTrajectoryInfo(std::ofstream& ofs, moveit_msgs::RobotTrajectory& traj);
+  bool safetyCheck();
+  void publishCurrentGoal(const ros::TimerEvent& e);
+  void setCurrentGoalTo(tf2::Transform t);
 
-    std::string logFileName;
+  std::string logFileName;
 
-    moveit::planning_interface::MoveGroupInterface::Plan currentPlan;
-    int numRetries;
-    moveit_msgs::CollisionObject grabbedObject;
-    GraspPair usedGrasp;
-    tf2::Transform prevObjRotation;
-    actionlib::SimpleActionClient<control_msgs::GripperCommandAction> gripper;
-    bool checkPlans;
-    bool gripperClosed;
-    bool stomp;
-    std::string plannerName;
+  moveit::planning_interface::MoveGroupInterface::Plan currentPlan;
+  int numRetries;
+  moveit_msgs::CollisionObject grabbedObject;
+  GraspPair usedGrasp;
+  tf2::Transform prevObjRotation;
+  actionlib::SimpleActionClient<control_msgs::GripperCommandAction> gripper;
+  bool checkPlans;
+  bool gripperClosed;
+  PlanLibrary plannerPlugin;
+  PlanAlgorithm plannerName;
 
-    geometry_msgs::PoseStamped currentGoal;
-    ros::Publisher goalPublisher;
-    ros::Timer pubTimer;
+  geometry_msgs::PoseStamped currentGoal;
+  ros::Publisher goalPublisher;
+  ros::Timer pubTimer;
 
-    moveit::planning_interface::MoveGroupInterface group;
-    ros::ServiceClient psDiffClient;
-    ros::ServiceClient getPSClient;
-    planning_scene_monitor::PlanningSceneMonitorPtr psm;
-    ros::ServiceClient planRequestClient;
+  moveit::planning_interface::MoveGroupInterface group;
+  ros::ServiceClient psDiffClient;
+  ros::ServiceClient getPSClient;
+  planning_scene_monitor::PlanningSceneMonitorPtr psm;
+  ros::ServiceClient planRequestClient;
 };
