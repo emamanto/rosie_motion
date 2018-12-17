@@ -3,6 +3,7 @@
 <arg name="world_name" default="empty_world" />
 <arg name="planning_library" default="ompl" />
 <arg name="planner_name" default="rrtc" />
+<arg name="plan_time" default="15.0" />
 
 <include file="$(find rosbridge_server)/launch/rosbridge_websocket.launch" >
 </include>
@@ -20,6 +21,7 @@
 <param name="rosie_is_sim" type="bool" value="true"/>
 <param name="planning_library" type="string" value="$(arg planning_library)"/>
 <param name="planner_name" type="string" value="$(arg planner_name)"/>
+<param name="planning_time" type="double" value="$(arg plan_time)"/>
 </node>
 
 </launch>

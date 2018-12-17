@@ -40,6 +40,7 @@ public:
     void setHumanChecks(bool on) { checkPlans = on; }
     void setStomp(bool isStomp) { stomp = isStomp; }
     void setPlannerName(std::string n);
+    void setPlanningTime(double t);
 
     std::string armPlanningFrame();
     std::string getHeld() { return grabbedObject.id; }
@@ -90,6 +91,7 @@ private:
     bool gripperClosed;
     bool stomp;
     std::string plannerName;
+    double planningTime;
 
     geometry_msgs::PoseStamped currentGoal;
     ros::Publisher goalPublisher;

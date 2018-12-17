@@ -118,7 +118,15 @@ public:
         (plannerName != "stomp" &&
          plannerName != "rrtc" &&
          plannerName != "rrt*" &&
-         plannerName != "rrtstar"))
+         plannerName != "rrtstar" &&
+         plannerName != "rrt*clear" &&
+         plannerName != "rrtstarclear" &&
+         plannerName != "infrrt*" &&
+         plannerName != "infrrtstar" &&
+         plannerName != "infrrt*clear" &&
+         plannerName != "infrrtstarclear" &&
+         plannerName != "trrt" &&
+         plannerName != "trrtclear"))
       {
         ROS_INFO("RosieMotionServer has invalid planner_name param, will use RRTConnect or STOMP.");
         if (planningLibName == "stomp") plannerName = "stomp";
@@ -131,10 +139,18 @@ public:
     else if (planningLibName == "ompl" && plannerName == "stomp") {
       ROS_INFO("RosieMotionServer is using OMPL library; cannot use STOMP planner.");
       plannerName = "rrtc";
-    } else if (plannerName == "rrt*") {
-      plannerName = "rrtstar";
+    } else if (plannerName.find("rrt*") != std::string::npos) {
+      plannerName.replace(plannerName.find("*"), 1, "star");
     }
     arm.setPlannerName(plannerName);
+
+    double maxPlanTime = 0.0;
+    if (n.getParam("/rosie_motion_server/planning_time", maxPlanTime)) {
+      arm.setPlanningTime(maxPlanTime);
+    } else {
+      ROS_INFO("RosieMotionServer found no planning time param; using 15.0s");
+      arm.setPlanningTime(15.0);
+    }
 
     ros::param::set("/move_group/trajectory_execution/allowed_start_tolerance", 0.0);
 

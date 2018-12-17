@@ -137,7 +137,6 @@ ArmController::ArmController(ros::NodeHandle& nh) : numRetries(2),
     ROS_INFO("Logging motion history to %s", logFileName.c_str());
 
     group.setMaxVelocityScalingFactor(0.4);
-    group.setPlanningTime(15.0);
     group.setEndEffectorLink("gripper_link");
     gripper.waitForServer();
     closeGripper();
@@ -171,22 +170,32 @@ void ArmController::setPlannerName(std::string n) {
             plannerName = "rrtc";
             group.setPlannerId("RRTConnectkConfigDefault");
         }
+    } else if (plannerName.find("rrt") != std::string::npos && stomp) {
+      ROS_INFO("Attempting to set an RRT-based alg as planner when using STOMP!");
+      plannerName = "stomp";
     } else if (plannerName == "rrtc") {
-        if (stomp) {
-            ROS_INFO("Attempting to set RRTConnect as planner when using STOMP!");
-            plannerName = "stomp";
-        } else {
-            group.setPlannerId("RRTConnectkConfigDefault");
-        }
+      group.setPlannerId("RRTConnectkConfigDefault");
     } else if (plannerName == "rrtstar") {
-        if (stomp) {
-            ROS_INFO("Attempting to set RRT* as planner when using STOMP!");
-            plannerName = "stomp";
-        } else {
-            group.setPlannerId("RRTstarkConfigDefault");
-        }
+      group.setPlannerId("RRTstarkConfigDefault");
+    } else if (plannerName == "rrtstarclear") {
+      group.setPlannerId("RRTstarkConfigClearance");
+    } else if (plannerName == "infrrtstar") {
+      group.setPlannerId("InfRRTstarkConfigDefault");
+    } else if (plannerName == "infrrtstarclear") {
+      group.setPlannerId("InfRRTstarkConfigClearance");
+    } else if (plannerName == "trrt") {
+      group.setPlannerId("TRRTkConfigDefault");
+    } else if (plannerName == "trrtclear") {
+      group.setPlannerId("TRRTkConfigClearance");
     }
+
     ROS_INFO("ArmController set up to use %s planner", plannerName.c_str());
+}
+
+void ArmController::setPlanningTime(double t) {
+  planningTime = t;
+  group.setPlanningTime(planningTime);
+  ROS_INFO("ArmController will plan for %f s", planningTime);
 }
 
 std::string ArmController::armPlanningFrame() {
@@ -718,7 +727,7 @@ bool ArmController::planToRegion(float xD, float yD, float zD, geometry_msgs::Po
 
     planRequest.motion_plan_request.group_name = group.getName();
     planRequest.motion_plan_request.num_planning_attempts = 1;
-    planRequest.motion_plan_request.allowed_planning_time = 15;
+    planRequest.motion_plan_request.allowed_planning_time = planningTime;
 
     if (plannerName == "rrtc") {
         planRequest.motion_plan_request.planner_id = "RRTConnectkConfigDefault";
