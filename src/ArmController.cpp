@@ -723,7 +723,12 @@ bool ArmController::planToRegionAsList(float xD, float yD, float zD,
 bool ArmController::planToRegion(float xD, float yD, float zD, geometry_msgs::Pose p) {
     moveit_msgs::GetMotionPlan::Request planRequest;
     moveit_msgs::GetMotionPlan::Response planResponse;
-    group.setStartStateToCurrentState();
+    if (stomp) {
+        group.setStartState(*group.getCurrentState());
+        group.setJointValueTarget(p);
+    } else {
+        group.setStartStateToCurrentState();
+    }
 
     planRequest.motion_plan_request.group_name = group.getName();
     planRequest.motion_plan_request.num_planning_attempts = 1;
@@ -763,7 +768,40 @@ bool ArmController::planToRegion(float xD, float yD, float zD, geometry_msgs::Po
     pc.constraint_region.primitive_poses.push_back(p);
     cm.position_constraints.push_back(pc);
 
+    if (stomp) {
+      robot_state::RobotState ss(*group.getCurrentState());
+      moveit::core::robotStateToRobotStateMsg(ss,
+                                              planRequest.motion_plan_request.start_state,
+                                              true);
+      ros::Duration(0.1).sleep();
+
+      moveit_msgs::OrientationConstraint oc;
+      oc.header.frame_id = group.getPlanningFrame();
+      oc.link_name = group.getEndEffectorLink();
+
+      geometry_msgs::Quaternion q = tf2::toMsg(tf2::Quaternion::getIdentity());
+      oc.orientation = q;
+      oc.absolute_x_axis_tolerance = 2*M_PI;
+      oc.absolute_y_axis_tolerance = 2*M_PI;
+      oc.absolute_z_axis_tolerance = 2*M_PI;
+      oc.weight = 0;
+      cm.orientation_constraints.push_back(oc);
+
+      std::vector<std::string> jns = group.getJointValueTarget().getVariableNames();
+      for(std::vector<std::string>::iterator i = jns.begin(); i != jns.end(); i++) {
+        moveit_msgs::JointConstraint jc;
+        jc.joint_name = *i;
+        jc.position = group.getJointValueTarget().getVariablePosition(*i);
+        jc.tolerance_above = 0;
+        jc.tolerance_below = 0;
+        jc.weight = 0;
+        cm.joint_constraints.push_back(jc);
+        ros::Duration(0.1).sleep();
+      }
+    }
+
     planRequest.motion_plan_request.goal_constraints.push_back(cm);
+    ros::Duration(0.5).sleep();
 
     if (!planRequestClient.call(planRequest, planResponse)) {
         ROS_WARN("Requesting the current collision scene failed!!");
