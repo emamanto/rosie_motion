@@ -738,6 +738,8 @@ bool ArmController::planToRegion(float xD, float yD, float zD, geometry_msgs::Po
         planRequest.motion_plan_request.planner_id = "RRTConnectkConfigDefault";
     } else if (plannerName == "rrtstar") {
         planRequest.motion_plan_request.planner_id = "RRTstarkConfigDefault";
+    } else if (plannerName == "rrtstarclear") {
+        planRequest.motion_plan_request.planner_id = "RRTstarkConfigClearance";
     }
     planRequest.motion_plan_request.goal_constraints.clear();
 
