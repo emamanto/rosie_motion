@@ -325,13 +325,10 @@ public:
         geometry_msgs::Pose regPose = msg->poses[0];
         geometry_msgs::Pose hackPose;
         hackPose.position = regPose.position;
-        hackPose.orientation.w = 1.0;
-        hackPose.orientation.x = 0.0;
-        hackPose.orientation.y = 0.0;
-        hackPose.orientation.z = 0.0;
+        hackPose.orientation = tf2::toMsg(tf2::Quaternion::getIdentity());
         bool success = arm.planToRegionAsList(regPose.orientation.x,
                                               regPose.orientation.y,
-                                              0.005,
+                                              0.05,
                                               hackPose,
                                               std::stoi(num));
     }

@@ -672,6 +672,7 @@ bool ArmController::planToXform(tf2::Transform t, int n) {
     target.position.z = t.getOrigin().z();
 
     if (stomp) {
+      target.position.z += 0.05;
       group.setJointValueTarget(target);
     } else {
       group.setPoseTarget(target);
@@ -725,7 +726,6 @@ bool ArmController::planToRegion(float xD, float yD, float zD, geometry_msgs::Po
     moveit_msgs::GetMotionPlan::Response planResponse;
     if (stomp) {
         group.setStartState(*group.getCurrentState());
-        group.setJointValueTarget(p);
     } else {
         group.setStartStateToCurrentState();
     }
@@ -754,25 +754,49 @@ bool ArmController::planToRegion(float xD, float yD, float zD, geometry_msgs::Po
     cm.orientation_constraints.clear();
     cm.visibility_constraints.clear();
 
-    moveit_msgs::PositionConstraint pc;
-    pc.header.frame_id = group.getPlanningFrame();
-    pc.link_name = group.getEndEffectorLink();
-    pc.target_point_offset.x = 0;
-    pc.target_point_offset.y = 0;
-    pc.target_point_offset.z = 0;
-    pc.constraint_region.primitives.clear();
-    pc.constraint_region.primitive_poses.clear();
-    pc.weight = 1.0;
+    // moveit_msgs::PositionConstraint pc;
+    // pc.header.frame_id = group.getPlanningFrame();
+    // pc.link_name = group.getEndEffectorLink();
+    // pc.target_point_offset.x = 0;
+    // pc.target_point_offset.y = 0;
+    // pc.target_point_offset.z = 0;
+    // pc.constraint_region.primitives.clear();
+    // pc.constraint_region.primitive_poses.clear();
+    // pc.weight = 1.0;
+    geometry_msgs::PoseStamped ee_pose;
+    ee_pose.pose.position = p.position;
+    ee_pose.pose.position.z += 0.05;
+    ee_pose.pose.orientation = p.orientation;
+    ee_pose.header.frame_id = group.getPlanningFrame();
 
-    shape_msgs::SolidPrimitive box;
-    box.type = box.BOX;
-    box.dimensions.push_back(xD);
-    box.dimensions.push_back(yD);
-    box.dimensions.push_back(zD);
+    std::vector<double> position_t;
+    position_t.resize(3);
+    position_t[0] = xD;
+    position_t[1] = yD;
+    position_t[2] = zD;
+    std::vector<double> orientation_t;
+    orientation_t.resize(3);
+    for (int i = 0;  i < 3; i++) orientation_t[i] = M_PI;
+    cm = kinematic_constraints::constructGoalConstraints("gripper_link",
+                                                         ee_pose,
+                                                         position_t,
+                                                         orientation_t);
 
-    pc.constraint_region.primitives.push_back(box);
-    pc.constraint_region.primitive_poses.push_back(p);
-    cm.position_constraints.push_back(pc);
+    tf2::Transform regGoal;
+    regGoal.setOrigin(tf2::Vector3(p.position.x, p.position.y, p.position.z));
+    regGoal.setRotation(tf2::Quaternion::getIdentity());
+    setCurrentGoalTo(regGoal);
+
+    // shape_msgs::SolidPrimitive box;
+    // box.type = box.BOX;
+    // box.dimensions.push_back(xD);
+    // box.dimensions.push_back(yD);
+    // box.dimensions.push_back(zD);
+
+    // pc.constraint_region.primitives.push_back(box);
+    // p.position.z += 0.2;
+    // pc.constraint_region.primitive_poses.push_back(p);
+    // cm.position_constraints.push_back(pc);
 
     if (stomp) {
       robot_state::RobotState ss(*group.getCurrentState());
@@ -781,32 +805,36 @@ bool ArmController::planToRegion(float xD, float yD, float zD, geometry_msgs::Po
                                               true);
       ros::Duration(0.1).sleep();
 
-      moveit_msgs::OrientationConstraint oc;
-      oc.header.frame_id = group.getPlanningFrame();
-      oc.link_name = group.getEndEffectorLink();
+      // moveit_msgs::OrientationConstraint oc;
+      // oc.header.frame_id = group.getPlanningFrame();
+      // oc.link_name = group.getEndEffectorLink();
 
-      geometry_msgs::Quaternion q = tf2::toMsg(tf2::Quaternion::getIdentity());
-      oc.orientation = q;
-      oc.absolute_x_axis_tolerance = 2*M_PI;
-      oc.absolute_y_axis_tolerance = 2*M_PI;
-      oc.absolute_z_axis_tolerance = 2*M_PI;
-      oc.weight = 0;
-      cm.orientation_constraints.push_back(oc);
+      // geometry_msgs::Quaternion q = tf2::toMsg(tf2::Quaternion::getIdentity());
+      // oc.orientation = q;
+      // oc.absolute_x_axis_tolerance = 2*M_PI;
+      // oc.absolute_y_axis_tolerance = 2*M_PI;ppp
+      // oc.absolute_z_axis_tolerance = 2*M_PI;
+      // oc.weight = 0;
+      // cm.orientation_constraints.push_back(oc);
 
-      std::vector<std::string> jns = group.getJointValueTarget().getVariableNames();
-      for(std::vector<std::string>::iterator i = jns.begin(); i != jns.end(); i++) {
-        moveit_msgs::JointConstraint jc;
-        jc.joint_name = *i;
-        jc.position = group.getJointValueTarget().getVariablePosition(*i);
-        jc.tolerance_above = 0;
-        jc.tolerance_below = 0;
-        jc.weight = 0;
-        cm.joint_constraints.push_back(jc);
-        ros::Duration(0.1).sleep();
-      }
+      // std::vector<std::string> jns = group.getJointValueTarget().getVariableNames();
+      // for(std::vector<std::string>::iterator i = jns.begin(); i != jns.end(); i++) {
+      //   moveit_msgs::JointConstraint jc;
+      //   jc.joint_name = *i;
+      //   jc.position = group.getJointValueTarget().getVariablePosition(*i);
+      //   jc.tolerance_above = 0;
+      //   jc.tolerance_below = 0;
+      //   jc.weight = 0;
+      //   cm.joint_constraints.push_back(jc);
+      //   ros::Duration(0.1).sleep();
+      // }
     }
 
-    planRequest.motion_plan_request.goal_constraints.push_back(cm);
+    planRequest.motion_plan_request.goal_constraints.clear();
+    planRequest.motion_plan_request.goal_constraints.resize(1);
+    planRequest.motion_plan_request.goal_constraints[0] =
+      kinematic_constraints::mergeConstraints(cm,
+                                              planRequest.motion_plan_request.goal_constraints[0]);
     ros::Duration(0.5).sleep();
 
     if (!planRequestClient.call(planRequest, planResponse)) {
@@ -835,12 +863,12 @@ bool ArmController::planToRegion(float xD, float yD, float zD, geometry_msgs::Po
         actualGoal.setOrigin(tf2::Vector3(eeXYZ(0), eeXYZ(1), eeXYZ(2)));
         actualGoal.setRotation(tf2::Quaternion(eeQ.x(), eeQ.y(), eeQ.z(), eeQ.w()));
     } else {
-        actualGoal.setOrigin(tf2::Vector3(xD, yD, zD));
+        actualGoal.setOrigin(tf2::Vector3(0, 0, 0));
         actualGoal.setRotation(tf2::Quaternion::getIdentity());
     }
 
     writeQuery(actualGoal, currentPlan);
-    //setCurrentGoalTo(actualGoal);
+    setCurrentGoalTo(actualGoal);
 }
 
 double ArmController::planStraightLineMotion(tf2::Transform target) {
