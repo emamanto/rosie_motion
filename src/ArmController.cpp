@@ -118,9 +118,10 @@ std::vector<double> ArmController::clearanceData(moveit_msgs::RobotTrajectory tr
 
 ArmController::ArmController(ros::NodeHandle& nh) : numRetries(2),
                                                     checkPlans(true),
-                                                    stomp(false),
                                                     group("arm"),
-                                                    gripper("gripper_controller/gripper_action", true)
+                                                    gripper("gripper_controller/gripper_action", true),
+                                                    plannerPlugin(UNKNOWNL),
+                                                    plannerName(UNKNOWN)
 {
     std::time_t t;
     std::time(&t);
@@ -162,34 +163,54 @@ ArmController::ArmController(ros::NodeHandle& nh) : numRetries(2),
     psm = std::make_shared<planning_scene_monitor::PlanningSceneMonitor>("robot_description");
 }
 
-void ArmController::setPlannerName(std::string n) {
-    plannerName = n;
-    if (plannerName == "stomp") {
-        if (!stomp) {
-            ROS_INFO("Attempting to set STOMP as planner when using OMPL!");
-            plannerName = "rrtc";
-            group.setPlannerId("RRTConnectkConfigDefault");
-        }
-    } else if (plannerName.find("rrt") != std::string::npos && stomp) {
-      ROS_INFO("Attempting to set an RRT-based alg as planner when using STOMP!");
-      plannerName = "stomp";
-    } else if (plannerName == "rrtc") {
-      group.setPlannerId("RRTConnectkConfigDefault");
-    } else if (plannerName == "rrtstar") {
-      group.setPlannerId("RRTstarkConfigDefault");
-    } else if (plannerName == "rrtstarclear") {
-      group.setPlannerId("RRTstarkConfigClearance");
-    } else if (plannerName == "infrrtstar") {
-      group.setPlannerId("InfRRTstarkConfigDefault");
-    } else if (plannerName == "infrrtstarclear") {
-      group.setPlannerId("InfRRTstarkConfigClearance");
-    } else if (plannerName == "trrt") {
-      group.setPlannerId("TRRTkConfigDefault");
-    } else if (plannerName == "trrtclear") {
-      group.setPlannerId("TRRTkConfigClearance");
-    }
+void ArmController::setLibrary(std::string l) {
+  if (l == "ompl") {
+    setLibrary(OMPL);
+  } else if (l == "stomp") {
+    setLibrary(STOMPL);
+  } else {
+    ROS_WARN("Unknown library name given!!");
+  }
+}
 
-    ROS_INFO("ArmController set up to use %s planner", plannerName.c_str());
+void ArmController::setLibrary(PlanLibrary l) {
+  plannerPlugin = l;
+}
+
+void ArmController::setPlanner(std::string p) {
+    if (p == "stomp") {
+      setPlanner(STOMP);
+    } else if (p == "rrtc" || p == "rrtconnect") {
+      setPlanner(RRTCONNECT);
+    } else if (p == "rrtstar" || p == "rrt*") {
+      setPlanner(RRTSTAR);
+    } else {
+      ROS_WARN("Unknown planner name given!!");
+    }
+}
+
+void ArmController::setPlanner(PlanAlgorithm p) {
+  if (plannerPlugin == UNKNOWNL) {
+    ROS_WARN("Tried to set planning algorithm before library!!");
+    return;
+  }
+
+  if (p == STOMP && plannerPlugin != STOMPL) {
+    ROS_WARN("Tried to use STOMP when OMPL is loaded!!");
+    plannerName = RRTCONNECT;
+  } else if (p != STOMP && plannerPlugin == STOMPL) {
+    ROS_WARN("Tried to use RRT when STOMP is loaded!!");
+    plannerName = STOMP;
+  } else {
+    plannerName = p;
+  }
+
+  ROS_INFO("ArmController set up to use %s planner from %s plugin",
+           paToString(plannerName).c_str(),
+           plToString(plannerPlugin).c_str());
+
+  if (plannerName == RRTCONNECT) group.setPlannerId("RRTConnectkConfigDefault");
+  if (plannerName == RRTSTAR) group.setPlannerId("RRTstarkConfigDefault");
 }
 
 void ArmController::setPlanningTime(double t) {
@@ -430,9 +451,9 @@ bool ArmController::pickUp(tf2::Transform objXform,
     openGripper();
     ros::Duration(0.5).sleep();
 
-    //setCurrentGoalTo(objXform*graspList.at(0).second);
-    //if (!planStraightLineMotion(objXform*graspList.at(graspIndex).second)) return false;
-    //if (!executeCurrentPlan()) return false;
+    setCurrentGoalTo(objXform*graspList.at(0).second);
+    if (!planStraightLineMotion(objXform*graspList.at(graspIndex).second)) return false;
+    if (!executeCurrentPlan()) return false;
 
     ros::Duration(0.5).sleep();
     closeGripper();
@@ -450,9 +471,9 @@ bool ArmController::pickUp(tf2::Transform objXform,
     usedGrasp = graspList.at(graspIndex);
     prevObjRotation = tf2::Transform(objXform.getRotation());
 
-    //setCurrentGoalTo(firstPose);
-    //if (!planStraightLineMotion(firstPose)) return false;
-    //if (!executeCurrentPlan()) return false;
+    setCurrentGoalTo(firstPose);
+    if (!planStraightLineMotion(firstPose)) return false;
+    if (!executeCurrentPlan()) return false;
 
     if (!homeArm()) return false;
 
@@ -555,71 +576,66 @@ bool ArmController::pointTo(tf2::Transform objXform, float objHeight) {
     return true;
 }
 
-bool ArmController::planToTargetList(std::vector<tf2::Transform> targets,
-                                     int numTrials) {
-    std::ofstream ofs;
-    ofs.open(logFileName, std::ofstream::out | std::ofstream::app);
-    ofs << std::endl << "BEGIN LIST " << std::endl;
-    ofs.close();
+// bool ArmController::planToTargetList(std::vector<tf2::Transform> targets,
+//                                      int numTrials) {
+//     std::ofstream ofs;
+//     ofs.open(logFileName, std::ofstream::out | std::ofstream::app);
+//     ofs << std::endl << "BEGIN LIST " << std::endl;
+//     ofs.close();
 
-    bool ok = false;
-    for (std::vector<tf2::Transform>::iterator i = targets.begin();
-         i != targets.end(); i++) {
-        //setCurrentGoalTo(*i);
-        for (int j = 0; j < numTrials; j++) {
-            if (planToXform(*i, 1)) {
-                ok = true;
-            }
-        }
-    }
-    return ok;
-}
+//     bool ok = false;
+//     for (std::vector<tf2::Transform>::iterator i = targets.begin();
+//          i != targets.end(); i++) {
+//         //setCurrentGoalTo(*i);
+//         for (int j = 0; j < numTrials; j++) {
+//             if (planToXform(*i, 1)) {
+//                 ok = true;
+//             }
+//         }
+//     }
+//     return ok;
+// }
 
-// This is no longer really checking IK, but oh well
-bool ArmController::checkIKPose(tf2::Transform blockXform) {
-    geometry_msgs::Pose bp;
-    bp.orientation = tf2::toMsg(blockXform.getRotation());
-    bp.position.x = blockXform.getOrigin().x();
-    bp.position.y = blockXform.getOrigin().y();
-    bp.position.z = blockXform.getOrigin().z();
+bool ArmController::checkIKPose(tf2::Transform eeXform) {
+    geometry_msgs::Pose eep;
+    eep.orientation = tf2::toMsg(eeXform.getRotation());
+    eep.position.x = eeXform.getOrigin().x();
+    eep.position.y = eeXform.getOrigin().y();
+    eep.position.z = eeXform.getOrigin().z();
 
-    if (!group.setJointValueTarget(bp)) {
+    if (!group.setJointValueTarget(eep)) {
       ROS_INFO("No IK solution!");
       return false;
-    }
-    else {
-        robot_state::RobotState goalCopy(group.getJointValueTarget());
-        goalCopy.setVariablePosition("torso_lift_joint", 0.2);
-        goalCopy.update();
+    } else {
+      psm->requestPlanningSceneState();
+      planning_scene_monitor::LockedPlanningSceneRO ps(psm);
+      robot_state::RobotState rs(*group.getCurrentState(0.1));
+      collision_detection::CollisionRobotConstPtr cr = ps->getCollisionRobotUnpadded();
+      collision_detection::AllowedCollisionMatrix acm;
+      acm.clear();
+      acm.setDefaultEntry("ground", true);
 
-        psm->requestPlanningSceneState();
-        planning_scene_monitor::LockedPlanningSceneRO ps(psm);
+      std::vector<std::string> namesCopy = rs.getJointModelGroup("arm")->getJointModelNames();
+      for (std::vector<std::string>::iterator i = namesCopy.begin();
+           i != namesCopy.end(); i++) {
+        rs.setVariablePosition(*i, group.getJointValueTarget().getVariablePosition(*i));
+      }
+      rs.updateCollisionBodyTransforms();
 
-        collision_detection::CollisionRequest req;
-        req.group_name = "arm";
-        req.verbose = true;
-        collision_detection::CollisionResult res;
-        collision_detection::AllowedCollisionMatrix acm;
-        acm.clear();
-        acm.setDefaultEntry("ground", true);
-        acm.setEntry(goalCopy.getRobotModel()->getLinkModelNames(),
-                     goalCopy.getRobotModel()->getLinkModelNames(), true);
+      collision_detection::CollisionRequest req;
+      req.group_name = "arm";
+      req.verbose = true;
+      collision_detection::CollisionResult res;
+      ps->getCollisionWorld()->checkRobotCollision(req, res,
+                                                   *cr, rs, acm);
 
-        ps->checkCollision(req, res, goalCopy, acm);
-
-        if (res.collision) {
-            ROS_INFO("IK solution in collision!");
-            return false;
-        }
-    }
-
-    if (!planToXform(blockXform, 1)) {
-        ROS_INFO("No solution found.");
+      if (res.collision) {
+        ROS_INFO("IK solution in collision!");
         return false;
-    }
-    else {
-        ROS_INFO("Successful planning!");
+      } else {
+        ROS_INFO("Valid IK solution found!");
         return true;
+      }
     }
 }
 
@@ -637,7 +653,7 @@ bool ArmController::homeArm() {
     moveit::planning_interface::MoveGroupInterface::Plan homePlan;
     bool ok = true;
 
-    if (stomp) {
+    if (plannerName == STOMP) {
         group.setStartState(*group.getCurrentState());
     } else {
         group.setStartStateToCurrentState();
@@ -659,7 +675,7 @@ bool ArmController::homeArm() {
 }
 
 bool ArmController::planToXform(tf2::Transform t, int n) {
-    if (stomp) {
+    if (plannerName == STOMP) {
         group.setStartState(*group.getCurrentState());
     } else {
         group.setStartStateToCurrentState();
@@ -671,8 +687,7 @@ bool ArmController::planToXform(tf2::Transform t, int n) {
     target.position.y = t.getOrigin().y();
     target.position.z = t.getOrigin().z();
 
-    if (stomp) {
-      target.position.z += 0.05;
+    if (plannerName == STOMP) {
       group.setJointValueTarget(target);
     } else {
       group.setPoseTarget(target);
@@ -707,19 +722,19 @@ bool ArmController::planToXformInner(tf2::Transform t) {
   return (bool)ok;
 }
 
-bool ArmController::planToRegionAsList(float xD, float yD, float zD,
-                                       geometry_msgs::Pose p, int numTrials) {
-    std::ofstream ofs;
-    ofs.open(logFileName, std::ofstream::out | std::ofstream::app);
-    ofs << std::endl << "BEGIN LIST REG" << std::endl;
-    ofs.close();
+// bool ArmController::planToRegionAsList(float xD, float yD, float zD,
+//                                        geometry_msgs::Pose p, int numTrials) {
+//     std::ofstream ofs;
+//     ofs.open(logFileName, std::ofstream::out | std::ofstream::app);
+//     ofs << std::endl << "BEGIN LIST REG" << std::endl;
+//     ofs.close();
 
-    for (int i = 0; i < numTrials; i++) {
-        planToRegion(xD, yD, zD, p);
-    }
+//     for (int i = 0; i < numTrials; i++) {
+//         planToRegion(xD, yD, zD, p);
+//     }
 
-    return true;
-}
+//     return true;
+// }
 
 bool ArmController::planToRegion(float xD, float yD, float zD, geometry_msgs::Pose p) {
     moveit_msgs::GetMotionPlan::Request planRequest;
@@ -734,9 +749,9 @@ bool ArmController::planToRegion(float xD, float yD, float zD, geometry_msgs::Po
     planRequest.motion_plan_request.num_planning_attempts = 1;
     planRequest.motion_plan_request.allowed_planning_time = planningTime;
 
-    if (plannerName == "rrtc") {
+    if (plannerName == RRTCONNECT) {
         planRequest.motion_plan_request.planner_id = "RRTConnectkConfigDefault";
-    } else if (plannerName == "rrtstar") {
+    } else if (plannerName == RRTSTAR) {
         planRequest.motion_plan_request.planner_id = "RRTstarkConfigDefault";
     } else if (plannerName == "rrtstarclear") {
         planRequest.motion_plan_request.planner_id = "RRTstarkConfigClearance";

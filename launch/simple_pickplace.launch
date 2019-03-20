@@ -5,7 +5,7 @@
 
   <arg name="robot" default="fetch"/>
   <arg name="debug" default="false"/>
-  <arg name="gui" default="false"/>
+  <arg name="gui" default="true"/>
   <arg name="headless" default="false"/>
   <arg name="worldfile" default="empty_world.sdf"/>
 
