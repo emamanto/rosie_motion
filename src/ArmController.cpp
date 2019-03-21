@@ -576,25 +576,31 @@ bool ArmController::pointTo(tf2::Transform objXform, float objHeight) {
     return true;
 }
 
-// bool ArmController::planToTargetList(std::vector<tf2::Transform> targets,
-//                                      int numTrials) {
-//     std::ofstream ofs;
-//     ofs.open(logFileName, std::ofstream::out | std::ofstream::app);
-//     ofs << std::endl << "BEGIN LIST " << std::endl;
-//     ofs.close();
+bool ArmController::planToTargetList(std::vector<tf2::Transform> targets,
+                                     int numTrials) {
+    std::ofstream ofs;
+    ofs.open(logFileName, std::ofstream::out | std::ofstream::app);
+    ofs << std::endl << "BEGIN LIST " << std::endl;
+    ofs.close();
 
-//     bool ok = false;
-//     for (std::vector<tf2::Transform>::iterator i = targets.begin();
-//          i != targets.end(); i++) {
-//         //setCurrentGoalTo(*i);
-//         for (int j = 0; j < numTrials; j++) {
-//             if (planToXform(*i, 1)) {
-//                 ok = true;
-//             }
-//         }
-//     }
-//     return ok;
-// }
+    bool ok = false;
+    for (std::vector<tf2::Transform>::iterator i = targets.begin();
+         i != targets.end(); i++) {
+        //setCurrentGoalTo(*i);
+        for (int j = 0; j < numTrials; j++) {
+            if (planToXform(*i, 1)) {
+                ok = true;
+            }
+        }
+    }
+    return ok;
+}
+
+bool ArmController::checkReachable(tf2::Transform eeXform) {
+    if (!checkIKPose(eeXform)) return false;
+
+    return planToXform(eeXform, 2);
+}
 
 bool ArmController::checkIKPose(tf2::Transform eeXform) {
     geometry_msgs::Pose eep;
@@ -722,24 +728,24 @@ bool ArmController::planToXformInner(tf2::Transform t) {
   return (bool)ok;
 }
 
-// bool ArmController::planToRegionAsList(float xD, float yD, float zD,
-//                                        geometry_msgs::Pose p, int numTrials) {
-//     std::ofstream ofs;
-//     ofs.open(logFileName, std::ofstream::out | std::ofstream::app);
-//     ofs << std::endl << "BEGIN LIST REG" << std::endl;
-//     ofs.close();
+bool ArmController::planToRegionAsList(float xD, float yD, float zD,
+                                       geometry_msgs::Pose p, int numTrials) {
+    std::ofstream ofs;
+    ofs.open(logFileName, std::ofstream::out | std::ofstream::app);
+    ofs << std::endl << "BEGIN LIST REG" << std::endl;
+    ofs.close();
 
-//     for (int i = 0; i < numTrials; i++) {
-//         planToRegion(xD, yD, zD, p);
-//     }
+    for (int i = 0; i < numTrials; i++) {
+        planToRegion(xD, yD, zD, p);
+    }
 
-//     return true;
-// }
+    return true;
+}
 
 bool ArmController::planToRegion(float xD, float yD, float zD, geometry_msgs::Pose p) {
     moveit_msgs::GetMotionPlan::Request planRequest;
     moveit_msgs::GetMotionPlan::Response planResponse;
-    if (stomp) {
+    if (plannerName == STOMP) {
         group.setStartState(*group.getCurrentState());
     } else {
         group.setStartStateToCurrentState();
@@ -753,11 +759,11 @@ bool ArmController::planToRegion(float xD, float yD, float zD, geometry_msgs::Po
         planRequest.motion_plan_request.planner_id = "RRTConnectkConfigDefault";
     } else if (plannerName == RRTSTAR) {
         planRequest.motion_plan_request.planner_id = "RRTstarkConfigDefault";
-    } else if (plannerName == "rrtstarclear") {
+    } else if (plannerName == RRTSTARCLEAR) {
         planRequest.motion_plan_request.planner_id = "RRTstarkConfigClearance";
-    } else if (plannerName == "trrt") {
+    } else if (plannerName == TRRT) {
         planRequest.motion_plan_request.planner_id = "TRRTkConfigDefault";
-    } else if (plannerName == "trrtclear") {
+    } else if (plannerName == TRRTCLEAR) {
         planRequest.motion_plan_request.planner_id = "TRRTkConfigClearance";
     }
     planRequest.motion_plan_request.goal_constraints.clear();
@@ -813,7 +819,7 @@ bool ArmController::planToRegion(float xD, float yD, float zD, geometry_msgs::Po
     // pc.constraint_region.primitive_poses.push_back(p);
     // cm.position_constraints.push_back(pc);
 
-    if (stomp) {
+    if (plannerName == STOMP) {
       robot_state::RobotState ss(*group.getCurrentState());
       moveit::core::robotStateToRobotStateMsg(ss,
                                               planRequest.motion_plan_request.start_state,

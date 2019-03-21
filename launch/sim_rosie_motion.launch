@@ -4,6 +4,8 @@
 <arg name="planning_library" default="ompl" />
 <arg name="planner_name" default="rrtc" />
 <arg name="gazebo_gui" default="true" />
+<arg name="exp" default="false" />
+<arg name="plan_time" default="15" />
 
 <include file="$(find rosbridge_server)/launch/rosbridge_websocket.launch" >
 </include>
@@ -23,6 +25,7 @@
 <param name="planning_library" type="string" value="$(arg planning_library)"/>
 <param name="planner_name" type="string" value="$(arg planner_name)"/>
 <param name="planning_time" type="double" value="$(arg plan_time)"/>
+<param name="is_exp" type="bool" value="$(arg exp)"/>
 </node>
 
 </launch>

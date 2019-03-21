@@ -44,8 +44,8 @@ public:
                     PUSH,
                     FAILURE,
                     SCENE,
-                    CHECK
-                    //LIST, Only used for experiments
+                    CHECK,
+                    LIST //Only used for experiments
                     };
 
   static std::string asToString(ActionState a)
@@ -123,6 +123,17 @@ public:
       arm.setPlanningTime(15.0);
     }
 
+    list_on = false;
+    if (!n.getParam("/rosie_motion_server/is_exp", list_on)) {
+      ROS_INFO("RosieMotionServer is missing is_exp parameter! List handling off by default.");
+    }
+    else if (list_on) {
+      ROS_INFO("RosieMotionServer can test lists of targets.");
+    }
+    else {
+      ROS_INFO("RosieMotionServer running in Soar/interactive mode ONLY.");
+    }
+
     ros::param::set("/move_group/trajectory_execution/allowed_start_tolerance", 0.0);
 
     ros::SubscribeOptions optionsObs =
@@ -142,20 +153,21 @@ public:
     jointsSubscriber = n.subscribe(optionsJoint);
 
     ros::SubscribeOptions optionsArm =
-      ros::SubscribeOptions::create<rosie_msgs::RobotCommand>("rosie_arm_commands",
-                                                              1,
-                                                              boost::bind(&MotionServer::commandCallback,
-                                                                          this, _1),
-                                                              ros::VoidPtr(), &armQueue);
+        ros::SubscribeOptions::create<rosie_msgs::RobotCommand>("rosie_arm_commands",
+                                                                1,
+                                                                boost::bind(&MotionServer::commandCallback,
+                                                                            this, _1),
+                                                                ros::VoidPtr(), &armQueue);
     commSubscriber = n.subscribe(optionsArm);
-
-    // ros::SubscribeOptions optionsList =
-    //   ros::SubscribeOptions::create<geometry_msgs::PoseArray>("rosie_test_list",
-    //                                                           1,
-    //                                                           boost::bind(&MotionServer::listCB,
-    //                                                                       this, _1),
-    //                                                           ros::VoidPtr(), &armQueue);
-    // listSubscriber = n.subscribe(optionsList);
+    if (list_on) {
+        ros::SubscribeOptions optionsList =
+            ros::SubscribeOptions::create<geometry_msgs::PoseArray>("rosie_test_list",
+                                                                    1,
+                                                                    boost::bind(&MotionServer::listCB,
+                                                                                this, _1),
+                                                                    ros::VoidPtr(), &armQueue);
+        listSubscriber = n.subscribe(optionsList);
+    }
 
     statusPublisher = n.advertise<rosie_msgs::RobotAction>("rosie_arm_status", 10);
     camXPublisher = n.advertise<geometry_msgs::TransformStamped>("rosie_camera", 10);
@@ -247,7 +259,7 @@ public:
       tf2::Transform xf;
       tf2::fromMsg(msg->dest, xf);
       arm.updateCollisionScene(getCollisionModels());
-      if (arm.checkIKPose(xf)) {
+      if (arm.checkReachable(xf)) {
         state = WAIT;
       } else {
         state = FAILURE;
@@ -260,49 +272,49 @@ public:
     }
   }
 
-  // void listCB(const geometry_msgs::PoseArray::ConstPtr& msg) {
-  //   if (state == LIST) return;
-  //   if (msg->header.seq < lastHandled + 5 && lastHandled != 0) return;
+  void listCB(const geometry_msgs::PoseArray::ConstPtr& msg) {
+    if (state == LIST) return;
+    if (msg->header.seq < lastHandled + 5 && lastHandled != 0) return;
 
-  //   lastHandled = msg->header.seq;
+    lastHandled = msg->header.seq;
 
-  //   if (msg->poses.size() > 1) {
-  //       ROS_INFO("Handling a list of targets!!");
-  //       state = LIST;
+    if (msg->poses.size() > 1) {
+        ROS_INFO("Handling a list of targets!!");
+        state = LIST;
 
-  //       std::vector<tf2::Transform> targs;
-  //       for (int i = 0; i < msg->poses.size(); i++) {
-  //           tf2::Transform t = tf2::Transform::getIdentity();
-  //           t.setOrigin(tf2::Vector3(msg->poses[i].position.x,
-  //                                    msg->poses[i].position.y,
-  //                                    msg->poses[i].position.z));
-  //           tf2::Quaternion q;
-  //           tf2::fromMsg(msg->poses[i].orientation, q);
-  //           t.setRotation(q);
-  //           targs.push_back(t);
-  //       }
-  //       std::string num = msg->header.frame_id.substr(msg->header.frame_id.find("=")+1);
-  //       arm.planToTargetList(targs, std::stoi(num));
-  //   } else {
-  //       ROS_INFO("Handling a region-style planning request!!");
-  //       state = LIST;
+        std::vector<tf2::Transform> targs;
+        for (int i = 0; i < msg->poses.size(); i++) {
+            tf2::Transform t = tf2::Transform::getIdentity();
+            t.setOrigin(tf2::Vector3(msg->poses[i].position.x,
+                                     msg->poses[i].position.y,
+                                     msg->poses[i].position.z));
+            tf2::Quaternion q;
+            tf2::fromMsg(msg->poses[i].orientation, q);
+            t.setRotation(q);
+            targs.push_back(t);
+        }
+        std::string num = msg->header.frame_id.substr(msg->header.frame_id.find("=")+1);
+        arm.planToTargetList(targs, std::stoi(num));
+    } else {
+        ROS_INFO("Handling a region-style planning request!!");
+        state = LIST;
 
-  //       std::string num = msg->header.frame_id.substr(msg->header.frame_id.find("=")+1);
-  //       geometry_msgs::Pose regPose = msg->poses[0];
-  //       geometry_msgs::Pose hackPose;
-  //       hackPose.position = regPose.position;
-  //       hackPose.orientation.w = 1.0;
-  //       hackPose.orientation.x = 0.0;
-  //       hackPose.orientation.y = 0.0;
-  //       hackPose.orientation.z = 0.0;
-  //       bool success = arm.planToRegionAsList(regPose.orientation.x,
-  //                                             regPose.orientation.y,
-  //                                             0.005,
-  //                                             hackPose,
-  //                                             std::stoi(num));
-  //   }
-  //   state = WAIT;
-  // }
+        std::string num = msg->header.frame_id.substr(msg->header.frame_id.find("=")+1);
+        geometry_msgs::Pose regPose = msg->poses[0];
+        geometry_msgs::Pose hackPose;
+        hackPose.position = regPose.position;
+        hackPose.orientation.w = 1.0;
+        hackPose.orientation.x = 0.0;
+        hackPose.orientation.y = 0.0;
+        hackPose.orientation.z = 0.0;
+        bool success = arm.planToRegionAsList(regPose.orientation.x,
+                                              regPose.orientation.y,
+                                              0.005,
+                                              hackPose,
+                                              std::stoi(num));
+    }
+    state = WAIT;
+  }
 
   // ID needs to be a substring of the object's model name
   void handleGrabCommand(std::string id)
@@ -550,6 +562,7 @@ private:
   std::string failureReason;
   std::string targetID;
   bool armHomeState;
+    bool list_on;
 
   WorldObjects world;
   ObjectDatabase objData;

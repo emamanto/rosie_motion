@@ -35,6 +35,9 @@ public:
   enum PlanAlgorithm {
     RRTCONNECT,
     RRTSTAR,
+    RRTSTARCLEAR,
+    TRRT,
+    TRRTCLEAR,
     STOMP,
     UNKNOWN
   };
@@ -53,7 +56,10 @@ public:
     switch (p)
       {
       case RRTCONNECT: return "RRT-Connect";
-      case RRTSTAR: return "RRT*";
+      case RRTSTAR: return "RRT* (Path Length)";
+      case RRTSTARCLEAR: return "RRT* (Obstacle Clearance)";
+      case TRRT: return "TRRT (Path Length)";
+      case TRRTCLEAR: return "TRRT (Obstacle Clearance)";
       case STOMP: return "STOMP";
       default: return "UNKNOWN";
       }
@@ -77,6 +83,7 @@ public:
   void setLibrary(PlanLibrary l);
   void setPlanner(std::string p);
   void setPlanner(PlanAlgorithm p);
+    void setPlanningTime(double t);
 
   std::string armPlanningFrame();
   std::string getHeld() { return grabbedObject.id; }
@@ -95,8 +102,9 @@ public:
   bool putDownHeldObj(std::vector<tf2::Transform> targets);
   bool pointTo(tf2::Transform objXform,
                float objHeight);
-  //bool planToTargetList(std::vector<tf2::Transform> targets, int numTrials);
-  //bool planToRegionAsList(float xD, float yD, float zD, geometry_msgs::Pose p, int numTrials);
+  bool planToTargetList(std::vector<tf2::Transform> targets, int numTrials);
+  bool planToRegionAsList(float xD, float yD, float zD, geometry_msgs::Pose p, int numTrials);
+    bool checkReachable(tf2::Transform eeXform);
   bool checkIKPose(tf2::Transform eeXform);
   bool homeArm();
 
@@ -127,6 +135,7 @@ private:
   bool gripperClosed;
   PlanLibrary plannerPlugin;
   PlanAlgorithm plannerName;
+    double planningTime;
 
   geometry_msgs::PoseStamped currentGoal;
   ros::Publisher goalPublisher;
