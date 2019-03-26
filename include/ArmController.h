@@ -10,6 +10,7 @@
 #include <tf2/utils.h>
 
 #include <ros/ros.h>
+#include <rosbag/bag.h>
 #include <moveit/move_group/capability_names.h>
 #include <moveit/move_group_interface/move_group_interface.h>
 #include <moveit/planning_scene/planning_scene.h>
@@ -23,6 +24,7 @@
 #include "moveit_msgs/ApplyPlanningScene.h"
 #include "moveit_msgs/GetPlanningScene.h"
 #include "moveit_msgs/GetMotionPlan.h"
+#include "std_msgs/String.h"
 
 class ArmController {
 public:
@@ -124,6 +126,7 @@ private:
   void setCurrentGoalTo(tf2::Transform t);
 
   std::string logFileName;
+    rosbag::Bag bagFile;
 
   moveit::planning_interface::MoveGroupInterface::Plan currentPlan;
   int numRetries;

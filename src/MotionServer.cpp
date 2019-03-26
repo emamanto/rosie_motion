@@ -61,7 +61,7 @@ public:
       case FAILURE: return "FAILURE";
       case SCENE: return "SCENE";
       case CHECK: return "CHECK";
-      //case LIST: return "LIST";
+      case LIST: return "LIST";
       default: return "WTF";
       }
   }

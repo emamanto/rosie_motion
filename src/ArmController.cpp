@@ -130,6 +130,12 @@ ArmController::ArmController(ros::NodeHandle& nh) : numRetries(2),
     ss << "logfile" << lt->tm_mon + 1 << lt->tm_mday << lt->tm_hour
        << lt->tm_min << lt->tm_sec << ".txt";
     logFileName = ss.str();
+    std::stringstream bs;
+    bs << "traj" << lt->tm_mon + 1 << lt->tm_mday << lt->tm_hour
+       << lt->tm_min << lt->tm_sec << ".bag";
+    std::string bagFileName = bs.str();
+    bagFile.open(bagFileName, rosbag::bagmode::Write);
+
     std::ofstream ofs;
     ofs.open(logFileName);
     ofs << "TIME " << lt->tm_mon + 1 << "/" << lt->tm_mday << ", "
@@ -341,6 +347,8 @@ void ArmController::updateCollisionScene(std::vector<moveit_msgs::CollisionObjec
     psDiffClient.call(applyRequest, applyResponse);
     if (!applyResponse.success) {
         ROS_WARN("Updating the collision scene failed!!");
+    } else {
+        bagFile.write("scenes", ros::Time::now(), applyRequest.scene.world);
     }
 }
 
@@ -664,6 +672,7 @@ bool ArmController::homeArm() {
     } else {
         group.setStartStateToCurrentState();
     }
+
     if (!group.plan(homePlan)) ok = false;
 
     // To stop it thinking it's successful if null plan
@@ -775,15 +784,6 @@ bool ArmController::planToRegion(float xD, float yD, float zD, geometry_msgs::Po
     cm.orientation_constraints.clear();
     cm.visibility_constraints.clear();
 
-    // moveit_msgs::PositionConstraint pc;
-    // pc.header.frame_id = group.getPlanningFrame();
-    // pc.link_name = group.getEndEffectorLink();
-    // pc.target_point_offset.x = 0;
-    // pc.target_point_offset.y = 0;
-    // pc.target_point_offset.z = 0;
-    // pc.constraint_region.primitives.clear();
-    // pc.constraint_region.primitive_poses.clear();
-    // pc.weight = 1.0;
     geometry_msgs::PoseStamped ee_pose;
     ee_pose.pose.position = p.position;
     ee_pose.pose.position.z += 0.05;
@@ -808,47 +808,12 @@ bool ArmController::planToRegion(float xD, float yD, float zD, geometry_msgs::Po
     regGoal.setRotation(tf2::Quaternion::getIdentity());
     setCurrentGoalTo(regGoal);
 
-    // shape_msgs::SolidPrimitive box;
-    // box.type = box.BOX;
-    // box.dimensions.push_back(xD);
-    // box.dimensions.push_back(yD);
-    // box.dimensions.push_back(zD);
-
-    // pc.constraint_region.primitives.push_back(box);
-    // p.position.z += 0.2;
-    // pc.constraint_region.primitive_poses.push_back(p);
-    // cm.position_constraints.push_back(pc);
-
     if (plannerName == STOMP) {
       robot_state::RobotState ss(*group.getCurrentState());
       moveit::core::robotStateToRobotStateMsg(ss,
                                               planRequest.motion_plan_request.start_state,
                                               true);
       ros::Duration(0.1).sleep();
-
-      // moveit_msgs::OrientationConstraint oc;
-      // oc.header.frame_id = group.getPlanningFrame();
-      // oc.link_name = group.getEndEffectorLink();
-
-      // geometry_msgs::Quaternion q = tf2::toMsg(tf2::Quaternion::getIdentity());
-      // oc.orientation = q;
-      // oc.absolute_x_axis_tolerance = 2*M_PI;
-      // oc.absolute_y_axis_tolerance = 2*M_PI;ppp
-      // oc.absolute_z_axis_tolerance = 2*M_PI;
-      // oc.weight = 0;
-      // cm.orientation_constraints.push_back(oc);
-
-      // std::vector<std::string> jns = group.getJointValueTarget().getVariableNames();
-      // for(std::vector<std::string>::iterator i = jns.begin(); i != jns.end(); i++) {
-      //   moveit_msgs::JointConstraint jc;
-      //   jc.joint_name = *i;
-      //   jc.position = group.getJointValueTarget().getVariablePosition(*i);
-      //   jc.tolerance_above = 0;
-      //   jc.tolerance_below = 0;
-      //   jc.weight = 0;
-      //   cm.joint_constraints.push_back(jc);
-      //   ros::Duration(0.1).sleep();
-      // }
     }
 
     planRequest.motion_plan_request.goal_constraints.clear();
@@ -934,7 +899,7 @@ void ArmController::writeQuery(tf2::Transform t,
     std::ofstream ofs;
     ofs.open(logFileName, std::ofstream::out | std::ofstream::app);
 
-    ofs << "AL " << plannerName;
+    ofs << "AL " << paToString(plannerName);
     ofs << " TO "
         << t.getOrigin().x() << " "
         << t.getOrigin().y() << " "
@@ -954,6 +919,15 @@ void ArmController::writeQuery(tf2::Transform t,
     ofs << std::endl;
 
     ofs.close();
+
+    std_msgs::String pname;
+    pname.data = paToString(plannerName);
+    bagFile.write("planners", ros::Time::now(), pname);
+
+    geometry_msgs::Transform xf = tf2::toMsg(t);
+    bagFile.write("targets", ros::Time::now(), xf);
+
+    // LOG PLAN (start, traj, planning time, succ)
 }
 
 void ArmController::writeHomeQuery(moveit::planning_interface::MoveGroupInterface::Plan p) {

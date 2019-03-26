@@ -16,6 +16,7 @@ find_package(catkin REQUIRED COMPONENTS
   rosie_msgs
   roscpp
   rospy
+  rosbag
   std_msgs
   geometry_msgs
   actionlib_msgs
