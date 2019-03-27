@@ -25,6 +25,7 @@
 #include "moveit_msgs/GetPlanningScene.h"
 #include "moveit_msgs/GetMotionPlan.h"
 #include "std_msgs/String.h"
+#include "std_msgs/Float32.h"
 
 class ArmController {
 public:

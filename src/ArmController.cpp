@@ -920,14 +920,28 @@ void ArmController::writeQuery(tf2::Transform t,
 
     ofs.close();
 
+    ros::Time sharedT = ros::Time::now();
+
     std_msgs::String pname;
     pname.data = paToString(plannerName);
-    bagFile.write("planners", ros::Time::now(), pname);
+    bagFile.write("planners", sharedT, pname);
 
     geometry_msgs::Transform xf = tf2::toMsg(t);
-    bagFile.write("targets", ros::Time::now(), xf);
+    bagFile.write("targets", sharedT, xf);
 
-    // LOG PLAN (start, traj, planning time, succ)
+    sensor_msgs::JointState ss = p.start_state_.joint_state;
+    bagFile.write("start_states", sharedT, ss);
+
+    trajectory_msgs::JointTrajectory traj = p.trajectory_.joint_trajectory;
+    bagFile.write("trajectories", sharedT, traj);
+
+    std_msgs::Float32 pt;
+    if (jointLength(p.trajectory_) > 0) {
+        pt.data = p.planning_time_;
+    } else {
+        pt.data = -1;
+    }
+    bagFile.write("planning_times", sharedT, pt);
 }
 
 void ArmController::writeHomeQuery(moveit::planning_interface::MoveGroupInterface::Plan p) {
