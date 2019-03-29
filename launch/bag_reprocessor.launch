@@ -1,0 +1,19 @@
+<launch>
+
+<arg name="gazebo_gui" default="false" />
+
+<include file="$(find rosbridge_server)/launch/rosbridge_websocket.launch" >
+</include>
+
+<include file="$(find rosie_motion)/launch/simple_pickplace.launch" >
+<arg name="worldfile" value="empty_world.sdf" />
+<arg name="gui" value="$(arg gazebo_gui)" />
+</include>
+
+<include file="$(find fetch_moveit_config)/launch/move_group.launch" >
+</include>
+
+<node name="rosie_bag_reprocessor" pkg="rosie_motion" type="bagreprocessor" output="screen">
+</node>
+
+</launch>
