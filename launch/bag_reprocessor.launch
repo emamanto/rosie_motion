@@ -1,6 +1,7 @@
 <launch>
 
 <arg name="gazebo_gui" default="false" />
+<arg name="bag_file"/>
 
 <include file="$(find rosbridge_server)/launch/rosbridge_websocket.launch" >
 </include>
@@ -14,6 +15,7 @@
 </include>
 
 <node name="rosie_bag_reprocessor" pkg="rosie_motion" type="bagreprocessor" output="screen">
+<param name="filename" type="string" value="$(arg bag_file)"/>
 </node>
 
 </launch>
