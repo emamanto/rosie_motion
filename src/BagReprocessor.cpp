@@ -14,7 +14,7 @@
 class BagReprocessor {
 public:
     BagReprocessor() : ready(false),
-                       arm(n) {
+                       arm(n, true) {
         std::string bagName;
         if (!n.getParam("/rosie_bag_reprocessor/filename", bagName)) {
             ROS_WARN("BagReprocessor is missing a filename!");
@@ -37,6 +37,29 @@ public:
 
         ready = true;
     }
+
+    void writeInfo(std_msgs::String::ConstPtr pl_,
+                   std_msgs::Float32::ConstPtr pt_,
+                   sensor_msgs::JointState::ConstPtr ss_,
+                   geometry_msgs::Transform::ConstPtr xf_,
+                   trajectory_msgs::JointTrajectory::ConstPtr traj_)
+{
+        arm.setPlanner(pl_->data);
+
+        moveit_msgs::RobotTrajectory rt;
+        rt.joint_trajectory = *traj_;
+
+        tf2::Transform tf2Xf;
+        tf2::fromMsg(*xf_, tf2Xf);
+
+        moveit::planning_interface::MoveGroupInterface::Plan plan;
+        plan.trajectory_ = rt;
+        plan.planning_time_ = pt_->data;
+        plan.start_state_.joint_state = *ss_;
+        plan.start_state_.is_diff = false;
+
+        arm.writeQuery(tf2Xf, plan);
+}
 
     bool process() {
         std::vector<std::string> scTopic;
@@ -88,6 +111,7 @@ public:
         // pl, pt, ss, xf, traj
         std::vector<ros::Time> msgTimes;
         msgTimes.resize(5);
+        msgTimes[0] = ros::Time::now();
 
         int numTrajectories = 0;
 
@@ -100,9 +124,10 @@ public:
                     break;
                 }
             }
-            // Where replaying the trajectory can happen!
+
             if (allMatched) {
                 numTrajectories++;
+                writeInfo(pl, pt, ss, xf, traj);
             }
 
             std_msgs::String::ConstPtr tmpPl = m.instantiate<std_msgs::String>();
@@ -140,6 +165,21 @@ public:
                 continue;
             }
         }
+        // Check for last set of msgs
+        bool allMatched = true;
+        for (int i = 1; i < msgTimes.size(); i++) {
+            if (msgTimes[i] != msgTimes[i-1]) {
+                allMatched = false;
+                break;
+            }
+        }
+
+        if (allMatched) {
+            numTrajectories++;
+            writeInfo(pl, pt, ss, xf, traj);
+        } else {
+            ROS_WARN("Final set of messages incomplete!");
+        }
 
         ROS_INFO("Found %i trajectories in the .bag file!", numTrajectories);
         return true;
@@ -161,6 +201,9 @@ int main(int argc, char** argv)
 {
     ros::init(argc, argv, "rosie_bag_reprocessor");
     BagReprocessor br;
+
+    ros::AsyncSpinner mainSpin(4);
+    mainSpin.start();
 
     if (br.fileReady() && br.process()) {
         ROS_INFO("BagReprocessor finished with the file successfully!");

@@ -80,7 +80,7 @@ public:
   // Returns min clearance, avg clearance metric
   std::vector<double> clearanceData(moveit_msgs::RobotTrajectory traj);
 
-  ArmController(ros::NodeHandle& nh);
+    ArmController(ros::NodeHandle& nh, bool rep = false);
   void setHumanChecks(bool on) { checkPlans = on; }
   void setLibrary(std::string l);
   void setLibrary(PlanLibrary l);
@@ -111,6 +111,8 @@ public:
   bool checkIKPose(tf2::Transform eeXform);
   bool homeArm();
 
+    void writeQuery(tf2::Transform t,
+                    moveit::planning_interface::MoveGroupInterface::Plan p);
 private:
   void setGripperTo(float m);
   bool planToXformInner(tf2::Transform t);
@@ -118,8 +120,6 @@ private:
   bool planToRegion(float xD, float yD, float zD, geometry_msgs::Pose p);
   double planStraightLineMotion(tf2::Transform target);
   bool executeCurrentPlan();
-  void writeQuery(tf2::Transform t,
-                  moveit::planning_interface::MoveGroupInterface::Plan p);
   void writeHomeQuery(moveit::planning_interface::MoveGroupInterface::Plan p);
   void writeTrajectoryInfo(std::ofstream& ofs, moveit_msgs::RobotTrajectory& traj);
   bool safetyCheck();
@@ -128,6 +128,7 @@ private:
 
   std::string logFileName;
     rosbag::Bag bagFile;
+    bool isReplay;
 
   moveit::planning_interface::MoveGroupInterface::Plan currentPlan;
   int numRetries;

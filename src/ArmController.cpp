@@ -116,25 +116,35 @@ std::vector<double> ArmController::clearanceData(moveit_msgs::RobotTrajectory tr
     return dataVals;
 }
 
-ArmController::ArmController(ros::NodeHandle& nh) : numRetries(2),
-                                                    checkPlans(true),
-                                                    group("arm"),
-                                                    gripper("gripper_controller/gripper_action", true),
-                                                    plannerPlugin(UNKNOWNL),
-                                                    plannerName(UNKNOWN)
+ArmController::ArmController(ros::NodeHandle& nh, bool rep) : isReplay(rep),
+                                                              numRetries(2),
+                                                              checkPlans(true),
+                                                              group("arm"),
+                                                              gripper("gripper_controller/gripper_action", true),
+                                                              plannerPlugin(UNKNOWNL),
+                                                              plannerName(UNKNOWN)
 {
     std::time_t t;
     std::time(&t);
     struct std::tm* lt = std::localtime(&t);
     std::stringstream ss;
-    ss << "logfile" << lt->tm_mon + 1 << lt->tm_mday << lt->tm_hour
-       << lt->tm_min << lt->tm_sec << ".txt";
+    if (!isReplay) {
+        ss << "logfile" << lt->tm_mon + 1 << lt->tm_mday << lt->tm_hour
+           << lt->tm_min << lt->tm_sec << ".txt";
+    } else {
+        ss << "replay_output" << lt->tm_mon + 1 << lt->tm_mday << lt->tm_hour
+           << lt->tm_min << lt->tm_sec << ".txt";
+    }
+
     logFileName = ss.str();
-    std::stringstream bs;
-    bs << "traj" << lt->tm_mon + 1 << lt->tm_mday << lt->tm_hour
-       << lt->tm_min << lt->tm_sec << ".bag";
-    std::string bagFileName = bs.str();
-    bagFile.open(bagFileName, rosbag::bagmode::Write);
+
+    if (!isReplay) {
+        std::stringstream bs;
+        bs << "traj" << lt->tm_mon + 1 << lt->tm_mday << lt->tm_hour
+           << lt->tm_min << lt->tm_sec << ".bag";
+        std::string bagFileName = bs.str();
+        bagFile.open(bagFileName, rosbag::bagmode::Write);
+    }
 
     std::ofstream ofs;
     ofs.open(logFileName);
@@ -184,14 +194,14 @@ void ArmController::setLibrary(PlanLibrary l) {
 }
 
 void ArmController::setPlanner(std::string p) {
-    if (p == "stomp") {
+    if (p == "stomp" || p == paToString(STOMP)) {
       setPlanner(STOMP);
-    } else if (p == "rrtc" || p == "rrtconnect") {
+    } else if (p == "rrtc" || p == "rrtconnect" || p == paToString(RRTCONNECT)) {
       setPlanner(RRTCONNECT);
-    } else if (p == "rrtstar" || p == "rrt*") {
+    } else if (p == "rrtstar" || p == "rrt*" || p == paToString(RRTSTAR)) {
       setPlanner(RRTSTAR);
     } else {
-      ROS_WARN("Unknown planner name given!!");
+        ROS_WARN("Unknown planner name given: %s", p.c_str());
     }
 }
 
@@ -348,7 +358,8 @@ void ArmController::updateCollisionScene(std::vector<moveit_msgs::CollisionObjec
     if (!applyResponse.success) {
         ROS_WARN("Updating the collision scene failed!!");
     } else {
-        bagFile.write("scenes", ros::Time::now(), applyRequest.scene.world);
+        if (!isReplay)
+            bagFile.write("scenes", ros::Time::now(), applyRequest.scene.world);
     }
 }
 
@@ -899,6 +910,8 @@ void ArmController::writeQuery(tf2::Transform t,
     std::ofstream ofs;
     ofs.open(logFileName, std::ofstream::out | std::ofstream::app);
 
+    ROS_INFO("Opened file to write query");
+
     ofs << "AL " << paToString(plannerName);
     ofs << " TO "
         << t.getOrigin().x() << " "
@@ -909,16 +922,22 @@ void ArmController::writeQuery(tf2::Transform t,
         << t.getRotation().y() << " "
         << t.getRotation().z() << " "
         << t.getRotation().w();
+    ROS_INFO("Wrote target");
+
     ofs << " TI ";
     if (jointLength(p.trajectory_) > 0) {
          ofs << p.planning_time_;
     } else {
         ofs << "-1";
     }
+    ROS_INFO("Wrote time");
+
     writeTrajectoryInfo(ofs, p.trajectory_);
     ofs << std::endl;
 
     ofs.close();
+
+    if (isReplay) return;
 
     ros::Time sharedT = ros::Time::now();
 
@@ -970,12 +989,16 @@ void ArmController::writeTrajectoryInfo(std::ofstream& ofs,
     } else {
         ofs << "N";
     }
+    ROS_INFO("Calculated joint length once.");
     ofs << " JL " << jointLength(traj);
     ofs << " ET " << execTime(traj);
+    ROS_INFO("Calculated exec time.");
     ofs << " HL " << handLength(traj);
-    std::vector<double> cd = clearanceData(traj);
-    ofs << " MC " << cd[0];
-    ofs << " CA " << cd[1];
+    ROS_INFO("Calculated hand length.");
+    //std::vector<double> cd = clearanceData(traj);
+    //ROS_INFO("Calculated clearance metrics.");
+    //ofs << " MC " << cd[0];
+    //ofs << " CA " << cd[1];
 }
 
 bool ArmController::safetyCheck() {
