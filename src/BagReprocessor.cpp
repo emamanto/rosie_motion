@@ -33,6 +33,7 @@ public:
         arm.setPlanner("rrtc");
         arm.setPlanningTime(0);
 
+        ROS_INFO("BagReprocessor set up, waiting for robot!");
         ros::Duration(30.0).sleep();
 
         ready = true;
@@ -92,6 +93,8 @@ public:
 
         arm.updateCollisionScene(s->collision_objects);
 
+
+        ROS_INFO("BagReprocessor starting to process trajectories!");
 
         std::vector<std::string> dataTopics;
         dataTopics.push_back(std::string("planners"));

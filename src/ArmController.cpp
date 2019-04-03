@@ -81,7 +81,7 @@ std::vector<double> ArmController::clearanceData(moveit_msgs::RobotTrajectory tr
 
     psm->requestPlanningSceneState();
     planning_scene_monitor::LockedPlanningSceneRO ps(psm);
-    robot_state::RobotState rs(*group.getCurrentState(0.1));
+    robot_state::RobotState rs(*group.getCurrentState());
     collision_detection::CollisionRobotConstPtr cr = ps->getCollisionRobotUnpadded();
 
     collision_detection::AllowedCollisionMatrix acm;
@@ -221,9 +221,10 @@ void ArmController::setPlanner(PlanAlgorithm p) {
     plannerName = p;
   }
 
-  ROS_INFO("ArmController set up to use %s planner from %s plugin",
-           paToString(plannerName).c_str(),
-           plToString(plannerPlugin).c_str());
+  if (!isReplay)
+      ROS_INFO("ArmController set up to use %s planner from %s plugin",
+               paToString(plannerName).c_str(),
+               plToString(plannerPlugin).c_str());
 
   if (plannerName == RRTCONNECT) group.setPlannerId("RRTConnectkConfigDefault");
   if (plannerName == RRTSTAR) group.setPlannerId("RRTstarkConfigDefault");
@@ -910,8 +911,6 @@ void ArmController::writeQuery(tf2::Transform t,
     std::ofstream ofs;
     ofs.open(logFileName, std::ofstream::out | std::ofstream::app);
 
-    ROS_INFO("Opened file to write query");
-
     ofs << "AL " << paToString(plannerName);
     ofs << " TO "
         << t.getOrigin().x() << " "
@@ -922,7 +921,6 @@ void ArmController::writeQuery(tf2::Transform t,
         << t.getRotation().y() << " "
         << t.getRotation().z() << " "
         << t.getRotation().w();
-    ROS_INFO("Wrote target");
 
     ofs << " TI ";
     if (jointLength(p.trajectory_) > 0) {
@@ -930,7 +928,6 @@ void ArmController::writeQuery(tf2::Transform t,
     } else {
         ofs << "-1";
     }
-    ROS_INFO("Wrote time");
 
     writeTrajectoryInfo(ofs, p.trajectory_);
     ofs << std::endl;
@@ -989,16 +986,14 @@ void ArmController::writeTrajectoryInfo(std::ofstream& ofs,
     } else {
         ofs << "N";
     }
-    ROS_INFO("Calculated joint length once.");
+
     ofs << " JL " << jointLength(traj);
     ofs << " ET " << execTime(traj);
-    ROS_INFO("Calculated exec time.");
     ofs << " HL " << handLength(traj);
-    ROS_INFO("Calculated hand length.");
-    //std::vector<double> cd = clearanceData(traj);
-    //ROS_INFO("Calculated clearance metrics.");
-    //ofs << " MC " << cd[0];
-    //ofs << " CA " << cd[1];
+
+    std::vector<double> cd = clearanceData(traj);
+    ofs << " MC " << cd[0];
+    ofs << " CA " << cd[1];
 }
 
 bool ArmController::safetyCheck() {
