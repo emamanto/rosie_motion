@@ -30,7 +30,8 @@ double ArmController::execTime(moveit_msgs::RobotTrajectory traj) {
     return traj.joint_trajectory.points[lastPose].time_from_start.toSec();
 }
 
-double ArmController::handLength(moveit_msgs::RobotTrajectory traj) {
+double ArmController::handLength(moveit_msgs::RobotTrajectory traj,
+                                 moveit_msgs::RobotState ss) {
     if (traj.multi_dof_joint_trajectory.points.size() > 0) {
         ROS_WARN("This is a multi DOF trajectory!");
         return 0;
@@ -38,25 +39,24 @@ double ArmController::handLength(moveit_msgs::RobotTrajectory traj) {
 
     if (traj.joint_trajectory.points.size() == 0) return 0;
 
-    robot_model::RobotModelConstPtr rm = group.getRobotModel();
+    moveit::core::RobotState rs1(group.getRobotModel());
+    robot_state::robotStateMsgToRobotState(ss, rs1);
+    rs1.update(true);
+    Eigen::Affine3d xform1 = rs1.getGlobalLinkTransform(group.getEndEffectorLink());
+    Eigen::Vector3d prev(xform1.translation());
+
     double approxHandDist = 0;
-    Eigen::Vector3d prev;
 
     for (int i = 0; i < traj.joint_trajectory.points.size(); i++) {
-        moveit::core::RobotState rs2(rm);
+        moveit::core::RobotState rs2(rs1);
         rs2.setVariablePositions(traj.joint_trajectory.joint_names,
                                  traj.joint_trajectory.points[i].positions);
-        rs2.update();
+        rs2.update(true);
         Eigen::Affine3d xform2 = rs2.getGlobalLinkTransform(group.getEndEffectorLink());
         Eigen::Vector3d cur(xform2.translation());
 
-        if (i > 0) {
-            double dist = sqrt(pow(cur[0] - prev[0], 2) +
-                               pow(cur[1] - prev[1], 2) +
-                               pow(cur[2] - prev[2], 2));
-            approxHandDist += dist;
-        }
-
+        Eigen:: Vector3d diff = cur - prev;
+        approxHandDist += diff.norm();
         prev = cur;
     }
 
@@ -929,7 +929,7 @@ void ArmController::writeQuery(tf2::Transform t,
         ofs << "-1";
     }
 
-    writeTrajectoryInfo(ofs, p.trajectory_);
+    writeTrajectoryInfo(ofs, p.trajectory_, p.start_state_);
     ofs << std::endl;
 
     ofs.close();
@@ -972,14 +972,15 @@ void ArmController::writeHomeQuery(moveit::planning_interface::MoveGroupInterfac
     } else {
         ofs << "-1";
     }
-    writeTrajectoryInfo(ofs, p.trajectory_);
+    writeTrajectoryInfo(ofs, p.trajectory_, p.start_state_);
     ofs << std::endl;
 
     ofs.close();
 }
 
 void ArmController::writeTrajectoryInfo(std::ofstream& ofs,
-                                        moveit_msgs::RobotTrajectory& traj) {
+                                        moveit_msgs::RobotTrajectory& traj,
+                                        moveit_msgs::RobotState& ss) {
     ofs << " SUCC ";
     if (jointLength(traj) > 0) {
         ofs << "Y";
@@ -989,7 +990,7 @@ void ArmController::writeTrajectoryInfo(std::ofstream& ofs,
 
     ofs << " JL " << jointLength(traj);
     ofs << " ET " << execTime(traj);
-    ofs << " HL " << handLength(traj);
+    ofs << " HL " << handLength(traj, ss);
 
     std::vector<double> cd = clearanceData(traj);
     ofs << " MC " << cd[0];

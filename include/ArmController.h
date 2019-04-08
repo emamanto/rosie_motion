@@ -76,7 +76,8 @@ public:
   static double execTime(moveit_msgs::RobotTrajectory traj);
 
   // Dependent on the specific setup
-  double handLength(moveit_msgs::RobotTrajectory traj);
+    double handLength(moveit_msgs::RobotTrajectory traj,
+                      moveit_msgs::RobotState ss);
   // Returns min clearance, avg clearance metric
   std::vector<double> clearanceData(moveit_msgs::RobotTrajectory traj);
 
@@ -121,7 +122,8 @@ private:
   double planStraightLineMotion(tf2::Transform target);
   bool executeCurrentPlan();
   void writeHomeQuery(moveit::planning_interface::MoveGroupInterface::Plan p);
-  void writeTrajectoryInfo(std::ofstream& ofs, moveit_msgs::RobotTrajectory& traj);
+  void writeTrajectoryInfo(std::ofstream& ofs, moveit_msgs::RobotTrajectory& traj,
+                           moveit_msgs::RobotState& ss);
   bool safetyCheck();
   void publishCurrentGoal(const ros::TimerEvent& e);
   void setCurrentGoalTo(tf2::Transform t);
