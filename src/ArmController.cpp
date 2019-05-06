@@ -200,6 +200,8 @@ void ArmController::setPlanner(std::string p) {
       setPlanner(RRTCONNECT);
     } else if (p == "rrtstar" || p == "rrt*" || p == paToString(RRTSTAR)) {
       setPlanner(RRTSTAR);
+    } else if (p == "trrt" || p == paToString(TRRT)) {
+      setPlanner(TRRT);
     } else {
         ROS_WARN("Unknown planner name given: %s", p.c_str());
     }
@@ -228,6 +230,7 @@ void ArmController::setPlanner(PlanAlgorithm p) {
 
   if (plannerName == RRTCONNECT) group.setPlannerId("RRTConnectkConfigDefault");
   if (plannerName == RRTSTAR) group.setPlannerId("RRTstarkConfigDefault");
+  if (plannerName == TRRT) group.setPlannerId("TRRTkConfigDefault");
 }
 
 void ArmController::setPlanningTime(double t) {

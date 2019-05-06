@@ -258,7 +258,7 @@ public:
       ROS_INFO("CHECK IK target %s", targetID.c_str());
       tf2::Transform xf;
       tf2::fromMsg(msg->dest, xf);
-      arm.updateCollisionScene(getCollisionModels());
+      //arm.updateCollisionScene(getCollisionModels());
       if (arm.checkReachable(xf)) {
         state = WAIT;
       } else {
