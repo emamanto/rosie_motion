@@ -1,6 +1,6 @@
 #include "ArmController.h"
 
-double ArmController::jointLength(moveit_msgs::RobotTrajectory traj) {
+double ArmController::totalJointLength(moveit_msgs::RobotTrajectory traj) {
     if (traj.multi_dof_joint_trajectory.points.size() > 0) {
         ROS_WARN("This is a multi DOF trajectory!");
         return 0;
@@ -14,6 +14,26 @@ double ArmController::jointLength(moveit_msgs::RobotTrajectory traj) {
             jl +=  fabs(traj.joint_trajectory.points[i].positions[j] -
                         traj.joint_trajectory.points[i-1].positions[j]);
         }
+    }
+    return jl;
+}
+
+double ArmController::strlJointLength(moveit_msgs::RobotTrajectory traj) {
+    if (traj.multi_dof_joint_trajectory.points.size() > 0) {
+        ROS_WARN("This is a multi DOF trajectory!");
+        return 0;
+    }
+
+    if (traj.joint_trajectory.points.size() == 0) return 0;
+
+    double jl = 0;
+    for (int i = 1; i < traj.joint_trajectory.points.size(); i++) {
+        double currM = 0;
+        for (int j = 0; j < traj.joint_trajectory.points[i].positions.size(); j++) {
+            currM +=  powf((traj.joint_trajectory.points[i].positions[j] -
+                            traj.joint_trajectory.points[i-1].positions[j]), 2);
+        }
+        jl += sqrt(currM);
     }
     return jl;
 }
@@ -76,6 +96,7 @@ std::vector<double> ArmController::clearanceData(moveit_msgs::RobotTrajectory tr
         return dataVals;
     }
 
+    ros::Time begin = ros::Time::now();
     // Only care about clearance if we get within 5cm of something
     double MAX_DIST_FOR_AVG = 0.05;
 
@@ -111,8 +132,12 @@ std::vector<double> ArmController::clearanceData(moveit_msgs::RobotTrajectory tr
     }
 
     double finalAvg = distSum / traj.joint_trajectory.points.size();
+    ros::Time end = ros::Time::now();
+    ros::Duration comp = end-begin;
+
     dataVals.push_back(distMin);
     dataVals.push_back(finalAvg);
+    dataVals.push_back(comp.toSec());
     return dataVals;
 }
 
@@ -691,7 +716,7 @@ bool ArmController::homeArm() {
     if (!group.plan(homePlan)) ok = false;
 
     // To stop it thinking it's successful if null plan
-    if (jointLength(homePlan.trajectory_) < 0.0001 ) {
+    if (totalJointLength(homePlan.trajectory_) < 0.0001 ) {
         homePlan = moveit::planning_interface::MoveGroupInterface::Plan();
         ok = false;
     }
@@ -741,7 +766,7 @@ bool ArmController::planToXformInner(tf2::Transform t) {
   moveit::planning_interface::MoveItErrorCode ok = group.plan(mp);
 
   // To stop it thinking it's successful if null plan
-  if (jointLength(mp.trajectory_) < 0.0001 ) {
+  if (totalJointLength(mp.trajectory_) < 0.0001 ) {
     mp = moveit::planning_interface::MoveGroupInterface::Plan();
     ok = false;
   }
@@ -926,7 +951,7 @@ void ArmController::writeQuery(tf2::Transform t,
         << t.getRotation().w();
 
     ofs << " TI ";
-    if (jointLength(p.trajectory_) > 0) {
+    if (totalJointLength(p.trajectory_) > 0) {
          ofs << p.planning_time_;
     } else {
         ofs << "-1";
@@ -955,7 +980,7 @@ void ArmController::writeQuery(tf2::Transform t,
     bagFile.write("trajectories", sharedT, traj);
 
     std_msgs::Float32 pt;
-    if (jointLength(p.trajectory_) > 0) {
+    if (totalJointLength(p.trajectory_) > 0) {
         pt.data = p.planning_time_;
     } else {
         pt.data = -1;
@@ -970,7 +995,7 @@ void ArmController::writeHomeQuery(moveit::planning_interface::MoveGroupInterfac
     ofs << "HOME POS ";
     ofs << "AL " << plannerName;
     ofs << " TI ";
-    if (jointLength(p.trajectory_) > 0) {
+    if (totalJointLength(p.trajectory_) > 0) {
          ofs << p.planning_time_;
     } else {
         ofs << "-1";
@@ -985,19 +1010,21 @@ void ArmController::writeTrajectoryInfo(std::ofstream& ofs,
                                         moveit_msgs::RobotTrajectory& traj,
                                         moveit_msgs::RobotState& ss) {
     ofs << " SUCC ";
-    if (jointLength(traj) > 0) {
+    if (totalJointLength(traj) > 0) {
         ofs << "Y";
     } else {
         ofs << "N";
     }
 
-    ofs << " JL " << jointLength(traj);
+    ofs << " TJ " << totalJointLength(traj);
+    ofs << " LJ " << strlJointLength(traj);
     ofs << " ET " << execTime(traj);
     ofs << " HL " << handLength(traj, ss);
 
     std::vector<double> cd = clearanceData(traj);
     ofs << " MC " << cd[0];
     ofs << " CA " << cd[1];
+    ofs << " CT " << cd[2];
 }
 
 bool ArmController::safetyCheck() {

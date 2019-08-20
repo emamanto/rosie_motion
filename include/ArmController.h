@@ -72,7 +72,8 @@ public:
   typedef std::pair<tf2::Transform, tf2::Transform> GraspPair;
 
   // Independent of the specific setup
-  static double jointLength(moveit_msgs::RobotTrajectory traj);
+  static double totalJointLength(moveit_msgs::RobotTrajectory traj);
+  static double strlJointLength(moveit_msgs::RobotTrajectory traj);
   static double execTime(moveit_msgs::RobotTrajectory traj);
 
   // Dependent on the specific setup
