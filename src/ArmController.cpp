@@ -103,7 +103,7 @@ std::vector<double> ArmController::clearanceData(moveit_msgs::RobotTrajectory tr
     psm->requestPlanningSceneState();
     planning_scene_monitor::LockedPlanningSceneRO ps(psm);
     robot_state::RobotState rs(*group.getCurrentState());
-    collision_detection::CollisionRobotConstPtr cr = ps->getCollisionRobotUnpadded();
+    collision_detection::CollisionEnvConstPtr cr = ps->getCollisionEnvUnpadded();
 
     collision_detection::AllowedCollisionMatrix acm;
     acm.clear();
@@ -121,8 +121,8 @@ std::vector<double> ArmController::clearanceData(moveit_msgs::RobotTrajectory tr
         req.distance = true;
         req.verbose = true;
         collision_detection::CollisionResult res;
-        ps->getCollisionWorld()->checkRobotCollision(req, res,
-                                                     *cr, rs, acm);
+        ps->getCollisionEnv()->checkRobotCollision(req, res,
+                                                   rs, acm);
         double resultDist = (res.distance < 0 ? 0 : res.distance);
 
         if (resultDist < MAX_DIST_FOR_AVG) {
@@ -664,7 +664,7 @@ bool ArmController::checkIKPose(tf2::Transform eeXform) {
       psm->requestPlanningSceneState();
       planning_scene_monitor::LockedPlanningSceneRO ps(psm);
       robot_state::RobotState rs(*group.getCurrentState(0.1));
-      collision_detection::CollisionRobotConstPtr cr = ps->getCollisionRobotUnpadded();
+      //collision_detection::CollisionEnvConstPtr cr = ps->getCollisionEnvUnpadded();
       collision_detection::AllowedCollisionMatrix acm;
       acm.clear();
       acm.setDefaultEntry("ground", true);
@@ -680,8 +680,8 @@ bool ArmController::checkIKPose(tf2::Transform eeXform) {
       req.group_name = "arm";
       req.verbose = true;
       collision_detection::CollisionResult res;
-      ps->getCollisionWorld()->checkRobotCollision(req, res,
-                                                   *cr, rs, acm);
+      ps->getCollisionEnv()->checkRobotCollision(req, res,
+                                                 rs, acm);
 
       if (res.collision) {
         ROS_INFO("IK solution in collision!");
